@@ -1,0 +1,330 @@
+{
+	Tools = ordered() {
+		RectangleMask = MacroOperator {
+			Inputs = ordered() {
+				Input1 = InstanceInput {
+					SourceOp = "Polygon1",
+					Source = "Point0",
+					DefaultX = 0.5,
+					DefaultY = 0.5,
+				},
+				Input2 = InstanceInput {
+					SourceOp = "Polygon1",
+					Source = "Point1",
+					DefaultX = 0.5,
+					DefaultY = 0.5,
+				},
+				Input3 = InstanceInput {
+					SourceOp = "Polygon1",
+					Source = "Point2",
+					DefaultX = 0.5,
+					DefaultY = 0.5,
+				},
+				Input4 = InstanceInput {
+					SourceOp = "Polygon1",
+					Source = "Point3",
+					DefaultX = 0.5,
+					DefaultY = 0.5,
+				},
+				Input5 = InstanceInput {
+					SourceOp = "Transform2",
+					Source = "Center",
+				},
+				Input6 = InstanceInput {
+					SourceOp = "Transform2",
+					Source = "Size",
+					Default = 1,
+				},
+				Input7 = InstanceInput {
+					SourceOp = "Transform2",
+					Source = "Aspect",
+					Default = 1,
+				},
+				Input8 = InstanceInput {
+					SourceOp = "Transform2",
+					Source = "XSize",
+					Default = 1,
+				},
+				Input9 = InstanceInput {
+					SourceOp = "Transform2",
+					Source = "YSize",
+					Default = 1,
+				},
+				Input10 = InstanceInput {
+					SourceOp = "Transform2",
+					Source = "Angle",
+					Default = 0,
+				},
+				Input11 = InstanceInput {
+					SourceOp = "Transform2",
+					Source = "FlipHoriz",
+					ControlGroup = 11,
+					Default = 0,
+				},
+				Input12 = InstanceInput {
+					SourceOp = "Transform2",
+					Source = "FlipVert",
+					ControlGroup = 11,
+					Default = 0,
+				},
+				Input13 = InstanceInput {
+					SourceOp = "Background1",
+					Source = "TopLeftRed",
+					Name = "Color",
+					ControlGroup = 12,
+					Default = 1,
+				},
+				Input14 = InstanceInput {
+					SourceOp = "Background1",
+					Source = "TopLeftGreen",
+					ControlGroup = 12,
+					Default = 0,
+				},
+				Input15 = InstanceInput {
+					SourceOp = "Background1",
+					Source = "TopLeftBlue",
+					ControlGroup = 12,
+					Default = 1,
+				},
+				Input16 = InstanceInput {
+					SourceOp = "Background1",
+					Source = "TopLeftAlpha",
+					ControlGroup = 12,
+					Default = 1,
+				},
+				Input17 = InstanceInput {
+					SourceOp = "Polygon1_1",
+					Source = "SoftEdge",
+				},
+				Input18 = InstanceInput {
+					SourceOp = "Polygon1_1",
+					Source = "BorderWidth",
+					Default = 0.01,
+				},
+				Input19 = InstanceInput {
+					SourceOp = "Polygon1_1",
+					Source = "JoinStyle",
+					Name = "Border Style",
+					ControlGroup = 15,
+					Default = 1,
+				},
+				Input20 = InstanceInput {
+					SourceOp = "Polygon1_1",
+					Source = "CapStyle",
+					ControlGroup = 15,
+					Default = 1,
+				},
+				Input21 = InstanceInput {
+					SourceOp = "Polygon1_1",
+					Source = "WritePosition",
+					Default = 0.207,
+				},
+				Input22 = InstanceInput {
+					SourceOp = "Polygon1_1",
+					Source = "WriteLength",
+					Default = 0.426,
+				},
+				MainInput1 = InstanceInput {
+					SourceOp = "Merge1",
+					Source = "Background",
+				},
+			},
+			Outputs = {
+				MainOutput1 = InstanceOutput {
+					SourceOp = "Merge2",
+					Source = "Output",
+				}
+			},
+			ViewInfo = GroupInfo { Pos = { 0, 0 } },
+			Tools = ordered() {
+				Polygon1 = PolylineMask {
+					DrawMode = "InsertAndModify",
+					DrawMode2 = "InsertAndModify",
+					Inputs = {
+						Filter = Input { Value = FuID { "Fast Gaussian" }, },
+						MaskWidth = Input { Value = 1920, },
+						MaskHeight = Input { Value = 1080, },
+						PixelAspect = Input { Value = { 1, 1 }, },
+						UseFrameFormatSettings = Input { Value = 1, },
+						ClippingMode = Input { Value = FuID { "None" }, },
+						Polyline = Input {
+							Value = Polyline {
+								Closed = true,
+								Points = {
+									{ Linear = true, X = -0.5, Y = 0.5, LX = 0.333333333333333, LY = 0, RX = 1.85037170770859e-17, RY = -0.333333333333333, PublishID = "Point0" },
+									{ Linear = true, X = -0.5, Y = -0.5, LX = -1.85037170770859e-17, LY = 0.333333333333333, RX = -1.85037170770859e-17, RY = 0, PublishID = "Point1" },
+									{ Linear = true, X = -0.5, Y = -0.5, LX = 1.85037170770859e-17, LY = 0, RX = 0.333333333333333, RY = 0.333333333333333, PublishID = "Point2" },
+									{ Linear = true, X = 0.5, Y = 0.5, LX = -0.333333333333333, LY = -0.333333333333333, RX = -0.333333333333333, RY = 0, PublishID = "Point3" }
+								}
+							},
+						},
+						Polyline2 = Input {
+							Value = Polyline {
+							},
+							Disabled = true,
+						},
+						Point0 = Input {
+							SourceOp = "Publish1",
+							Source = "Value",
+						},
+						Point1 = Input {
+							SourceOp = "Publish2",
+							Source = "Value",
+						},
+						Point2 = Input {
+							SourceOp = "Publish3",
+							Source = "Value",
+						},
+						Point3 = Input {
+							SourceOp = "Publish4",
+							Source = "Value",
+						},
+					},
+					ViewInfo = OperatorInfo { Pos = { 360.818, -69.7144 } },
+				},
+				Publish1 = PublishPoint {
+					CtrlWZoom = false,
+					Inputs = {
+						Value = Input { Value = { 0, 1 }, },
+					},
+				},
+				Publish2 = PublishPoint {
+					CtrlWZoom = false,
+					Inputs = {
+						Value = Input { Value = { 5.55111512312578e-17, 0 }, },
+					},
+				},
+				Publish3 = PublishPoint {
+					CtrlWZoom = false,
+					Inputs = {
+						Value = Input { Value = { 0, 0 }, },
+					},
+				},
+				Publish4 = PublishPoint {
+					CtrlWZoom = false,
+					Inputs = {
+						Value = Input { Value = { 1, 1 }, },
+					},
+				},
+				Transform2 = Transform {
+					Inputs = {
+						Input = Input {
+							SourceOp = "Polygon1",
+							Source = "Mask",
+						},
+					},
+					ViewInfo = OperatorInfo { Pos = { 357.99, -20.8597 } },
+				},
+				Background1 = Background {
+					Inputs = {
+						EffectMask = Input {
+							SourceOp = "Instance_Transform2",
+							Source = "Output",
+						},
+						Width = Input { Value = 1920, },
+						Height = Input { Value = 1080, },
+						UseFrameFormatSettings = Input { Value = 1, },
+						["Gamut.SLogVersion"] = Input { Value = FuID { "SLog2" }, },
+						TopLeftRed = Input { Value = 1, },
+						TopLeftBlue = Input { Value = 1, },
+					},
+					ViewInfo = OperatorInfo { Pos = { 499.411, 18.9971 } },
+				},
+				Instance_Transform2 = Transform {
+					SourceOp = "Transform2",
+					Inputs = {
+						EffectMask = Input { },
+						SettingsNest = Input { },
+						TransformNest = Input { },
+						ReferenceSize = Input { },
+						Input = Input {
+							SourceOp = "Polygon1_1",
+							Source = "Mask",
+						},
+						CommentsNest = Input { },
+						FrameRenderScriptNest = Input { },
+						StartRenderScripts = Input { },
+						EndRenderScripts = Input { },
+					},
+					ViewInfo = OperatorInfo { Pos = { 503.182, -23.431 } },
+				},
+				Polygon1_1 = PolylineMask {
+					DrawMode = "InsertAndModify",
+					DrawMode2 = "InsertAndModify",
+					Inputs = {
+						Filter = Input { Value = FuID { "Fast Gaussian" }, },
+						BorderWidth = Input { Value = 0.01, },
+						Solid = Input { Value = 0, },
+						WritePosition = Input { Value = 0.207, },
+						WriteLength = Input { Value = 0.426, },
+						MaskWidth = Input { Value = 1920, },
+						MaskHeight = Input { Value = 1080, },
+						PixelAspect = Input { Value = { 1, 1 }, },
+						UseFrameFormatSettings = Input { Value = 1, },
+						ClippingMode = Input { Value = FuID { "None" }, },
+						Polyline = Input {
+							Value = Polyline {
+								Closed = true,
+								Points = {
+									{ Linear = true, X = -0.5, Y = 0.5, LX = 0.333333333333333, LY = 0, RX = 1.85037170770859e-17, RY = -0.333333333333333, PublishID = "Point0" },
+									{ Linear = true, X = -0.5, Y = -0.5, LX = -1.85037170770859e-17, LY = 0.333333333333333, RX = -1.85037170770859e-17, RY = 0, PublishID = "Point1" },
+									{ Linear = true, X = -0.5, Y = -0.5, LX = 1.85037170770859e-17, LY = 0, RX = 0.333333333333333, RY = 0.333333333333333, PublishID = "Point2" },
+									{ Linear = true, X = 0.5, Y = 0.5, LX = -0.333333333333333, LY = -0.333333333333333, RX = -0.333333333333333, RY = 0, PublishID = "Point3" }
+								}
+							},
+						},
+						Polyline2 = Input {
+							Value = Polyline {
+							},
+							Disabled = true,
+						},
+						Point0 = Input {
+							SourceOp = "Publish1",
+							Source = "Value",
+						},
+						Point1 = Input {
+							SourceOp = "Publish2",
+							Source = "Value",
+						},
+						Point2 = Input {
+							SourceOp = "Publish3",
+							Source = "Value",
+						},
+						Point3 = Input {
+							SourceOp = "Publish4",
+							Source = "Value",
+						},
+					},
+					ViewInfo = OperatorInfo { Pos = { 505.068, -66.286 } },
+				},
+				Merge2 = Merge {
+					CtrlWZoom = false,
+					Inputs = {
+						Background = Input {
+							SourceOp = "Merge1",
+							Source = "Output",
+						},
+						Foreground = Input {
+							SourceOp = "Background1",
+							Source = "Output",
+						},
+						PerformDepthMerge = Input { Value = 0, },
+					},
+					ViewInfo = OperatorInfo { Pos = { 500.354, 59.7076 } },
+				},
+				Merge1 = Merge {
+					Inputs = {
+						Foreground = Input {
+							SourceOp = "Transform2",
+							Source = "Output",
+						},
+						Operator = Input { Value = FuID { "Mask" }, },
+						PerformDepthMerge = Input { Value = 0, },
+					},
+					ViewInfo = OperatorInfo { Pos = { 357.047, 57.9934 } },
+				}
+			},
+		}
+	},
+	ActiveTool = "RectangleMask"
+}
