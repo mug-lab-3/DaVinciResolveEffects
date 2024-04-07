@@ -2,6 +2,99 @@
 	Tools = ordered() {
 		RectangleMask = MacroOperator {
 			Inputs = ordered() {
+				Input1 = InstanceInput {
+					SourceOp = "PolygonMask",
+					Source = "Point0",
+					DefaultX = 0.5,
+					DefaultY = 0.5,
+				},
+				Input2 = InstanceInput {
+					SourceOp = "PolygonMask",
+					Source = "Point1",
+					DefaultX = 0.5,
+					DefaultY = 0.5,
+				},
+				Input3 = InstanceInput {
+					SourceOp = "PolygonMask",
+					Source = "Point2",
+					DefaultX = 0.5,
+					DefaultY = 0.5,
+				},
+				Input4 = InstanceInput {
+					SourceOp = "PolygonMask",
+					Source = "Point3",
+					DefaultX = 0.5,
+					DefaultY = 0.5,
+				},
+				Input5 = InstanceInput {
+					SourceOp = "Background1",
+					Source = "TopLeftRed",
+					Name = "Color",
+					ControlGroup = 5,
+					Default = 0.433,
+				},
+				Input6 = InstanceInput {
+					SourceOp = "Background1",
+					Source = "TopLeftGreen",
+					ControlGroup = 5,
+					Default = 0,
+				},
+				Input7 = InstanceInput {
+					SourceOp = "Background1",
+					Source = "TopLeftBlue",
+					ControlGroup = 5,
+					Default = 1,
+				},
+				Input8 = InstanceInput {
+					SourceOp = "Background1",
+					Source = "TopLeftAlpha",
+					ControlGroup = 5,
+					Default = 1,
+				},
+				Input9 = InstanceInput {
+					SourceOp = "PolygonBorder",
+					Source = "SoftEdge",
+				},
+				Input10 = InstanceInput {
+					SourceOp = "PolygonBorder",
+					Source = "BorderWidth",
+					Default = 0.0087,
+				},
+				Input11 = InstanceInput {
+					SourceOp = "PolygonBorder",
+					Source = "JoinStyle",
+					Name = "Border Style",
+					ControlGroup = 8,
+					Default = 1,
+				},
+				Input12 = InstanceInput {
+					SourceOp = "PolygonBorder",
+					Source = "CapStyle",
+					ControlGroup = 8,
+					Default = 1,
+				},
+				Input13 = InstanceInput {
+					SourceOp = "PolygonBorder",
+					Source = "WritePosition",
+					Default = 0.445,
+				},
+				Input14 = InstanceInput {
+					SourceOp = "PolygonBorder",
+					Source = "WriteLength",
+					Default = 0.278,
+				},
+				Input15 = InstanceInput {
+					SourceOp = "Transform1",
+					Source = "FlipHoriz",
+					ControlGroup = 11,
+					Default = 0,
+				},
+				Input16 = InstanceInput {
+					SourceOp = "Transform1",
+					Source = "FlipVert",
+					ControlGroup = 11,
+					Default = 0,
+				},
 				MainInput1 = InstanceInput {
 					SourceOp = "Merge1",
 					Source = "Background",
@@ -85,6 +178,21 @@
 						Value = Input { Value = { 0.6, 1 }, },
 					},
 				},
+				Background1 = Background {
+					Inputs = {
+						EffectMask = Input {
+							SourceOp = "PolygonBorder",
+							Source = "Mask",
+						},
+						Width = Input { Value = 1920, },
+						Height = Input { Value = 1080, },
+						UseFrameFormatSettings = Input { Value = 1, },
+						["Gamut.SLogVersion"] = Input { Value = FuID { "SLog2" }, },
+						TopLeftRed = Input { Value = 0.433, },
+						TopLeftBlue = Input { Value = 1, },
+					},
+					ViewInfo = OperatorInfo { Pos = { 427.334, -8.39394 } },
+				},
 				PolygonBorder = PolylineMask {
 					DrawMode = "InsertAndModify",
 					DrawMode2 = "InsertAndModify",
@@ -134,21 +242,6 @@
 						},
 					},
 					ViewInfo = OperatorInfo { Pos = { 428, -37.4848 } },
-				},
-				Background1 = Background {
-					Inputs = {
-						EffectMask = Input {
-							SourceOp = "PolygonBorder",
-							Source = "Mask",
-						},
-						Width = Input { Value = 1920, },
-						Height = Input { Value = 1080, },
-						UseFrameFormatSettings = Input { Value = 1, },
-						["Gamut.SLogVersion"] = Input { Value = FuID { "SLog2" }, },
-						TopLeftRed = Input { Value = 0.433, },
-						TopLeftBlue = Input { Value = 1, },
-					},
-					ViewInfo = OperatorInfo { Pos = { 427.334, -8.39394 } },
 				},
 				Transform1 = Transform {
 					Inputs = {
