@@ -1,64 +1,48 @@
 {
 	Tools = ordered() {
-		Ellipse1_1 = EllipseMask {
+		MediaOut1 = MediaOut {
 			Inputs = {
-				Filter = Input { Value = FuID { "Fast Gaussian" }, },
-				SoftEdge = Input { Value = 0.052, },
-				MaskWidth = Input { Value = 3840, },
-				MaskHeight = Input { Value = 2160, },
-				PixelAspect = Input { Value = { 1, 1 }, },
-				UseFrameFormatSettings = Input { Value = 1, },
-				ClippingMode = Input { Value = FuID { "None" }, },
-			},
-			ViewInfo = OperatorInfo { Pos = { 273.333, -208.394 } },
-		},
-		Background2_1 = Background {
-			Inputs = {
-				EffectMask = Input {
-					SourceOp = "Ellipse1_1",
-					Source = "Mask",
+				Index = Input { Value = "0", },
+				Input = Input {
+					SourceOp = "pRender1",
+					Source = "Output",
 				},
+			},
+			ViewInfo = OperatorInfo { Pos = { 669.666, -23.8333 } },
+		},
+		pRender1 = pRender {
+			Inputs = {
+				_MotionBlurWarning = Input { Disabled = true, },
 				GlobalOut = Input { Value = 119, },
 				Width = Input { Value = 3840, },
 				Height = Input { Value = 2160, },
 				UseFrameFormatSettings = Input { Value = 1, },
 				["Gamut.SLogVersion"] = Input { Value = FuID { "SLog2" }, },
-				TopLeftRed = Input { Value = 1, },
-				TopLeftGreen = Input { Value = 1, },
-				TopLeftBlue = Input { Value = 1, },
-			},
-			ViewInfo = OperatorInfo { Pos = { 272, -170.212 } },
-		},
-		Ellipse1 = EllipseMask {
-			Inputs = {
-				Filter = Input { Value = FuID { "Fast Gaussian" }, },
-				SoftEdge = Input { Value = 0.0803, },
-				MaskWidth = Input { Value = 3840, },
-				MaskHeight = Input { Value = 2160, },
-				PixelAspect = Input { Value = { 1, 1 }, },
-				UseFrameFormatSettings = Input { Value = 1, },
-				ClippingMode = Input { Value = FuID { "None" }, },
-				Width = Input { Value = 0.205, },
-				Height = Input { Value = 0.472, },
-			},
-			ViewInfo = OperatorInfo { Pos = { 44.667, -135.061 } },
-		},
-		Glow2 = Glow {
-			Inputs = {
-				Blend = Input { Value = 0.2, },
-				Filter = Input { Value = FuID { "Fast Gaussian" }, },
-				Glow = Input { Value = 0.8, },
-				ClippingMode = Input { Value = FuID { "Domain" }, },
-				ColorScale = Input { Value = 1, },
-				RedScale = Input { Value = 2, },
-				GreenScale = Input { Value = 0, },
-				BlueScale = Input { Value = 0, },
+				OutputMode = Input {
+					Value = FuID { "TwoD" },
+					Disabled = true,
+				},
+				["MaterialID.MaterialID"] = Input { Value = 1, },
+				["ObjectID.ObjectID"] = Input { Value = 1, },
 				Input = Input {
-					SourceOp = "Background2_1",
+					SourceOp = "pDirectionalForce1",
 					Source = "Output",
 				},
 			},
-			ViewInfo = OperatorInfo { Pos = { 271.334, -137.485 } },
+			ViewInfo = OperatorInfo { Pos = { 518.003, -24.1515 } },
+		},
+		pDirectionalForce1 = pDirectionalForce {
+			ID = 11,
+			Inputs = {
+				Strength = Input { Value = 0.01, },
+				Input = Input {
+					SourceOp = "pSpawn1",
+					Source = "Output",
+				},
+				SetMode = Input { Value = FuID { "Affect" }, },
+				Set1 = Input { Value = 0, },
+			},
+			ViewInfo = OperatorInfo { Pos = { 392.667, -22.9394 } },
 		},
 		Glow3 = Glow {
 			Inputs = {
@@ -77,23 +61,6 @@
 			},
 			ViewInfo = OperatorInfo { Pos = { 273.334, -108.121 } },
 		},
-		Background2 = Background {
-			Inputs = {
-				EffectMask = Input {
-					SourceOp = "Ellipse1",
-					Source = "Mask",
-				},
-				GlobalOut = Input { Value = 119, },
-				Width = Input { Value = 3840, },
-				Height = Input { Value = 2160, },
-				UseFrameFormatSettings = Input { Value = 1, },
-				["Gamut.SLogVersion"] = Input { Value = FuID { "SLog2" }, },
-				TopLeftRed = Input { Value = 1, },
-				TopLeftGreen = Input { Value = 1, },
-				TopLeftBlue = Input { Value = 1, },
-			},
-			ViewInfo = OperatorInfo { Pos = { 43.3337, -97.4848 } },
-		},
 		Transform1 = Transform {
 			Inputs = {
 				Size = Input { Value = 0.52, },
@@ -103,23 +70,6 @@
 				},
 			},
 			ViewInfo = OperatorInfo { Pos = { 272.666, -73.8483 } },
-		},
-		Glow1 = Glow {
-			Inputs = {
-				Blend = Input { Value = 0.2, },
-				Filter = Input { Value = FuID { "Fast Gaussian" }, },
-				XGlowSize = Input { Value = 48.8, },
-				Glow = Input { Value = 0.795, },
-				ColorScale = Input { Value = 1, },
-				RedScale = Input { Value = 2, },
-				GreenScale = Input { Value = 0.425, },
-				BlueScale = Input { Value = 0.22, },
-				Input = Input {
-					SourceOp = "Background2",
-					Source = "Output",
-				},
-			},
-			ViewInfo = OperatorInfo { Pos = { 44, -64.7576 } },
 		},
 		pSpawn1 = pSpawn {
 			ID = 13,
@@ -192,6 +142,7 @@
 				}
 			},
 			SplineColor = { Red = 192, Green = 128, Blue = 64 },
+			CtrlWZoom = false,
 		},
 		pSpawn1BlurOverLife2D = LUTBezier {
 			KeyColorSplines = {
@@ -202,6 +153,22 @@
 			},
 			SplineColor = { Red = 192, Green = 128, Blue = 64 },
 			CtrlWZoom = false,
+		},
+		Glow2 = Glow {
+			Inputs = {
+				Blend = Input { Value = 0.2, },
+				Filter = Input { Value = FuID { "Fast Gaussian" }, },
+				ClippingMode = Input { Value = FuID { "Domain" }, },
+				ColorScale = Input { Value = 1, },
+				RedScale = Input { Value = 2, },
+				GreenScale = Input { Value = 0, },
+				BlueScale = Input { Value = 0, },
+				Input = Input {
+					SourceOp = "Background2_1",
+					Source = "Output",
+				},
+			},
+			ViewInfo = OperatorInfo { Pos = { 271.334, -137.485 } },
 		},
 		pKill1 = pKill {
 			ID = 16,
@@ -221,15 +188,63 @@
 			},
 			ViewInfo = OperatorInfo { Pos = { 159.334, -24.4849 } },
 		},
+		Background2_1 = Background {
+			Inputs = {
+				EffectMask = Input {
+					SourceOp = "Ellipse1_1",
+					Source = "Mask",
+				},
+				GlobalOut = Input { Value = 119, },
+				Width = Input { Value = 3840, },
+				Height = Input { Value = 2160, },
+				UseFrameFormatSettings = Input { Value = 1, },
+				["Gamut.SLogVersion"] = Input { Value = FuID { "SLog2" }, },
+				TopLeftRed = Input { Value = 1, },
+				TopLeftGreen = Input { Value = 1, },
+				TopLeftBlue = Input { Value = 1, },
+			},
+			ViewInfo = OperatorInfo { Pos = { 272, -170.212 } },
+		},
+		Background2 = Background {
+			Inputs = {
+				EffectMask = Input {
+					SourceOp = "Ellipse1",
+					Source = "Mask",
+				},
+				GlobalOut = Input { Value = 119, },
+				Width = Input { Value = 3840, },
+				Height = Input { Value = 2160, },
+				UseFrameFormatSettings = Input { Value = 1, },
+				["Gamut.SLogVersion"] = Input { Value = FuID { "SLog2" }, },
+				TopLeftRed = Input { Value = 1, },
+				TopLeftGreen = Input { Value = 1, },
+				TopLeftBlue = Input { Value = 1, },
+			},
+			ViewInfo = OperatorInfo { Pos = { 43.3337, -97.4848 } },
+		},
+		Glow1 = Glow {
+			Inputs = {
+				Blend = Input { Value = 0.2, },
+				Filter = Input { Value = FuID { "Fast Gaussian" }, },
+				XGlowSize = Input { Value = 48.8, },
+				Glow = Input { Value = 0.795, },
+				ColorScale = Input { Value = 1, },
+				RedScale = Input { Value = 2, },
+				GreenScale = Input { Value = 0.425, },
+				BlueScale = Input { Value = 0.22, },
+				Input = Input {
+					SourceOp = "Background2",
+					Source = "Output",
+				},
+			},
+			ViewInfo = OperatorInfo { Pos = { 44, -64.7576 } },
+		},
 		pEmitter1 = pEmitter {
 			ID = 18,
 			Inputs = {
 				["ParticleStyleNGon.NGonType"] = Input { Value = 1, },
 				RandomSeed = Input { Value = 8228, },
-				Number = Input {
-					SourceOp = "pEmitter1Number",
-					Source = "Value",
-				},
+				Number = Input { Value = 0.06, },
 				Lifespan = Input { Value = 591, },
 				PositionVariance = Input { Value = 0.0811, },
 				VelocityControls = Input { Value = 1, },
@@ -261,15 +276,6 @@
 			},
 			ViewInfo = OperatorInfo { Pos = { 43.3334, -23.5455 } },
 		},
-		pEmitter1Number = BezierSpline {
-			SplineColor = { Red = 233, Green = 206, Blue = 78 },
-			NameSet = true,
-			KeyFrames = {
-				[0] = { 4, RH = { 0.333333333333333, 2.66666666666667 }, Flags = { Linear = true } },
-				[1] = { 0, LH = { 0.666666666666667, 1.33333333333333 }, RH = { 1.33333333333333, 0 }, Flags = { Linear = true } },
-				[2] = { 0, LH = { 1.66666666666667, 0 }, Flags = { Linear = true } }
-			}
-		},
 		pEmitter1SizeOverLife = LUTBezier {
 			KeyColorSplines = {
 				[0] = {
@@ -289,49 +295,31 @@
 			SplineColor = { Red = 192, Green = 128, Blue = 64 },
 			CtrlWZoom = false,
 		},
-		MediaOut1 = MediaOut {
+		Ellipse1 = EllipseMask {
 			Inputs = {
-				Index = Input { Value = "0", },
-				Input = Input {
-					SourceOp = "pRender1",
-					Source = "Output",
-				},
-			},
-			ViewInfo = OperatorInfo { Pos = { 669.666, -23.8333 } },
-		},
-		pDirectionalForce1 = pDirectionalForce {
-			ID = 11,
-			Inputs = {
-				Strength = Input { Value = 0.01, },
-				Input = Input {
-					SourceOp = "pSpawn1",
-					Source = "Output",
-				},
-				SetMode = Input { Value = FuID { "Affect" }, },
-				Set1 = Input { Value = 0, },
-			},
-			ViewInfo = OperatorInfo { Pos = { 392.667, -22.9394 } },
-		},
-		pRender1 = pRender {
-			Inputs = {
-				_MotionBlurWarning = Input { Disabled = true, },
-				GlobalOut = Input { Value = 119, },
-				Width = Input { Value = 3840, },
-				Height = Input { Value = 2160, },
+				Filter = Input { Value = FuID { "Fast Gaussian" }, },
+				SoftEdge = Input { Value = 0.0803, },
+				MaskWidth = Input { Value = 3840, },
+				MaskHeight = Input { Value = 2160, },
+				PixelAspect = Input { Value = { 1, 1 }, },
 				UseFrameFormatSettings = Input { Value = 1, },
-				["Gamut.SLogVersion"] = Input { Value = FuID { "SLog2" }, },
-				OutputMode = Input {
-					Value = FuID { "TwoD" },
-					Disabled = true,
-				},
-				["MaterialID.MaterialID"] = Input { Value = 1, },
-				["ObjectID.ObjectID"] = Input { Value = 1, },
-				Input = Input {
-					SourceOp = "pDirectionalForce1",
-					Source = "Output",
-				},
+				ClippingMode = Input { Value = FuID { "None" }, },
+				Width = Input { Value = 0.205, },
+				Height = Input { Value = 0.472, },
 			},
-			ViewInfo = OperatorInfo { Pos = { 518.003, -24.1515 } },
+			ViewInfo = OperatorInfo { Pos = { 44.667, -135.061 } },
+		},
+		Ellipse1_1 = EllipseMask {
+			Inputs = {
+				Filter = Input { Value = FuID { "Fast Gaussian" }, },
+				SoftEdge = Input { Value = 0.052, },
+				MaskWidth = Input { Value = 3840, },
+				MaskHeight = Input { Value = 2160, },
+				PixelAspect = Input { Value = { 1, 1 }, },
+				UseFrameFormatSettings = Input { Value = 1, },
+				ClippingMode = Input { Value = FuID { "None" }, },
+			},
+			ViewInfo = OperatorInfo { Pos = { 273.333, -208.394 } },
 		}
 	}
 }
