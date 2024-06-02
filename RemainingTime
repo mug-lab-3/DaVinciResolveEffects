@@ -1,0 +1,71 @@
+{
+	Tools = ordered() {
+		Rectangle1 = RectangleMask {
+			Inputs = {
+				Filter = Input { Value = FuID { "Fast Gaussian" }, },
+				BorderWidth = Input { Value = 0.0056, },
+				Solid = Input { Value = 0, },
+				CapStyle = Input { Expression = "iif(WriteLength==0, 0, 1)", },
+				WritePosition = Input { Value = 0.413, },
+				WriteLength = Input {
+					SourceOp = "AnimCurves1",
+					Source = "Value",
+				},
+				MaskWidth = Input { Value = 3840, },
+				MaskHeight = Input { Value = 2160, },
+				PixelAspect = Input { Value = { 1, 1 }, },
+				UseFrameFormatSettings = Input { Value = 1, },
+				ClippingMode = Input { Value = FuID { "None" }, },
+				Width = Input { Value = 0.989, },
+				Height = Input { Value = 0.968, },
+				CornerRadius = Input { Value = 0.024, },
+			},
+			ViewInfo = OperatorInfo { Pos = { 397.322, -47.4276 } },
+		},
+		AnimCurves1 = LUTLookup {
+			CtrlWZoom = false,
+			Inputs = {
+				Lookup = Input {
+					SourceOp = "AnimCurves1Lookup",
+					Source = "Value",
+				},
+				Invert = Input { Value = 1, },
+			},
+		},
+		AnimCurves1Lookup = LUTBezier {
+			KeyColorSplines = {
+				[0] = {
+					[0] = { 0, RH = { 0.333333333333333, 0.333333333333333 }, Flags = { Linear = true } },
+					[1] = { 1, LH = { 0.666666666666667, 0.666666666666667 }, Flags = { Linear = true } }
+				}
+			},
+			SplineColor = { Red = 255, Green = 255, Blue = 255 },
+		},
+		Background1 = Background {
+			Inputs = {
+				EffectMask = Input {
+					SourceOp = "Rectangle1",
+					Source = "Mask",
+				},
+				GlobalOut = Input { Value = 92, },
+				Width = Input { Value = 3840, },
+				Height = Input { Value = 2160, },
+				UseFrameFormatSettings = Input { Value = 1, },
+				["Gamut.SLogVersion"] = Input { Value = FuID { "SLog2" }, },
+				TopLeftRed = Input { Value = 1, },
+				TopLeftBlue = Input { Value = 1, },
+			},
+			ViewInfo = OperatorInfo { Pos = { 393.079, -1.99972 } },
+		},
+		Merge1 = Merge {
+			Inputs = {
+				Foreground = Input {
+					SourceOp = "Background1",
+					Source = "Output",
+				},
+				PerformDepthMerge = Input { Value = 0, },
+			},
+			ViewInfo = OperatorInfo { Pos = { 387.894, 48.5709 } },
+		}
+	}
+}
