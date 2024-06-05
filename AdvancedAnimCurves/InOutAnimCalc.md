@@ -44,7 +44,7 @@ Time * comp:GetPrefs("Comp.FrameFormat.Rate") = FrameCount
 
 #### FrameCount -> Ratio(%)
 
-FrameCount / [Clipレンダリング長](#clipレンダリング長) = Ratio
+FrameCount ÷ [Clipレンダリング長](#clipレンダリング長) = Ratio
 
 ```
 FrameCount / (comp.RenderEnd - comp.RenderStart)
