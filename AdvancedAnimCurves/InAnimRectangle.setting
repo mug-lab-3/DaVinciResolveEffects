@@ -1,0 +1,164 @@
+{
+	Tools = ordered() {
+		InAnimRectangle = RectangleMask {
+			CtrlWZoom = false,
+			NameSet = true,
+			Inputs = {
+				Filter = Input { Value = FuID { "Fast Gaussian" }, },
+				BorderWidth = Input { Value = 0.0112, },
+				Solid = Input { Value = 0, },
+				WriteLength = Input {
+					SourceOp = "AnimCurves1",
+					Source = "Value",
+				},
+				MaskWidth = Input { Value = 3840, },
+				MaskHeight = Input { Value = 2160, },
+				PixelAspect = Input { Value = { 1, 1 }, },
+				UseFrameFormatSettings = Input { Value = 1, },
+				ClippingMode = Input { Value = FuID { "None" }, },
+			},
+			ViewInfo = OperatorInfo { Pos = { 157.555, -42.856 } },
+		},
+		AnimCurves1 = LUTLookup {
+			CtrlWZoom = false,
+			Inputs = {
+				AnimLength = Input { Value = 25, },
+				Source = Input { Value = FuID { "Duration" }, },
+				Lookup = Input {
+					SourceOp = "AnimCurvesonInAnimRectangleLookup",
+					Source = "Value",
+				},
+				ClipLow = Input { Value = 1, },
+				ClipHigh = Input { Value = 1, },
+				TimeScale = Input {
+					Value = 35.1,
+					Expression = "AnimScale",
+				},
+				ClipInfo = Input { Value = 1, },
+				StartFrame = Input { Expression = "comp.RenderStart", },
+				EndFrame = Input {
+					Value = 702,
+					Expression = "comp.RenderEnd",
+				},
+				ClipLength = Input {
+					Value = 702,
+					Expression = "EndFrame-StartFrame",
+				},
+				InAnimInfo = Input { Value = 1, },
+				AnimLength_Frame = Input { Value = 20, },
+				AnimLength_Ratio = Input {
+					Value = 0.0284900284900285,
+					Expression = "AnimLength_Frame/ClipLength",
+				},
+				AnimScale = Input {
+					Value = 35.1,
+					Expression = "1/AnimLength_Ratio",
+				}
+			},
+			UserControls = ordered() {
+				ClipInfo = {
+					LINKID_DataType = "Number",
+					INP_Integer = false,
+					LBLC_DropDownButton = true,
+					INPID_InputControl = "LabelControl",
+					LBLC_NumInputs = 3,
+					LBLC_NestLevel = 1,
+					ICS_ControlPage = "Controls",
+					LINKS_Name = "Clip Info",
+				},
+				StartFrame = {
+					LINKS_Name = "Start",
+					INP_Integer = true,
+					LINKID_DataType = "Number",
+					ICS_ControlPage = "Controls",
+					IC_Steps = 1,
+					INPID_InputControl = "SliderControl",
+					ICD_Center = 0,
+					INP_Default = 0,
+				},
+				EndFrame = {
+					LINKS_Name = "End",
+					INP_Integer = true,
+					LINKID_DataType = "Number",
+					ICS_ControlPage = "Controls",
+					IC_Steps = 1,
+					INPID_InputControl = "SliderControl",
+					ICD_Center = 0,
+					INP_Default = 0,
+				},
+				ClipLength = {
+					LINKS_Name = "Length(Frame)",
+					INP_Integer = true,
+					LINKID_DataType = "Number",
+					ICS_ControlPage = "Controls",
+					IC_Steps = 1,
+					INPID_InputControl = "SliderControl",
+					ICD_Center = 0,
+					INP_Default = 0,
+				},
+				InAnimInfo = {
+					INP_Integer = false,
+					LBLC_DropDownButton = true,
+					INPID_InputControl = "LabelControl",
+					LBLC_NumInputs = 3,
+					INP_MaxScale = 1,
+					INP_MinScale = 0,
+					INP_MinAllowed = -1000000,
+					LINKID_DataType = "Number",
+					LBLC_NestLevel = 1,
+					ICS_ControlPage = "Controls",
+					LINKS_Name = "In Anim Info",
+				},
+				AnimLength_Frame = {
+					INP_Integer = true,
+					INPID_InputControl = "SliderControl",
+					IC_Steps = 1,
+					INP_Default = 0,
+					INP_MinScale = 0,
+					INP_MinAllowed = 0,
+					LINKID_DataType = "Number",
+					ICS_ControlPage = "Controls",
+					LINKS_Name = "Length(Frame)",
+				},
+				AnimLength_Ratio = {
+					INP_MaxAllowed = 100,
+					INP_Integer = false,
+					INPID_InputControl = "SliderControl",
+					IC_Steps = 1,
+					INP_MaxScale = 100,
+					INP_Default = 0,
+					INP_MinScale = 0,
+					INP_MinAllowed = 0,
+					LINKID_DataType = "Number",
+					ICD_Center = 50,
+					ICS_ControlPage = "Controls",
+					LINKS_Name = "Ratio(%)"
+				},
+				AnimScale = {
+					INP_MaxAllowed = 100,
+					INP_Integer = false,
+					INPID_InputControl = "SliderControl",
+					IC_Steps = 1,
+					INP_MaxScale = 100,
+					INP_Default = 0,
+					INP_MinScale = 0,
+					INP_MinAllowed = 0,
+					LINKID_DataType = "Number",
+					ICD_Center = 50,
+					ICS_ControlPage = "Controls",
+					LINKS_Name = "Scale"
+				}
+			}
+		},
+		AnimCurvesonInAnimRectangleLookup = LUTBezier {
+			KeyColorSplines = {
+				[0] = {
+					[0] = { 0, RH = { 0.333333333333333, 0.333333333333333 }, Flags = { Linear = true } },
+					[1] = { 1, LH = { 0.666666666666667, 0.666666666666667 }, Flags = { Linear = true } }
+				}
+			},
+			SplineColor = { Red = 255, Green = 255, Blue = 255 },
+		}
+	},
+	ActiveTool = "InAnimRectangle"
+}
