@@ -24,6 +24,15 @@ comp.RenderEnd
 comp.RenderEnd - comp.RenderStart
 ```
 
+#### 前半 or 後半 判定
+
+前半を0、後半を1とする例
+
+```
+iif((time/comp.RenderEnd) < 0.5, 0, 1)
+```
+
+
 ### Timeline情報
 
 #### Frame Rate
@@ -34,12 +43,12 @@ comp:GetPrefs("Comp.FrameFormat.Rate")
 
 ### 単位変換
 
-#### Time(sec) -> FrameCount
+#### AnimTime(sec) -> FrameCount
 
-Time × [FrameRate](#frame-rate) = FrameCount
+AnimTime × [FrameRate](#frame-rate) = FrameCount
 
 ```
-Time * comp:GetPrefs("Comp.FrameFormat.Rate") = FrameCount
+AnimTime * comp:GetPrefs("Comp.FrameFormat.Rate") = FrameCount
 ```
 
 #### FrameCount -> Ratio(%)
@@ -47,7 +56,7 @@ Time * comp:GetPrefs("Comp.FrameFormat.Rate") = FrameCount
 FrameCount ÷ [Clipレンダリング長](#clipレンダリング長) = Ratio
 
 ```
-FrameCount / (comp.RenderEnd - comp.RenderStart)
+(AnimTime * comp:GetPrefs("Comp.FrameFormat.Rate")) / (comp.RenderEnd - comp.RenderStart)
 ```
 
 ## Anim curves 設定
@@ -59,7 +68,7 @@ FrameCount / (comp.RenderEnd - comp.RenderStart)
 [Ratio](#framecount---ratio)の逆数
 
 ```
-1.0 / Ratio
+1.0 / ((AnimTime * comp:GetPrefs("Comp.FrameFormat.Rate")) / (comp.RenderEnd - comp.RenderStart))
 ```
 
 #### Time Offset
@@ -76,7 +85,7 @@ FrameCount / (comp.RenderEnd - comp.RenderStart)
 > In Animと同じ
 
 ```
-1.0 / Ratio
+1.0 / ((AnimTime * comp:GetPrefs("Comp.FrameFormat.Rate")) / (comp.RenderEnd - comp.RenderStart))
 ```
 
 #### Time Offset
@@ -84,5 +93,5 @@ FrameCount / (comp.RenderEnd - comp.RenderStart)
 1 - [Ratio](#framecount---ratio)
 > 誤差を考慮して1フレーム分早く始めるように計算する必要がある
 ```
-1.0 - ((FrameCount + 1) / (comp.RenderEnd - comp.RenderStart))
+1.0 - (((AnimTime * comp:GetPrefs("Comp.FrameFormat.Rate")) + 1) / (comp.RenderEnd - comp.RenderStart))
 ```
