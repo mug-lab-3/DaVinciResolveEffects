@@ -29,7 +29,7 @@ comp.RenderEnd - comp.RenderStart
 前半を0、後半を1とする例
 
 ```
-iif((time/comp.RenderEnd) < 0.5, 0, 1)
+iif(((time - comp.RenderStart)/(comp.RenderEnd - comp.RenderStart)) < 0.5, 0, 1)
 ```
 
 
