@@ -53,7 +53,7 @@ AnimTime × [FrameRate](#frame-rate) = FrameCount
 ※ AnimTimeはアニメーション時間を表す任意の値(変数)
 
 ```
-AnimTime * comp:GetPrefs("Comp.FrameFormat.Rate") = FrameCount
+AnimTime * comp:GetPrefs("Comp.FrameFormat.Rate")
 ```
 
 #### FrameCount -> Ratio(%)
