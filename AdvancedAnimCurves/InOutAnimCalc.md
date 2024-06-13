@@ -1,4 +1,4 @@
-# Anim Curves による In/Out Anim の計算
+# Anim Curves による In/Out Anim のTiming計算
 
 ## 基本計算式
 
@@ -18,6 +18,8 @@ comp.RenderEnd
 
 #### Clipレンダリング長
 
+≒クリップの長さ
+
 [レンダリング終了位置](#レンダリング終了位置) - [レンダリング開始位置](#レンダリング開始位置) = Clipレンダリング長
 
 ```
@@ -26,7 +28,8 @@ comp.RenderEnd - comp.RenderStart
 
 #### 前半 or 後半 判定
 
-前半を0、後半を1とする例
+iifはExcel関数のIFと同じ書式  
+以下はクリップ前半を0、後半を1とする例
 
 ```
 iif(((time - comp.RenderStart)/(comp.RenderEnd - comp.RenderStart)) < 0.5, 0, 1)
