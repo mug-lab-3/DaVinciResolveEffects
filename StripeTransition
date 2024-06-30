@@ -1,0 +1,230 @@
+{
+	Tools = ordered() {
+		StripeTransition = GroupOperator {
+			Inputs = ordered() {
+				Input1 = InstanceInput {
+					SourceOp = "AnimCurves1",
+					Source = "Curve",
+				},
+				Input2 = InstanceInput {
+					SourceOp = "AnimCurves1",
+					Source = "EaseIn",
+					Width = 0.5,
+				},
+				Input3 = InstanceInput {
+					SourceOp = "AnimCurves1",
+					Source = "Scale",
+					Default = 1.46,
+				},
+				Input4 = InstanceInput {
+					SourceOp = "AnimCurves1",
+					Source = "Offset",
+					Default = -0.23,
+				},
+				Input5 = InstanceInput {
+					SourceOp = "Transform4",
+					Source = "Size",
+					Default = 2.29,
+				},
+				Input6 = InstanceInput {
+					SourceOp = "Transform4",
+					Source = "Angle",
+					Default = 52.7,
+				},
+				MainInput1 = InstanceInput {
+					SourceOp = "Dissolve1",
+					Source = "Background",
+				},
+				MainInput2 = InstanceInput {
+					SourceOp = "Dissolve1",
+					Source = "Foreground",
+				},
+			},
+			Outputs = {
+				Output1 = InstanceOutput {
+					SourceOp = "XYPath1",
+					Source = "Heading",
+				},
+				MainOutput1 = InstanceOutput {
+					SourceOp = "Merge2",
+					Source = "Output",
+				}
+			},
+			ViewInfo = GroupInfo { Pos = { 0, 0 } },
+			Tools = ordered() {
+				Rectangle1 = RectangleMask {
+					Inputs = {
+						Filter = Input { Value = FuID { "Fast Gaussian" }, },
+						MaskWidth = Input { Value = 1920, },
+						MaskHeight = Input { Value = 1080, },
+						PixelAspect = Input { Value = { 1, 1 }, },
+						UseFrameFormatSettings = Input { Value = 1, },
+						ClippingMode = Input { Value = FuID { "None" }, },
+						Width = Input { Value = 1, },
+						Height = Input { Value = 0.125, },
+						CornerRadius = Input { Value = 1, },
+					},
+					ViewInfo = OperatorInfo { Pos = { 474.161, -7.14392 } },
+				},
+				Transform1 = Transform {
+					Inputs = {
+						Center = Input { Value = { 0.5, 0.9375 }, },
+						Input = Input {
+							SourceOp = "Rectangle1",
+							Source = "Mask",
+						},
+					},
+					ViewInfo = OperatorInfo { Pos = { 475.104, 30.5685 } },
+				},
+				Duplicate1 = Fuse.Duplicate {
+					Inputs = {
+						Copies = Input { Value = 4, },
+						Center = Input { Value = { 0.5, 0.25 }, },
+						Background = Input {
+							SourceOp = "Transform1",
+							Source = "Output",
+						},
+					},
+					ViewInfo = OperatorInfo { Pos = { 475.104, 63.5685 } },
+				},
+				Transform3 = Transform {
+					Inputs = {
+						Center = Input { Value = { 0.5, 0.375 }, },
+						FlipHoriz = Input { Value = 1, },
+						Input = Input {
+							SourceOp = "Transform2",
+							Source = "Output",
+						},
+					},
+					ViewInfo = OperatorInfo { Pos = { 633.968, 87.1372 } },
+				},
+				Transform2 = Transform {
+					CtrlWZoom = false,
+					Inputs = {
+						Center = Input {
+							SourceOp = "XYPath1",
+							Source = "Value",
+						},
+						Input = Input {
+							SourceOp = "Duplicate1",
+							Source = "Output",
+						},
+					},
+					ViewInfo = OperatorInfo { Pos = { 458.605, 95.7082 } },
+				},
+				XYPath1 = XYPath {
+					ShowKeyPoints = false,
+					DrawMode = "ModifyOnly",
+					CtrlWZoom = false,
+					Inputs = {
+						X = Input {
+							SourceOp = "AnimCurves1",
+							Source = "Value",
+						},
+						Y = Input { Value = 0.5, },
+					},
+				},
+				AnimCurves1 = LUTLookup {
+					CtrlWZoom = false,
+					Inputs = {
+						Lookup = Input {
+							SourceOp = "AnimCurves1Lookup",
+							Source = "Value",
+						},
+						Scale = Input { Value = 1.46, },
+						Offset = Input { Value = -0.23, },
+					},
+				},
+				AnimCurves1Lookup = LUTBezier {
+					KeyColorSplines = {
+						[0] = {
+							[0] = { 0, RH = { 0.333333333333333, 0.333333333333333 }, Flags = { Linear = true } },
+							[1] = { 1, LH = { 0.666666666666667, 0.666666666666667 }, Flags = { Linear = true } }
+						}
+					},
+					SplineColor = { Red = 255, Green = 255, Blue = 255 },
+					CtrlWZoom = false,
+				},
+				Background1 = Background {
+					Inputs = {
+						EffectMask = Input {
+							SourceOp = "Transform2",
+							Source = "Output",
+						},
+						Width = Input { Value = 1920, },
+						Height = Input { Value = 1080, },
+						UseFrameFormatSettings = Input { Value = 1, },
+						["Gamut.SLogVersion"] = Input { Value = FuID { "SLog2" }, },
+						TopLeftRed = Input { Value = 0.3333333333333, },
+						TopLeftBlue = Input { Value = 0.4980392156863, },
+					},
+					ViewInfo = OperatorInfo { Pos = { 450.591, 117.136 } },
+				},
+				Background2 = Background {
+					Inputs = {
+						EffectMask = Input {
+							SourceOp = "Transform3",
+							Source = "Output",
+						},
+						Width = Input { Value = 1920, },
+						Height = Input { Value = 1080, },
+						UseFrameFormatSettings = Input { Value = 1, },
+						["Gamut.SLogVersion"] = Input { Value = FuID { "SLog2" }, },
+						TopLeftRed = Input { Value = 1, },
+						TopLeftBlue = Input { Value = 1, },
+					},
+					ViewInfo = OperatorInfo { Pos = { 628.311, 135.992 } },
+				},
+				Merge1 = Merge {
+					Inputs = {
+						Background = Input {
+							SourceOp = "Background1",
+							Source = "Output",
+						},
+						Foreground = Input {
+							SourceOp = "Background2",
+							Source = "Output",
+						},
+						PerformDepthMerge = Input { Value = 0, },
+					},
+					ViewInfo = OperatorInfo { Pos = { 466.619, 148.849 } },
+				},
+				Transform4 = Transform {
+					Inputs = {
+						Size = Input { Value = 2.29, },
+						Angle = Input { Value = 52.7, },
+						Input = Input {
+							SourceOp = "Merge1",
+							Source = "Output",
+						},
+					},
+					ViewInfo = OperatorInfo { Pos = { 462.376, 190.418 } },
+				},
+				Merge2 = Merge {
+					Inputs = {
+						Background = Input {
+							SourceOp = "Dissolve1",
+							Source = "Output",
+						},
+						Foreground = Input {
+							SourceOp = "Transform4",
+							Source = "Output",
+						},
+						PerformDepthMerge = Input { Value = 0, },
+					},
+					ViewInfo = OperatorInfo { Pos = { 463.319, 229.416 } },
+				},
+				Dissolve1 = Dissolve {
+					Transitions = {
+						[0] = "DFTDissolve"
+					},
+					Inputs = {
+						Mix = Input { Expression = "iif(Transform2.Center.X > 0.5, 1, 0)", },
+					},
+					ViewInfo = OperatorInfo { Pos = { 351.921, 229.418 } },
+				}
+			},
+		}
+	},
+	ActiveTool = "StripeTransition"
+}
