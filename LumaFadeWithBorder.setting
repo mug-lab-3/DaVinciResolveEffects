@@ -1,0 +1,339 @@
+{
+	Tools = ordered() {
+		LumaFadeWithBorder = GroupOperator {
+			Inputs = ordered() {
+				MainInput1 = InstanceInput {
+					SourceOp = "Transform2",
+					Source = "Input",
+				},
+				Input1 = InstanceInput {
+					SourceOp = "LumaKeyer1",
+					Source = "MatteBlur",
+					Default = 1.73,
+				},
+				Input2 = InstanceInput {
+					SourceOp = "LumaKeyer1",
+					Source = "Invert",
+					Default = 0,
+				},
+				Input3 = InstanceInput {
+					SourceOp = "AnimCurves1",
+					Source = "Curve",
+				},
+				Input4 = InstanceInput {
+					SourceOp = "AnimCurves1",
+					Source = "EaseIn",
+					Width = 0.5,
+				},
+				Input5 = InstanceInput {
+					SourceOp = "AnimCurves1",
+					Source = "EaseOut",
+					Width = 0.5,
+				},
+				Input6 = InstanceInput {
+					SourceOp = "AnimCurves2",
+					Source = "Curve",
+				},
+				Input7 = InstanceInput {
+					SourceOp = "AnimCurves2",
+					Source = "EaseIn",
+					Width = 0.5,
+				},
+				Input8 = InstanceInput {
+					SourceOp = "AnimCurves2",
+					Source = "EaseOut",
+					Width = 0.5,
+				},
+				Input9 = InstanceInput {
+					SourceOp = "Dissolve1",
+					Source = "Mix",
+					Default = 0,
+				},
+				Input10 = InstanceInput {
+					SourceOp = "ErodeDilate1",
+					Source = "XAmount",
+					Default = -0.0043,
+				},
+				Input11 = InstanceInput {
+					SourceOp = "Glow1",
+					Source = "XGlowSize",
+					Default = 10,
+				},
+				Input12 = InstanceInput {
+					SourceOp = "Glow1",
+					Source = "Glow",
+					Default = 0.987,
+				},
+				Input13 = InstanceInput {
+					SourceOp = "Glow1",
+					Source = "RedScale",
+					Default = 0.535,
+				},
+				Input14 = InstanceInput {
+					SourceOp = "Glow1",
+					Source = "GreenScale",
+					Default = 0.22,
+				},
+				Input15 = InstanceInput {
+					SourceOp = "Glow1",
+					Source = "BlueScale",
+					Default = 0,
+				},
+				Input16 = InstanceInput {
+					SourceOp = "Glow1",
+					Source = "AlphaScale",
+					Default = 2,
+				},
+				MainInput2 = InstanceInput {
+					SourceOp = "Transform1",
+					Source = "Input",
+				},
+			},
+			Outputs = {
+				MainOutput1 = InstanceOutput {
+					SourceOp = "Merge1",
+					Source = "Output",
+				}
+			},
+			ViewInfo = GroupInfo { Pos = { 0, 0 } },
+			Tools = ordered() {
+				Merge2 = Merge {
+					Inputs = {
+						Background = Input {
+							SourceOp = "Transform1",
+							Source = "Output",
+						},
+						Foreground = Input {
+							SourceOp = "LumaKeyer1",
+							Source = "Output",
+						},
+						Operator = Input { Value = FuID { "Mask" }, },
+						PerformDepthMerge = Input { Value = 0, },
+					},
+					ViewInfo = OperatorInfo { Pos = { -8.81898, 23.1275 } },
+				},
+				Background1 = Background {
+					Inputs = {
+						EffectMask = Input {
+							SourceOp = "Merge2",
+							Source = "Output",
+						},
+						Width = Input { Value = 1920, },
+						Height = Input { Value = 1080, },
+						UseFrameFormatSettings = Input { Value = 1, },
+						["Gamut.SLogVersion"] = Input { Value = FuID { "SLog2" }, },
+						TopLeftRed = Input { Value = 1, },
+						TopLeftGreen = Input { Value = 1, },
+						TopLeftBlue = Input { Value = 1, },
+					},
+					ViewInfo = OperatorInfo { Pos = { 212.03, 8.26091 } },
+				},
+				BrightnessContrast1 = BrightnessContrast {
+					CtrlWZoom = false,
+					Inputs = {
+						EffectMask = Input {
+							SourceOp = "Background1",
+							Source = "Output",
+						},
+						Gain = Input { Value = 5, },
+						Lift = Input { Value = 1, },
+						Gamma = Input { Value = 5, },
+						Contrast = Input { Value = 1, },
+						Brightness = Input { Value = 1, },
+						Saturation = Input { Value = 5, },
+						Input = Input {
+							SourceOp = "Background1",
+							Source = "Output",
+						},
+					},
+					ViewInfo = OperatorInfo { Pos = { 223.815, 50.6874 } },
+				},
+				Transform1 = Transform {
+					ViewInfo = OperatorInfo { Pos = { -222.854, 59.9829 } },
+				},
+				Merge4 = Merge {
+					Inputs = {
+						Background = Input {
+							SourceOp = "BrightnessContrast1",
+							Source = "Output",
+						},
+						Foreground = Input {
+							SourceOp = "Merge2",
+							Source = "Output",
+						},
+						Operator = Input { Value = FuID { "Stencil" }, },
+						PerformDepthMerge = Input { Value = 0, },
+					},
+					ViewInfo = OperatorInfo { Pos = { 229, 77.2575 } },
+				},
+				LumaKeyer1 = LumaKeyer {
+					Inputs = {
+						High = Input {
+							SourceOp = "AnimCurves1",
+							Source = "Value",
+						},
+						Low = Input {
+							SourceOp = "AnimCurves2",
+							Source = "Value",
+						},
+						Filter = Input { Value = FuID { "Fast Gaussian" }, },
+						MatteBlur = Input { Value = 1.73, },
+						Invert = Input {
+							SourceOp = "Publish1",
+							Source = "Value",
+						},
+						Input = Input {
+							SourceOp = "Dissolve1",
+							Source = "Output",
+						},
+						InvertInvert = Input {
+							SourceOp = "Calculation1",
+							Source = "Result",
+						}
+					},
+					ViewInfo = OperatorInfo { Pos = { 3.275, 79.2709 } },
+					UserControls = ordered() { InvertInvert = { CBC_TriState = false, INP_Integer = false, LINKID_DataType = "Number", ICS_ControlPage = "Controls", INPID_InputControl = "CheckboxControl", LINKS_Name = "InvertInvert", } }
+				},
+				AnimCurves1 = LUTLookup {
+					CtrlWZoom = false,
+					Inputs = {
+						Lookup = Input {
+							SourceOp = "AnimCurves1Lookup",
+							Source = "Value",
+						},
+						Invert = Input {
+							SourceOp = "Calculation1",
+							Source = "Result",
+						},
+						Scale = Input { Value = 1.2, },
+						Offset = Input { Value = -0.1, },
+					},
+				},
+				AnimCurves1Lookup = LUTBezier {
+					KeyColorSplines = {
+						[0] = {
+							[0] = { 0, RH = { 0.333333333333333, 0.333333333333333 }, Flags = { Linear = true } },
+							[1] = { 1, LH = { 0.666666666666667, 0.666666666666667 }, Flags = { Linear = true } }
+						}
+					},
+					SplineColor = { Red = 255, Green = 255, Blue = 255 },
+					CtrlWZoom = false,
+				},
+				Calculation1 = Calculation {
+					CtrlWZoom = false,
+					Inputs = {
+						FirstOperand = Input {
+							Value = 1,
+							Expression = "iif(LumaKeyer1.Invert == 1, 0, 1)",
+						},
+						Operator = Input { Value = 9, },
+					},
+				},
+				AnimCurves2 = LUTLookup {
+					CtrlWZoom = false,
+					Inputs = {
+						Lookup = Input {
+							SourceOp = "AnimCurves2Lookup",
+							Source = "Value",
+						},
+						Invert = Input {
+							SourceOp = "Calculation1",
+							Source = "Result",
+						},
+						Scale = Input { Value = 1.2, },
+						Offset = Input { Value = -0.1, },
+					},
+				},
+				AnimCurves2Lookup = LUTBezier {
+					KeyColorSplines = {
+						[0] = {
+							[0] = { 0, RH = { 0.333333333333333, 0.333333333333333 }, Flags = { Linear = true } },
+							[1] = { 1, LH = { 0.666666666666667, 0.666666666666667 }, Flags = { Linear = true } }
+						}
+					},
+					SplineColor = { Red = 255, Green = 255, Blue = 255 },
+					CtrlWZoom = false,
+				},
+				Publish1 = PublishNumber {
+					CtrlWZoom = false,
+				},
+				Dissolve1 = Dissolve {
+					Transitions = {
+						[0] = "DFTDissolve"
+					},
+					Inputs = {
+						Mix = Input { Value = 0, },
+						Background = Input {
+							SourceOp = "Transform2",
+							Source = "Output",
+						},
+						Foreground = Input {
+							SourceOp = "Transform1",
+							Source = "Output",
+						},
+					},
+					ViewInfo = OperatorInfo { Pos = { -116.316, 89.9814 } },
+				},
+				ErodeDilate1 = ErodeDilate {
+					Inputs = {
+						XAmount = Input { Value = -0.0043, },
+						Input = Input {
+							SourceOp = "Merge4",
+							Source = "Output",
+						},
+					},
+					ViewInfo = OperatorInfo { Pos = { 227.586, 104.256 } },
+				},
+				Merge3 = Merge {
+					Inputs = {
+						Background = Input {
+							SourceOp = "Glow1",
+							Source = "Output",
+						},
+						Foreground = Input {
+							SourceOp = "Merge2",
+							Source = "Output",
+						},
+						PerformDepthMerge = Input { Value = 0, },
+					},
+					ViewInfo = OperatorInfo { Pos = { 75.793, 111.114 } },
+				},
+				Glow1 = Glow {
+					Inputs = {
+						Blend = Input { Value = 0.2, },
+						Filter = Input { Value = FuID { "Fast Gaussian" }, },
+						Glow = Input { Value = 0.987, },
+						ColorScale = Input { Value = 0.535, },
+						RedScale = Input { Value = 0.535, },
+						GreenScale = Input { Value = 0.22, },
+						BlueScale = Input { Value = 0, },
+						AlphaScale = Input { Value = 2, },
+						Input = Input {
+							SourceOp = "ErodeDilate1",
+							Source = "Output",
+						},
+					},
+					ViewInfo = OperatorInfo { Pos = { 220.824, 135.113 } },
+				},
+				Transform2 = Transform {
+					ViewInfo = OperatorInfo { Pos = { -229.924, 147.407 } },
+				},
+				Merge1 = Merge {
+					Inputs = {
+						Background = Input {
+							SourceOp = "Transform2",
+							Source = "Output",
+						},
+						Foreground = Input {
+							SourceOp = "Merge3",
+							Source = "Output",
+						},
+						PerformDepthMerge = Input { Value = 0, },
+					},
+					ViewInfo = OperatorInfo { Pos = { 138.568, 161.254 } },
+				}
+			},
+		}
+	},
+	ActiveTool = "LumaFadeWithBorder"
+}
