@@ -2,10 +2,6 @@
 	Tools = ordered() {
 		LumaFade = GroupOperator {
 			Inputs = ordered() {
-				MainInput1 = InstanceInput {
-					SourceOp = "Transform2",
-					Source = "Input",
-				},
 				Input1 = InstanceInput {
 					SourceOp = "Dissolve1",
 					Source = "Mix",
@@ -13,13 +9,13 @@
 				},
 				Input2 = InstanceInput {
 					SourceOp = "LumaKeyer1",
-					Source = "MatteBlur",
-					Default = 8.52,
+					Source = "Invert",
+					Default = 0,
 				},
 				Input3 = InstanceInput {
 					SourceOp = "LumaKeyer1",
-					Source = "Invert",
-					Default = 0,
+					Source = "MatteBlur",
+					Default = 8.52,
 				},
 				Input4 = InstanceInput {
 					SourceOp = "AnimCurves1",
@@ -69,6 +65,10 @@
 					Source = "Offset",
 					Default = -0.1,
 				},
+				MainInput1 = InstanceInput {
+					SourceOp = "Transform2",
+					Source = "Input",
+				},
 				MainInput2 = InstanceInput {
 					SourceOp = "Transform1",
 					Source = "Input",
@@ -82,24 +82,19 @@
 			},
 			ViewInfo = GroupInfo { Pos = { 0, 0 } },
 			Tools = ordered() {
-				Transform1 = Transform {
-					ViewInfo = OperatorInfo { Pos = { 389.287, 36.8642 } },
-				},
-				Dissolve1 = Dissolve {
-					Transitions = {
-						[0] = "DFTDissolve"
-					},
+				Merge1 = Merge {
 					Inputs = {
 						Background = Input {
 							SourceOp = "Transform2",
 							Source = "Output",
 						},
 						Foreground = Input {
-							SourceOp = "Transform1",
+							SourceOp = "Merge2",
 							Source = "Output",
 						},
+						PerformDepthMerge = Input { Value = 0, },
 					},
-					ViewInfo = OperatorInfo { Pos = { 495.825, 66.8627 } },
+					ViewInfo = OperatorInfo { Pos = { 190, 89.159 } },
 				},
 				Merge2 = Merge {
 					Inputs = {
@@ -114,7 +109,7 @@
 						Operator = Input { Value = FuID { "Mask" }, },
 						PerformDepthMerge = Input { Value = 0, },
 					},
-					ViewInfo = OperatorInfo { Pos = { 767.371, 66.8627 } },
+					ViewInfo = OperatorInfo { Pos = { 187.806, 38.3547 } },
 				},
 				LumaKeyer1 = LumaKeyer {
 					Inputs = {
@@ -128,10 +123,6 @@
 						},
 						Filter = Input { Value = FuID { "Fast Gaussian" }, },
 						MatteBlur = Input { Value = 8.52, },
-						Invert = Input {
-							SourceOp = "Publish1",
-							Source = "Value",
-						},
 						Input = Input {
 							SourceOp = "Dissolve1",
 							Source = "Output",
@@ -141,15 +132,15 @@
 							Source = "Result",
 						}
 					},
-					ViewInfo = OperatorInfo { Pos = { 622.958, 66.4374 } },
+					ViewInfo = OperatorInfo { Pos = { 43.393, 37.9294 } },
 					UserControls = ordered() {
 						InvertInvert = {
-							LINKS_Name = "InvertInvert",
-							LINKID_DataType = "Number",
-							INPID_InputControl = "CheckboxControl",
-							INP_Integer = false,
 							CBC_TriState = false,
+							INP_Integer = false,
+							LINKID_DataType = "Number",
 							ICS_ControlPage = "Controls",
+							INPID_InputControl = "CheckboxControl",
+							LINKS_Name = "InvertInvert",
 						}
 					}
 				},
@@ -213,26 +204,28 @@
 					SplineColor = { Red = 255, Green = 255, Blue = 255 },
 					CtrlWZoom = false,
 				},
-				Publish1 = PublishNumber {
-					CtrlWZoom = false,
-				},
-				Transform2 = Transform {
-					ViewInfo = OperatorInfo { Pos = { 389.759, 108.004 } },
-				},
-				Merge1 = Merge {
-					CtrlWZoom = false,
+				Dissolve1 = Dissolve {
+					Transitions = {
+						[0] = "DFTDissolve"
+					},
 					Inputs = {
 						Background = Input {
 							SourceOp = "Transform2",
 							Source = "Output",
 						},
 						Foreground = Input {
-							SourceOp = "Merge2",
+							SourceOp = "Transform1",
 							Source = "Output",
 						},
-						PerformDepthMerge = Input { Value = 0, },
 					},
-					ViewInfo = OperatorInfo { Pos = { 769.565, 117.667 } },
+					ViewInfo = OperatorInfo { Pos = { -83.74, 38.3547 } },
+				},
+				Transform2 = Transform {
+					ViewInfo = OperatorInfo { Pos = { -189.806, 79.496 } },
+				},
+				Transform1 = Transform {
+					CtrlWZoom = false,
+					ViewInfo = OperatorInfo { Pos = { -190.278, 8.35618 } },
 				}
 			},
 		}
