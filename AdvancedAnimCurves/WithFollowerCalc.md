@@ -39,9 +39,6 @@ self.Delay = ceil(self.DelayTime * framerate)
 Floowerに設定したAnimCurvesに以下を設定し
 `AnimTime`でIn Anim時間を調整できるようにする
 
-* Curve Shape -> Source は`Duration`に設定する
-* Scaling -> Clip Low に`✓`を入れる
-* Scaling -> Clip High に`✓`を入れる
 * Controlsタブに`AnimTime`として新しいコントロールを追加する
 
   | 設定先 | 値 |
@@ -68,7 +65,7 @@ Settings -> Frame Render Scriptに以下を設定する
 local framerate = comp:GetPrefs("Comp.FrameFormat.Rate")
 local delayCount = ceil(Follower1.DelayTime * framerate)
 local animCount = ceil(self.AnimTime * framerate)
-local clipLength = (comp.RenderEnd - comp.RenderStart) + 1
+local clipLength = (comp.RenderEnd - comp.RenderStart)
 local ratioCorrection = (clipLength + 1) / clipLength 
 
 if delayCount > clipLength then
@@ -81,11 +78,14 @@ if animCount > clipLength then
 end
 
 if animCount <= delayCount then
-   animCount = delayCount
-   delayCount = floor(delayCount - ratioCorrection)
-   self.AnimTime = animCount / framerate
+  animCount = delayCount
+  delayCount = floor(delayCount - ratioCorrection)
+  self.AnimTime = animCount / framerate
 end
 
+self.Source.Value =  "Duration"
+self.ClipHigh = 1
+self.ClipLow = 1
 self.TimeScale = ratioCorrection / ((animCount - delayCount) / clipLength)
 self.TimeOffset = 0
 ```
@@ -95,9 +95,6 @@ self.TimeOffset = 0
 Floowerに設定したAnimCurvesに以下を設定し
 `AnimTime`でOut Anim時間を調整できるようにする
 
-* Curve Shape -> Source は`Duration`に設定する
-* Scaling -> Clip Low に`✓`を入れる
-* Scaling -> Clip High に`✓`を入れる
 * Controlsタブに`AnimTime`として新しいコントロールを追加する
 
   | 設定先 | 値 |
@@ -125,7 +122,7 @@ Settings -> Frame Render Scriptに以下を設定する
 local framerate = comp:GetPrefs("Comp.FrameFormat.Rate")
 local delayCount = ceil(Follower1.DelayTime * framerate)
 local animCount = ceil(self.AnimTime * framerate)
-local clipLength = (comp.RenderEnd - comp.RenderStart) + 1
+local clipLength = (comp.RenderEnd - comp.RenderStart)
 local ratioCorrection = (clipLength + 1) / clipLength 
 
 if delayCount > clipLength then
@@ -139,12 +136,15 @@ end
 
 local magicOffset = 0
 if animCount <= delayCount then
-   magicOffset = 2
-   animCount = delayCount
-   delayCount = floor(delayCount - ratioCorrection)
-   self.AnimTime = animCount / framerate
+  magicOffset = 2
+  animCount = delayCount
+  delayCount = floor(delayCount - ratioCorrection)
+  self.AnimTime = animCount / framerate
 end
 
+self.Source.Value = "Duration"
+self.ClipHigh = 1
+self.ClipLow = 1
 self.TimeScale  = ratioCorrection / ((animCount - delayCount)   / clipLength)
-self.TimeOffset = (1 / ratioCorrection) - ((animCount + magicOffset) / clipLength)
+self.TimeOffset = (1 - ((animCount + magicOffset) / clipLength)) / ratioCorrection
 ```
