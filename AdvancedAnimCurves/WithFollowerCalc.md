@@ -11,15 +11,15 @@ Delay Timeを追加して秒単位でDelayを設定できるようにする
 
   | 設定先 | 値 |
   | ---- | ---- |
-  | Name | `Delay Time(sec)` |
-  | ID | `DelayTime` |
-  | Type | `Number` |
-  | Page | `Timing` |
-  | Default | `0` |
-  | Range | `0` to: `10` |
-  | Allowed | `0` to: 空欄 |
-  | Input Ctrol | `SliderControl` |
-  | View Ctrl | `None` |
+  | Name | ```Delay Time(sec)``` |
+  | ID | ```DelayTime``` |
+  | Type | ```Number``` |
+  | Page | ```Timing``` |
+  | Default | ```0``` |
+  | Range | ```0``` to: ```10``` |
+  | Allowed | ```0``` to: 空欄 |
+  | Input Ctrol | ```SliderControl``` |
+  | View Ctrl | ```None``` |
   | Center | 空欄 |
   | Steps | 空欄 |
 
@@ -46,15 +46,15 @@ Floowerに設定したAnimCurvesに以下を設定し
 
   | 設定先 | 値 |
   | ---- | ---- |
-  | Name | `Anuim Time(sec)` |
-  | ID | `AnimTime` |
-  | Type | `Number` |
-  | Page | `Controls` |
-  | Default | `0` |
-  | Range | `0` to: `10` |
-  | Allowed | `0` to: 空欄 |
-  | Input Ctrol | `SliderControl` |
-  | View Ctrl | `None` |
+  | Name | ```Anuim Time(sec)``` |
+  | ID | ```AnimTime``` |
+  | Type | ```Number``` |
+  | Page | ```Controls``` |
+  | Default | ```0``` |
+  | Range | ```0``` to: ```10``` |
+  | Allowed | ```0``` to: 空欄 |
+  | Input Ctrol | ```SliderControl``` |
+  | View Ctrl | ```None``` |
   | Center | 空欄 |
   | Steps | 空欄 |
 
@@ -102,18 +102,17 @@ Floowerに設定したAnimCurvesに以下を設定し
 
   | 設定先 | 値 |
   | ---- | ---- |
-  | Name | `Anuim Time(sec)` |
-  | ID | `AnimTime` |
-  | Type | `Number` |
-  | Page | `Controls` |
-  | Default | `0` |
-  | Range | `0` to: `10` |
-  | Allowed | `0` to: 空欄 |
-  | Input Ctrol | `SliderControl` |
-  | View Ctrl | `None` |
+  | Name | ```Anuim Time(sec)``` |
+  | ID | ```AnimTime``` |
+  | Type | ```Number``` |
+  | Page | ```Controls``` |
+  | Default | ```0``` |
+  | Range | ```0``` to: ```10``` |
+  | Allowed | ```0``` to: 空欄 |
+  | Input Ctrol | ```SliderControl``` |
+  | View Ctrl | ```None``` |
   | Center | 空欄 |
   | Steps | 空欄 |
-
 
 #### Frame Render Script
 
