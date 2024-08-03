@@ -6,21 +6,22 @@ Delay Timeを追加して秒単位でDelayを設定できるようにする
 
 ### Timing
 
-Timingタブに`DelayTime`として新しいコントロールを追加する
+* Delay typeは`Between First and Last Character`に設定する
+* Timingタブに`DelayTime`として新しいコントロールを追加する
 
-| 設定先 | 値 |
-| ---- | ---- |
-| Name | `Delay Time(sec)` |
-| ID | `DelayTime` |
-| Type | `Number` |
-| Page | `Timing` |
-| Default | `0` |
-| Range | `0` to: `10` |
-| Allowed | `0` to: 空欄 |
-| Input Ctrol | `SliderControl` |
-| View Ctrl | `None` |
-| Center | 空欄 |
-| Steps | 空欄 |
+  | 設定先 | 値 |
+  | ---- | ---- |
+  | Name | `Delay Time(sec)` |
+  | ID | `DelayTime` |
+  | Type | `Number` |
+  | Page | `Timing` |
+  | Default | `0` |
+  | Range | `0` to: `10` |
+  | Allowed | `0` to: 空欄 |
+  | Input Ctrol | `SliderControl` |
+  | View Ctrl | `None` |
+  | Center | 空欄 |
+  | Steps | 空欄 |
 
 ### Frame Render Script
 
