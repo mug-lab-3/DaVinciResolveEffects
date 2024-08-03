@@ -83,7 +83,7 @@ if animCount <= delayCount then
   self.AnimTime = animCount / framerate
 end
 
-self.Source.Value =  "Duration"
+self.Source = "Duration"
 self.ClipHigh = 1
 self.ClipLow = 1
 self.TimeScale = ratioCorrection / ((animCount - delayCount) / clipLength)
@@ -142,7 +142,7 @@ if animCount <= delayCount then
   self.AnimTime = animCount / framerate
 end
 
-self.Source.Value = "Duration"
+self.Source = "Duration"
 self.ClipHigh = 1
 self.ClipLow = 1
 self.TimeScale  = ratioCorrection / ((animCount - delayCount)   / clipLength)
