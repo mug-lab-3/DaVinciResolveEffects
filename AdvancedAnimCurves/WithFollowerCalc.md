@@ -31,9 +31,10 @@ Settings -> Frame Render Scriptに以下を設定する
 local framerate = comp:GetPrefs("Comp.FrameFormat.Rate")
 self.Delay = ceil(self.DelayTime * framerate)
 ```
-### 
 
-## In Anim
+## Anim Curves
+
+### In Anim
 
 Floowerに設定したAnimCurvesに以下を設定し
 `AnimTime`でIn Anim時間を調整できるようにする
@@ -41,8 +42,23 @@ Floowerに設定したAnimCurvesに以下を設定し
 * Curve Shape -> Source は`Duration`に設定する
 * Scaling -> Clip Low に`✓`を入れる
 * Scaling -> Clip High に`✓`を入れる
+* Controlsタブに`AnimTime`として新しいコントロールを追加する
 
-### Frame Render Script
+  | 設定先 | 値 |
+  | ---- | ---- |
+  | Name | `Anuim Time(sec)` |
+  | ID | `AnimTime` |
+  | Type | `Number` |
+  | Page | `Controls` |
+  | Default | `0` |
+  | Range | `0` to: `10` |
+  | Allowed | `0` to: 空欄 |
+  | Input Ctrol | `SliderControl` |
+  | View Ctrl | `None` |
+  | Center | 空欄 |
+  | Steps | 空欄 |
+
+#### Frame Render Script
 
 Settings -> Frame Render Scriptに以下を設定する
 
@@ -74,7 +90,7 @@ self.TimeScale = ratioCorrection / ((animCount - delayCount) / clipLength)
 self.TimeOffset = 0
 ```
 
-## Out Anim
+### Out Anim
 
 Floowerに設定したAnimCurvesに以下を設定し
 `AnimTime`でOut Anim時間を調整できるようにする
@@ -82,8 +98,24 @@ Floowerに設定したAnimCurvesに以下を設定し
 * Curve Shape -> Source は`Duration`に設定する
 * Scaling -> Clip Low に`✓`を入れる
 * Scaling -> Clip High に`✓`を入れる
+* Controlsタブに`AnimTime`として新しいコントロールを追加する
 
-### Frame Render Script
+  | 設定先 | 値 |
+  | ---- | ---- |
+  | Name | `Anuim Time(sec)` |
+  | ID | `AnimTime` |
+  | Type | `Number` |
+  | Page | `Controls` |
+  | Default | `0` |
+  | Range | `0` to: `10` |
+  | Allowed | `0` to: 空欄 |
+  | Input Ctrol | `SliderControl` |
+  | View Ctrl | `None` |
+  | Center | 空欄 |
+  | Steps | 空欄 |
+
+
+#### Frame Render Script
 
 Settings -> Frame Render Scriptに以下を設定する
 
