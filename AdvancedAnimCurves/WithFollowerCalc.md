@@ -46,7 +46,7 @@ Floowerに設定したAnimCurvesに以下を設定し
 
   | 設定先 | 値 |
   | ---- | ---- |
-  | Name | `Anuim Time(sec)` |
+  | Name | `Anim Time(sec)` |
   | ID | `AnimTime` |
   | Type | `Number` |
   | Page | `Controls` |
@@ -102,7 +102,7 @@ Floowerに設定したAnimCurvesに以下を設定し
 
   | 設定先 | 値 |
   | ---- | ---- |
-  | Name | `Anuim Time(sec)` |
+  | Name | `Anim Time(sec)` |
   | ID | `AnimTime` |
   | Type | `Number` |
   | Page | `Controls` |
