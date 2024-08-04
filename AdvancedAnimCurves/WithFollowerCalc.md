@@ -14,7 +14,7 @@ Delay Timeを追加して秒単位でDelayを設定できるようにする
   | Type | `Number` |
   | Page | `Timing` |
   | Default | `0` |
-  | Range | `0` to: `10` |
+  | Range | 空欄 |
   | Allowed | `0` to: 空欄 |
   | Input Ctrol | `ScrewControl` |
   | View Ctrl | `None` |
@@ -31,7 +31,7 @@ local clipLength = (comp.RenderEnd - comp.RenderStart)
 
 local delayCount = ceil(self.DelayTime * framerate)
 if delayCount > (clipLength - 1) then
-  delayCount = clipLength
+  delayCount = clipLength - 1
   self.DelayTime = delayCount / framerate
 end
 
@@ -55,7 +55,7 @@ Floowerに設定したAnimCurvesに以下を設定し
   | Type | `Number` |
   | Page | `Controls` |
   | Default | `0` |
-  | Range | `0` to: `10` |
+  | Range | 空欄 |
   | Allowed | `0` to: 空欄 |
   | Input Ctrol | `SliderControl` |
   | View Ctrl | `None` |
@@ -69,34 +69,37 @@ Settings -> Frame Render Scriptに以下を設定する
 * `Follower1`となっているところは設定元のfollowerに置き換える
 
 ```lua
+local follower = Follower1
 local tag = "InAnim :" .. self.Name
 local debugEnable = comp:GetData("DebugEnable")
 local framerate = comp:GetPrefs("Comp.FrameFormat.Rate")
-local delayCount = ceil(Follower1.DelayTime * framerate)
-local animCount = ceil(self.AnimTime * framerate)
 local clipLength = (comp.RenderEnd - comp.RenderStart)
-local ratioCorrection = (clipLength + 1) / clipLength 
+local ratioCorrection = (clipLength + 1) / clipLength
+local textLength = GetTextLength(follower.Text.Value)
 
-if animCount > clipLength then
-  animCount = clipLength
-  self.AnimTime = animCount / framerate 
+local delayCount = ceil(follower.DelayTime * framerate)
+if delayCount > (clipLength - 1) then
+  delayCount = clipLength - 1
 end
 
-if animCount <= delayCount then
-  animCount = delayCount
-  delayCount = floor(delayCount - ratioCorrection)
-  self.AnimTime = animCount / framerate
+local animCount = ceil((self.AnimTime * framerate) - delayCount)
+if animCount <= 0 then
+  animCount = 1
+end
+if (animCount + delayCount) > clipLength then
+  animCount = clipLength - delayCount
 end
 
 if debugEnable then
   local digit = floor(math.log10(clipLength) + 1)
-  print(string.format("[%s] Confirmed value: start=%0"..digit.."d, end=%0"..digit.."d, delay=%0" .. digit.."d, anim=%0"..digit .. "d", tag, 0, animCount, delayCount, (animCount - delayCount)))
+  print(string.format("[%s] start=%0"..digit.."d, end=%0"..digit.."d, delay=%0" .. digit.."d, anim=%0"..digit .. "d", tag, 0, (animCount + delayCount), delayCount, animCount))
 end
 
 self.Source = "Duration"
 self.ClipHigh = 1
 self.ClipLow = 1
-self.TimeScale = ratioCorrection / ((animCount - delayCount) / clipLength)
+self.AnimTime = (animCount + delayCount) / framerate
+self.TimeScale = ratioCorrection / (animCount / clipLength)
 self.TimeOffset = 0
 ```
 
@@ -128,37 +131,37 @@ Settings -> Frame Render Scriptに以下を設定する
 * `Follower1`となっているところは設定元のfollowerに置き換える
 
 ```lua
-local tag = "EndAnim:" .. self.Name
+local follower = Follower1
+local tag = "OutAnim:" .. self.Name
 local debugEnable = comp:GetData("DebugEnable")
 local framerate = comp:GetPrefs("Comp.FrameFormat.Rate")
-local delayCount = ceil(Follower1.DelayTime * framerate)
-local animCount = ceil(self.AnimTime * framerate)
 local clipLength = (comp.RenderEnd - comp.RenderStart)
 local ratioCorrection = (clipLength + 1) / clipLength 
 
-if animCount > clipLength then
-  animCount = clipLength 
-  self.AnimTime = animCount / framerate 
+local delayCount = ceil(follower.DelayTime * framerate)
+if delayCount > (clipLength - 1) then
+  delayCount = clipLength - 1
 end
 
-local magicOffset = 0
-if animCount <= delayCount then
-  animCount = delayCount
-  delayCount = floor(delayCount / ratioCorrection)
-  magicOffset = animCount - delayCount
-  self.AnimTime = animCount / framerate
+local animCount = ceil((self.AnimTime * framerate) - delayCount)
+if animCount <= 0 then
+  animCount = 1
+end
+if (animCount + delayCount) > clipLength then
+  animCount = clipLength - delayCount
 end
 
 if debugEnable then
   local digit = floor(math.log10(clipLength) + 1)
-  print(string.format("[%s] Confirmed value: start=%0"..digit.."d, end=%0"..digit.."d, delay=%0" .. digit.."d, anim=%0"..digit .. "d", tag, clipLength - (animCount + magicOffset), clipLength, delayCount, (animCount - delayCount)))
+  print(string.format("[%s] start=%0"..digit.."d, end=%0"..digit.."d, delay=%0" .. digit.."d, anim=%0"..digit .. "d", tag, clipLength - (animCount + delayCount), clipLength, delayCount, animCount))
 end
 
 self.Source = "Duration"
 self.ClipHigh = 1
 self.ClipLow = 1
-self.TimeScale  = ratioCorrection / ((animCount - delayCount) / clipLength)
-self.TimeOffset = (1 - ((animCount + magicOffset) / clipLength)) / ratioCorrection
+self.AnimTime = (animCount + delayCount) / framerate
+self.TimeScale  = ratioCorrection / (animCount / clipLength)
+self.TimeOffset = (1 - ((animCount + delayCount) / clipLength)) / ratioCorrection
 ```
 
 
@@ -175,7 +178,7 @@ Floowerに設定したAnimCurvesに以下を設定し
   | Type | `Number` |
   | Page | `Controls` |
   | Default | `0` |
-  | Range | `0` to: `10` |
+  | Range | 空欄 |
   | Allowed | `0` to: 空欄 |
   | Input Ctrol | `ScrewControl` |
   | View Ctrl | `None` |
@@ -189,7 +192,7 @@ Floowerに設定したAnimCurvesに以下を設定し
   | Type | `Number` |
   | Page | `Controls` |
   | Default | `0` |
-  | Range | `0` to: `10` |
+  | Range | 空欄 |
   | Allowed | `0` to: 空欄 |
   | Input Ctrol | `ScrewControl` |
   | View Ctrl | `None` |
@@ -209,6 +212,11 @@ local framerate = comp:GetPrefs("Comp.FrameFormat.Rate")
 local clipLength = (comp.RenderEnd - comp.RenderStart)
 local isError = false
 
+local delayCount = ceil(Follower1.DelayTime * framerate)
+if delayCount > (clipLength - 1) then
+  delayCount = clipLength - 1
+end
+
 local animStartCount = floor(self.AnimStartTime * framerate)
 local animEndCount = ceil(self.AnimEndTime * framerate)
 if (clipLength -1) < animStartCount  then
@@ -221,7 +229,6 @@ if animEndCount <= animStartCount then
   isError = true
 end
 
-local delayCount = ceil(Follower1.DelayTime * framerate)
 local animCount = animEndCount - animStartCount
 local ratioCorrection = (clipLength + 1) / clipLength 
 
