@@ -57,7 +57,7 @@ Floowerに設定したAnimCurvesに以下を設定し
   | Default | `0` |
   | Range | 空欄 |
   | Allowed | `0` to: 空欄 |
-  | Input Ctrol | `SliderControl` |
+  | Input Ctrol | `ScrewControl` |
   | View Ctrl | `None` |
   | Center | 空欄 |
   | Steps | 空欄 |
@@ -118,7 +118,7 @@ Floowerに設定したAnimCurvesに以下を設定し
   | Default | `0` |
   | Range | `0` to: `10` |
   | Allowed | `0` to: 空欄 |
-  | Input Ctrol | `SliderControl` |
+  | Input Ctrol | `ScrewControl` |
   | View Ctrl | `None` |
   | Center | 空欄 |
   | Steps | 空欄 |
@@ -178,12 +178,12 @@ Floowerに設定したAnimCurvesに以下を設定し
   | Type | `Number` |
   | Page | `Controls` |
   | Default | `0` |
-  | Range | 空欄 |
+  | Range | `0` to: `10` |
   | Allowed | `0` to: 空欄 |
-  | Input Ctrol | `ScrewControl` |
+  | Input Ctrol | `RangeControl` |
   | View Ctrl | `None` |
-  | Center | 空欄 |
-  | Steps | 空欄 |
+  | Group | `<New Group>` |
+  | ID | `Low` |
 * Controlsタブに`AnimEndTime`として新しいコントロールを追加する
   | 設定先 | 値 |
   | ---- | ---- |
@@ -192,12 +192,12 @@ Floowerに設定したAnimCurvesに以下を設定し
   | Type | `Number` |
   | Page | `Controls` |
   | Default | `0` |
-  | Range | 空欄 |
+  | Range | `0` to: `10` |
   | Allowed | `0` to: 空欄 |
   | Input Ctrol | `ScrewControl` |
   | View Ctrl | `None` |
-  | Center | 空欄 |
-  | Steps | 空欄 |
+  | Group | *1番大きな値* |
+  | ID | `High` |
 
 #### Frame Render Script
 
@@ -206,54 +206,43 @@ Settings -> Frame Render Scriptに以下を設定する
 * `Follower1`となっているところは設定元のfollowerに置き換える
 
 ```lua
+local follower = Follower1
 local tag = "MidAnim:" .. self.Name
 local debugEnable = comp:GetData("DebugEnable")
 local framerate = comp:GetPrefs("Comp.FrameFormat.Rate")
 local clipLength = (comp.RenderEnd - comp.RenderStart)
-local isError = false
 
-local delayCount = ceil(Follower1.DelayTime * framerate)
+local delayCount = ceil(follower.DelayTime * framerate)
 if delayCount > (clipLength - 1) then
   delayCount = clipLength - 1
 end
 
 local animStartCount = floor(self.AnimStartTime * framerate)
-local animEndCount = ceil(self.AnimEndTime * framerate)
-if (clipLength -1) < animStartCount  then
-  isError = true
+if (animStartCount + delayCount) > clipLength then
+  animStartCount = clipLength - delayCount - 1
 end
-if clipLength < animEndCount  then
-  isError = true
+
+local animEndCount = ceil((self.AnimEndTime * framerate) - delayCount)
+if animEndCount <= (delayCount + 1) then
+  animEndCount = animStartCount + 1
 end
-if animEndCount <= animStartCount then
-  isError = true
+if animEndCount > clipLength then
+  animEndCount = clipLength - delayCount
 end
 
 local animCount = animEndCount - animStartCount
 local ratioCorrection = (clipLength + 1) / clipLength 
 
-if animCount > clipLength then
-  isError = true
-end
-
-local magicOffset = 0
-if animCount <= delayCount then
-  isError = true
-end
-
 if debugEnable then
   local digit = floor(math.log10(clipLength) + 1)
-  print(string.format("[%s] Confirmed value: start=%0"..digit.."d, end=%0"..digit.."d, delay=%0" .. digit.."d, anim=%0"..digit .. "d, error=%s", tag, animStartCount, animEndCount, delayCount, (animCount - delayCount), tostring(isError)))
+  print(string.format("[%s] start=%0"..digit.."d, end=%0"..digit.."d, delay=%0" .. digit.."d, anim=%0"..digit .. "d", tag, animStartCount, (animEndCount + delayCount), delayCount, animCount))
 end
 
 self.Source = "Duration"
 self.ClipHigh = 1
 self.ClipLow = 1
-if not isError then
-  self.TimeScale  = ratioCorrection / ((animCount - delayCount) / clipLength)
-  self.TimeOffset = (animStartCount / clipLength) / ratioCorrection
-else
-  self.TimeScale  = 0
-  self.TimeOffset = 0
-end
+self.AnimStartTime = animStartCount / framerate
+self.AnimEndTime = (animEndCount + delayCount) / framerate
+self.TimeScale  = ratioCorrection / (animCount / clipLength)
+self.TimeOffset = (animStartCount / clipLength) / ratioCorrection
 ```
