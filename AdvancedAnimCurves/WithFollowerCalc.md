@@ -6,9 +6,7 @@ Delay Timeを追加して秒単位でDelayを設定できるようにする
 
 ### Timing
 
-* Delay typeは`Between First and Last Character`に設定する
-* Timingタブに`DelayTime`として新しいコントロールを追加する
-
+* Timingタブに`DelayTime`として新しいコントロールを以下の設定で追加する
   | 設定先 | 値 |
   | ---- | ---- |
   | Name | `Delay Time(sec)` |
@@ -18,7 +16,7 @@ Delay Timeを追加して秒単位でDelayを設定できるようにする
   | Default | `0` |
   | Range | `0` to: `10` |
   | Allowed | `0` to: 空欄 |
-  | Input Ctrol | `SliderControl` |
+  | Input Ctrol | `ScrewControl` |
   | View Ctrl | `None` |
   | Center | 空欄 |
   | Steps | 空欄 |
@@ -29,7 +27,16 @@ Settings -> Frame Render Scriptに以下を設定する
 
 ```lua
 local framerate = comp:GetPrefs("Comp.FrameFormat.Rate")
-self.Delay = ceil(self.DelayTime * framerate)
+local clipLength = (comp.RenderEnd - comp.RenderStart)
+
+local delayCount = ceil(self.DelayTime * framerate)
+if delayCount > (clipLength - 1) then
+  delayCount = clipLength
+  self.DelayTime = delayCount / framerate
+end
+
+self.DelayType = 2
+self.Delay = delayCount
 ```
 
 ## Anim Curves
@@ -70,10 +77,6 @@ local animCount = ceil(self.AnimTime * framerate)
 local clipLength = (comp.RenderEnd - comp.RenderStart)
 local ratioCorrection = (clipLength + 1) / clipLength 
 
-if delayCount > clipLength then
-  delayCount = clipLength
-end
-
 if animCount > clipLength then
   animCount = clipLength
   self.AnimTime = animCount / framerate 
@@ -103,7 +106,6 @@ Floowerに設定したAnimCurvesに以下を設定し
 `AnimTime`でOut Anim時間を調整できるようにする
 
 * Controlsタブに`AnimTime`として新しいコントロールを追加する
-
   | 設定先 | 値 |
   | ---- | ---- |
   | Name | `Anim Time(sec)` |
@@ -134,10 +136,6 @@ local animCount = ceil(self.AnimTime * framerate)
 local clipLength = (comp.RenderEnd - comp.RenderStart)
 local ratioCorrection = (clipLength + 1) / clipLength 
 
-if delayCount > clipLength then
-  delayCount = clipLength 
-end
-
 if animCount > clipLength then
   animCount = clipLength 
   self.AnimTime = animCount / framerate 
@@ -166,7 +164,43 @@ self.TimeOffset = (1 - ((animCount + magicOffset) / clipLength)) / ratioCorrecti
 
 ### Mid Anim
 
+Floowerに設定したAnimCurvesに以下を設定し
+`AnimStartTime`, `AnimEndTime`でMid Anim時間を調整できるようにする
+
+* Controlsタブに`AnimStartTime`として新しいコントロールを追加する
+  | 設定先 | 値 |
+  | ---- | ---- |
+  | Name | `Anim Start Time(sec)` |
+  | ID | `AnimStartTime` |
+  | Type | `Number` |
+  | Page | `Controls` |
+  | Default | `0` |
+  | Range | `0` to: `10` |
+  | Allowed | `0` to: 空欄 |
+  | Input Ctrol | `ScrewControl` |
+  | View Ctrl | `None` |
+  | Center | 空欄 |
+  | Steps | 空欄 |
+* Controlsタブに`AnimEndTime`として新しいコントロールを追加する
+  | 設定先 | 値 |
+  | ---- | ---- |
+  | Name | `Anim End Time(sec)` |
+  | ID | `AnimEndTime` |
+  | Type | `Number` |
+  | Page | `Controls` |
+  | Default | `0` |
+  | Range | `0` to: `10` |
+  | Allowed | `0` to: 空欄 |
+  | Input Ctrol | `ScrewControl` |
+  | View Ctrl | `None` |
+  | Center | 空欄 |
+  | Steps | 空欄 |
+
 #### Frame Render Script
+
+Settings -> Frame Render Scriptに以下を設定する
+
+* `Follower1`となっているところは設定元のfollowerに置き換える
 
 ```lua
 local tag = "MidAnim:" .. self.Name
@@ -190,10 +224,6 @@ end
 local delayCount = ceil(Follower1.DelayTime * framerate)
 local animCount = animEndCount - animStartCount
 local ratioCorrection = (clipLength + 1) / clipLength 
-
-if delayCount > clipLength then
-  isError = true
-end
 
 if animCount > clipLength then
   isError = true
