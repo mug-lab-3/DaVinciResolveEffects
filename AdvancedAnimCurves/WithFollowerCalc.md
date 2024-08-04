@@ -223,7 +223,7 @@ if (animStartCount + delayCount) > clipLength then
 end
 
 local animEndCount = ceil((self.AnimEndTime * framerate) - delayCount)
-if animEndCount <= (delayCount + 1) then
+if animEndCount < (animStartCount + 1) then
   animEndCount = animStartCount + 1
 end
 if animEndCount > clipLength then
