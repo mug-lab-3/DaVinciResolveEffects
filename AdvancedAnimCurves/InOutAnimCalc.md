@@ -100,3 +100,45 @@ FrameCount ÷ [Clipレンダリング長](#clipレンダリング長) = Ratio
 ```
 1.0 - (((AnimTime * comp:GetPrefs("Comp.FrameFormat.Rate")) + 1) / (comp.RenderEnd - comp.RenderStart))
 ```
+
+### Mid Anim (Free Position)
+
+※ AnimStartはアニメーション開始時間を表す任意の値(変数)
+
+#### Time Scalce
+
+[Ratio](#framecount---ratio)の逆数
+> In Animと同じ
+
+```
+1.0 / ((AnimTime * comp:GetPrefs("Comp.FrameFormat.Rate")) / (comp.RenderEnd - comp.RenderStart))
+```
+
+#### Time Offset
+
+offsetのratio
+
+```
+(AnimStartTime * comp:GetPrefs("Comp.FrameFormat.Rate")) / (comp.RenderEnd - comp.RenderStart)
+```
+
+### Mid Anim (Out Ancker)
+
+※ AnimStartOffsetはアニメーション開始時間をクリップエンドからのオフセットを表す任意の値(変数)
+
+#### Time Scalce
+
+[Ratio](#framecount---ratio)の逆数
+> In Animと同じ
+
+```
+1.0 / ((AnimTime * comp:GetPrefs("Comp.FrameFormat.Rate")) / (comp.RenderEnd - comp.RenderStart))
+```
+
+#### Time Offset
+
+1 - offsetのratio
+
+```
+1.0 - ((AnimStartOffset * -1 * comp:GetPrefs("Comp.FrameFormat.Rate") + 1) / (comp.RenderEnd - comp.RenderStart))
+```
