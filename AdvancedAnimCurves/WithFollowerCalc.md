@@ -141,10 +141,14 @@ local debugEnable = comp:GetData("DebugEnable")
 local framerate = comp:GetPrefs("Comp.FrameFormat.Rate")
 local clipLength = (comp.RenderEnd - comp.RenderStart)
 local ratioCorrection = (clipLength + 1) / clipLength 
+local debug = ""
 
-local delayCount = ceil(follower.DelayTime * framerate)
-if delayCount > (clipLength - 1) then
-  delayCount = clipLength - 1
+local delayCount = 0
+if follower and follower.DelayTime then
+  delayCount = ceil(follower.DelayTime * framerate)
+  if delayCount > (clipLength - 1) then
+    delayCount = clipLength - 1
+  end
 end
 
 local animCount = ceil((self.AnimTime * framerate) - delayCount)
@@ -155,9 +159,15 @@ if (animCount + delayCount) > clipLength then
   animCount = clipLength - delayCount
 end
 
-if debugEnable then
-  local digit = floor(math.log10(clipLength) + 1)
-  print(string.format("[%s] start=%0"..digit.."d, end=%0"..digit.."d, delay=%0" .. digit.."d, anim=%0"..digit .. "d", tag, clipLength - (animCount + delayCount), clipLength, delayCount, animCount))
+if self.debug then
+  local animStartFrame = clipLength - (animCount + delayCount)
+  debug = debug .. "Anim Time : " .. self.AnimTime .. "\n"
+  debug = debug .. "Clip Length : " .. clipLength .. "(" .. comp.RenderEnd .. " - ".. comp.RenderStart .. ")\n"
+  debug = debug .. "Anim Start Frame : " .. animStartFrame .."(" .. (comp.RenderStart + animStartFrame) .. ")\n"
+  debug = debug .. "Anim End Frame : " .. clipLength .."(" .. (comp.RenderStart + clipLength) .. ")\n"
+  debug = debug .. "Anim Count : " .. animCount .. "\n"
+  debug = debug .. "Delay Count : " .. delayCount .. "\n"
+  self.debug = debug
 end
 
 self.Source = "Duration"
@@ -249,13 +259,13 @@ end
 
 if self.debug then
   local animEndFrame = (animStartCount + delayCount + animCount)
-  debug = debug .. "AnimStartOffset : " .. self.AnimStartOffset .. "\n"
-  debug = debug .. "AnimTime : " .. self.AnimTime .. "\n"
-  debug = debug .. "ClipLength : " .. clipLength .. "(" .. comp.RenderEnd .. " - ".. comp.RenderStart .. ")\n"
-  debug = debug .. "AnimStartFrame : " .. animStartCount .."(" .. (comp.RenderStart + animStartCount) .. ")\n"
-  debug = debug .. "AnimEndFrame : " .. animEndFrame .."(" .. (comp.RenderStart + animEndFrame) .. ")\n"
-  debug = debug .. "animCount : " .. animCount .. "\n"
-  debug = debug .. "delayCount : " .. delayCount .. "\n"
+  debug = debug .. "Anim Start Offset : " .. self.AnimStartOffset .. "\n"
+  debug = debug .. "Anim Time : " .. self.AnimTime .. "\n"
+  debug = debug .. "Clip Length : " .. clipLength .. "(" .. comp.RenderEnd .. " - ".. comp.RenderStart .. ")\n"
+  debug = debug .. "Anim Start Frame : " .. animStartCount .."(" .. (comp.RenderStart + animStartCount) .. ")\n"
+  debug = debug .. "Anim End Frame : " .. animEndFrame .."(" .. (comp.RenderStart + animEndFrame) .. ")\n"
+  debug = debug .. "Anim Count : " .. animCount .. "\n"
+  debug = debug .. "DelayCount : " .. delayCount .. "\n"
   self.debug = debug
 end
 
