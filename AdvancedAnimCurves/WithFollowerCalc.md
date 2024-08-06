@@ -72,16 +72,17 @@ Settings -> Frame Render Scriptに以下を設定する
 
 ```lua
 local follower = Follower1
-local tag = "InAnim :" .. self.Name
-local debugEnable = comp:GetData("DebugEnable")
 local framerate = comp:GetPrefs("Comp.FrameFormat.Rate")
 local clipLength = (comp.RenderEnd - comp.RenderStart)
 local ratioCorrection = (clipLength + 1) / clipLength
-local textLength = GetTextLength(follower.Text.Value)
+local debug = ""
 
-local delayCount = ceil(follower.DelayTime * framerate)
-if delayCount > (clipLength - 1) then
-  delayCount = clipLength - 1
+local delayCount = 0
+if follower and follower.DelayTime then
+  delayCount = ceil(follower.DelayTime * framerate)
+  if delayCount > (clipLength - 1) then
+    delayCount = clipLength - 1
+  end
 end
 
 local animCount = ceil((self.AnimTime * framerate) - delayCount)
@@ -92,9 +93,15 @@ if (animCount + delayCount) > clipLength then
   animCount = clipLength - delayCount
 end
 
-if debugEnable then
-  local digit = floor(math.log10(clipLength) + 1)
-  print(string.format("[%s] start=%0"..digit.."d, end=%0"..digit.."d, delay=%0" .. digit.."d, anim=%0"..digit .. "d", tag, 0, (animCount + delayCount), delayCount, animCount))
+if self.debug then
+  local animEndFrame = animCount + delayCount
+  debug = debug .. "Anim Time : " .. self.AnimTime .. "\n"
+  debug = debug .. "Clip Length : " .. clipLength .. "(" .. comp.RenderEnd .. " - ".. comp.RenderStart .. ")\n"
+  debug = debug .. "Anim Start Frame : " .. 0 .."(" .. comp.RenderStart .. ")\n"
+  debug = debug .. "Anim End Frame : " .. animEndFrame .."(" .. (comp.RenderStart + animEndFrame) .. ")\n"
+  debug = debug .. "Anim Count : " .. animCount .. "\n"
+  debug = debug .. "Delay Count : " .. delayCount .. "\n"
+  self.debug = debug
 end
 
 self.Source = "Duration"
@@ -136,8 +143,6 @@ Settings -> Frame Render Scriptに以下を設定する
 
 ```lua
 local follower = Follower1
-local tag = "OutAnim:" .. self.Name
-local debugEnable = comp:GetData("DebugEnable")
 local framerate = comp:GetPrefs("Comp.FrameFormat.Rate")
 local clipLength = (comp.RenderEnd - comp.RenderStart)
 local ratioCorrection = (clipLength + 1) / clipLength 
