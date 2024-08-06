@@ -172,91 +172,24 @@ self.TimeOffset = (1 - ((animCount + delayCount) / clipLength)) / ratioCorrectio
 ### Mid Anim
 
 Floowerに設定したAnimCurvesに以下を設定し
-`AnimStartTime`, `AnimEndTime`でMid Anim時間を調整できるようにする
+`AnimStartTime`, `AnimTime`でMid Anim時間を調整できるようにする
 
 #### Controls
 
-* Controlsタブに`AnimStartTime`として新しいコントロールを追加する
+* Controlsタブに`AnimStartOffset`として新しいコントロールを追加する
   | 設定先 | 値 |
   | ---- | ---- |
-  | Name | `Anim Start Time(sec)` |
-  | ID | `AnimStartTime` |
+  | Name | `Anim Start Offset(sec)` |
+  | ID | `AnimStartOffset` |
   | Type | `Number` |
   | Page | `Controls` |
   | Default | `0` |
-  | Range | `0` to: `10` |
-  | Allowed | `0` to: 空欄 |
-  | Input Ctrol | `RangeControl` |
+  | Range | 空欄 |
+  | Allowed | 空欄 |
+  | Input Ctrol | `ScrewControl` |
   | View Ctrl | `None` |
-  | Group | `<New Group>` |
-  | ID | `Low` |
-* Controlsタブに`AnimEndTime`として新しいコントロールを追加する
-  | 設定先 | 値 |
-  | ---- | ---- |
-  | Name | `Anim End Time(sec)` |
-  | ID | `AnimEndTime` |
-  | Type | `Number` |
-  | Page | `Controls` |
-  | Default | `0` |
-  | Range | `0` to: `10` |
-  | Allowed | `0` to: 空欄 |
-  | Input Ctrol | `RangeControl` |
-  | View Ctrl | `None` |
-  | Group | *1番大きな値* |
-  | ID | `High` |
-
-#### Frame Render Script
-
-Settings -> Frame Render Scriptに以下を設定する
-
-* `Follower1`となっているところは設定元のfollowerに置き換える
-
-```lua
-local follower = Follower1
-local tag = "MidAnim:" .. self.Name
-local debugEnable = comp:GetData("DebugEnable")
-local framerate = comp:GetPrefs("Comp.FrameFormat.Rate")
-local clipLength = (comp.RenderEnd - comp.RenderStart)
-
-local delayCount = ceil(follower.DelayTime * framerate)
-if delayCount > (clipLength - 1) then
-  delayCount = clipLength - 1
-end
-
-local animStartCount = floor(self.AnimStartTime * framerate)
-if (animStartCount + delayCount) > clipLength then
-  animStartCount = clipLength - delayCount - 1
-end
-
-local animEndCount = ceil((self.AnimEndTime * framerate) - delayCount)
-if animEndCount < (animStartCount + 1) then
-  animEndCount = animStartCount + 1
-end
-if animEndCount > clipLength then
-  animEndCount = clipLength - delayCount
-end
-
-local animCount = animEndCount - animStartCount
-local ratioCorrection = (clipLength + 1) / clipLength 
-
-if debugEnable then
-  local digit = floor(math.log10(clipLength) + 1)
-  print(string.format("[%s] start=%0"..digit.."d, end=%0"..digit.."d, delay=%0" .. digit.."d, anim=%0"..digit .. "d", tag, animStartCount, (animEndCount + delayCount), delayCount, animCount))
-end
-
-self.Source = "Duration"
-self.ClipHigh = 1
-self.ClipLow = 1
-self.AnimStartTime = animStartCount / framerate
-self.AnimEndTime = (animEndCount + delayCount) / framerate
-self.TimeScale  = ratioCorrection / (animCount / clipLength)
-self.TimeOffset = (animStartCount / clipLength) / ratioCorrection
-```
-
-### Mid Anim (Anker to Clip End)
-
-#### Controls
-
+  | Center | 空欄 |
+  | Steps | 空欄 |
 * Controlsタブに`AnimTime`として新しいコントロールを追加する
   | 設定先 | 値 |
   | ---- | ---- |
@@ -271,20 +204,6 @@ self.TimeOffset = (animStartCount / clipLength) / ratioCorrection
   | View Ctrl | `None` |
   | Center | 空欄 |
   | Steps | 空欄 |
-* Controlsタブに`AnimStartOffset`として新しいコントロールを追加する
-  | 設定先 | 値 |
-  | ---- | ---- |
-  | Name | `Anim Start Offset(sec)` |
-  | ID | `AnimStartOffset` |
-  | Type | `Number` |
-  | Page | `Controls` |
-  | Default | `0` |
-  | Range | `-10` to: `0` |
-  | Allowed | `-1e+06` to: `0` |
-  | Input Ctrol | `ScrewControl` |
-  | View Ctrl | `None` |
-  | Center | 空欄 |
-  | Steps | 空欄 |
 
 #### Frame Render Script
 
@@ -294,15 +213,17 @@ Settings -> Frame Render Scriptに以下を設定する
 
 ```lua
 local follower = Follower1
-local tag = "MidAnim:" .. self.Name
-local debugEnable = comp:GetData("DebugEnable")
 local framerate = comp:GetPrefs("Comp.FrameFormat.Rate")
 local clipLength = (comp.RenderEnd - comp.RenderStart)
-local ratioCorrection = (clipLength + 1) / clipLength 
+local ratioCorrection = (clipLength + 1) / clipLength
+local debug = ""
 
-local delayCount = ceil(follower.DelayTime * framerate)
-if delayCount > (clipLength - 1) then
-  delayCount = clipLength - 1
+local delayCount = 0
+if follower and follower.DelayTime then
+  delayCount = ceil(follower.DelayTime * framerate)
+  if delayCount > (clipLength - 1) then
+    delayCount = clipLength - 1
+  end
 end
 
 local animCount = ceil((self.AnimTime * framerate) - delayCount)
@@ -313,25 +234,40 @@ if (animCount + delayCount) > clipLength then
   animCount = clipLength - delayCount
 end
 
-local animStartOffsetCount = floor(self.AnimStartOffset * -1 * framerate)
-local animStartCount = clipLength - animStartOffsetCount - animCount
+local animStartCount = 0
+if 0 < self.AnimStartOffset then
+  animStartCount = floor(self.AnimStartOffset * framerate)
+else
+  animStartCount = clipLength - floor(self.AnimStartOffset * -1 * framerate)
+end
 if animStartCount < 0 then
   animStartCount = 0
 end
-if (animStartCount + delayCount) > clipLength then
+if (animStartCount + delayCount + animCount) > clipLength then
   animStartCount = clipLength - animCount - delayCount - 1
 end
 
-if debugEnable then
-  local digit = floor(math.log10(clipLength) + 1)
-  print(string.format("[%s] start=%0"..digit.."d, end=%0"..digit.."d, delay=%0" .. digit .."d, anim=%0".. digit .. "d", tag, animStartCount, (animStartCount + animCount + delayCount), delayCount, animCount))
+if self.debug then
+  local animEndFrame = (animStartCount + delayCount + animCount)
+  debug = debug .. "AnimStartOffset : " .. self.AnimStartOffset .. "\n"
+  debug = debug .. "AnimTime : " .. self.AnimTime .. "\n"
+  debug = debug .. "ClipLength : " .. clipLength .. "(" .. comp.RenderEnd .. " - ".. comp.RenderStart .. ")\n"
+  debug = debug .. "AnimStartFrame : " .. animStartCount .."(" .. (comp.RenderStart + animStartCount) .. ")\n"
+  debug = debug .. "AnimEndFrame : " .. animEndFrame .."(" .. (comp.RenderStart + animEndFrame) .. ")\n"
+  debug = debug .. "animCount : " .. animCount .. "\n"
+  debug = debug .. "delayCount : " .. delayCount .. "\n"
+  self.debug = debug
 end
 
 self.Source = "Duration"
 self.ClipHigh = 1
 self.ClipLow = 1
 self.AnimTime = (animCount + delayCount) / framerate
-self.AnimStartOffset = ((clipLength - animStartCount) / framerate) * -1
+if 0 < self.AnimStartOffset then
+  self.AnimStartOffset = animStartCount / framerate
+else
+  self.AnimStartOffset = ((clipLength - animStartCount) / framerate) * -1
+end
 self.TimeScale  = ratioCorrection / (animCount / clipLength)
 self.TimeOffset = (animStartCount / clipLength) / ratioCorrection
 ```
