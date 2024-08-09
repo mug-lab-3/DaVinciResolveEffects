@@ -127,7 +127,7 @@ Floowerに設定したAnimCurvesに以下を設定し
   | Type | `Number` |
   | Page | `Controls` |
   | Default | `0` |
-  | Range | `0` to: `10` |
+  | Range | 空欄 |
   | Allowed | `0` to: 空欄 |
   | Input Ctrol | `ScrewControl` |
   | View Ctrl | `None` |
@@ -213,7 +213,7 @@ Floowerに設定したAnimCurvesに以下を設定し
   | Type | `Number` |
   | Page | `Controls` |
   | Default | `0` |
-  | Range | `0` to: `10` |
+  | Range | 空欄 |
   | Allowed | `0` to: 空欄 |
   | Input Ctrol | `ScrewControl` |
   | View Ctrl | `None` |
