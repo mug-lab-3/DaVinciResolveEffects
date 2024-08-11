@@ -104,7 +104,9 @@ if self.debug then
   self.debug = debug
 end
 
-self.Source = "Duration"
+if not (self.Source.Value == "Custom") then
+  self.Source = "Duration"
+end
 self.ClipHigh = 1
 self.ClipLow = 1
 self.AnimTime = (animCount + delayCount) / framerate
@@ -175,7 +177,9 @@ if self.debug then
   self.debug = debug
 end
 
-self.Source = "Duration"
+if not (self.Source.Value == "Custom") then
+  self.Source = "Duration"
+end
 self.ClipHigh = 1
 self.ClipLow = 1
 self.AnimTime = (animCount + delayCount) / framerate
@@ -274,7 +278,9 @@ if self.debug then
   self.debug = debug
 end
 
-self.Source = "Duration"
+if not (self.Source.Value == "Custom") then
+  self.Source = "Duration"
+end
 self.ClipHigh = 1
 self.ClipLow = 1
 self.AnimTime = (animCount + delayCount) / framerate
