@@ -1,0 +1,430 @@
+{
+	Tools = ordered() {
+		PataPata = GroupOperator {
+			Inputs = ordered() {
+				Input1 = InstanceInput {
+					SourceOp = "Rectangle1",
+					Source = "Width",
+					Default = 0.5,
+				},
+				Input2 = InstanceInput {
+					SourceOp = "Rectangle1",
+					Source = "Height",
+					Default = 0.323,
+				},
+				Input3 = InstanceInput {
+					SourceOp = "Rectangle1",
+					Source = "CornerRadius",
+					Default = 0.893,
+				},
+				Input4 = InstanceInput {
+					SourceOp = "AnimCurves4",
+					Source = "Scale",
+					Default = 0.01,
+				},
+				Input5 = InstanceInput {
+					SourceOp = "AnimCurves4",
+					Source = "AnimStartOffset",
+					Page = "Controls",
+					Default = -1.3,
+				},
+				Input6 = InstanceInput {
+					SourceOp = "AnimCurves4",
+					Source = "AnimTime",
+					Page = "Controls",
+					Default = 0.3,
+				},
+				Input7 = InstanceInput {
+					SourceOp = "AnimCurves2",
+					Source = "AnimStartOffset",
+					Page = "Controls",
+					Default = 1.3,
+				},
+				Input8 = InstanceInput {
+					SourceOp = "AnimCurves2",
+					Source = "AnimTime",
+					Page = "Controls",
+					Default = 0.3,
+				},
+				Input9 = InstanceInput {
+					SourceOp = "Follower1",
+					Source = "DelayTime",
+					Page = "Timing",
+					Default = 0,
+				},
+				Input10 = InstanceInput {
+					SourceOp = "AnimCurves1",
+					Source = "AnimTime",
+					Page = "Controls",
+					Default = 0.9,
+				},
+				Input11 = InstanceInput {
+					SourceOp = "AnimCurves3",
+					Source = "AnimTime",
+					Page = "Controls",
+					Default = 0.9,
+				},
+				Input12 = InstanceInput {
+					SourceOp = "Background1",
+					Source = "TopLeftRed",
+					Name = "Color",
+					ControlGroup = 12,
+					Default = 0,
+				},
+				Input13 = InstanceInput {
+					SourceOp = "Background1",
+					Source = "TopLeftGreen",
+					ControlGroup = 12,
+					Default = 0.92,
+				},
+				Input14 = InstanceInput {
+					SourceOp = "Background1",
+					Source = "TopLeftBlue",
+					ControlGroup = 12,
+					Default = 0,
+				},
+				Input15 = InstanceInput {
+					SourceOp = "Background1",
+					Source = "TopLeftAlpha",
+					ControlGroup = 12,
+					Default = 1,
+				},
+				Input16 = InstanceInput {
+					SourceOp = "InAnimText",
+					Source = "StyledText",
+				},
+				Input17 = InstanceInput {
+					SourceOp = "InAnimText",
+					Source = "Font",
+					ControlGroup = 14,
+				},
+			},
+			Outputs = {
+				MainOutput1 = InstanceOutput {
+					SourceOp = "Merge1",
+					Source = "Output",
+				}
+			},
+			ViewInfo = GroupInfo { Pos = { 0, 0 } },
+			Tools = ordered() {
+				Rectangle1 = RectangleMask {
+					CtrlWShown = false,
+					Inputs = {
+						Filter = Input { Value = FuID { "Fast Gaussian" }, },
+						BorderWidth = Input {
+							SourceOp = "AnimCurves4",
+							Source = "Value",
+						},
+						Solid = Input { Value = 0, },
+						CapStyle = Input { Value = 0, },
+						WritePosition = Input { Value = 0.572, },
+						WriteLength = Input {
+							SourceOp = "AnimCurves2",
+							Source = "Value",
+						},
+						MaskWidth = Input { Value = 1920, },
+						MaskHeight = Input { Value = 1080, },
+						PixelAspect = Input { Value = { 1, 1 }, },
+						UseFrameFormatSettings = Input { Value = 1, },
+						ClippingMode = Input { Value = FuID { "None" }, },
+						Height = Input { Value = 0.323, },
+						CornerRadius = Input { Value = 0.893, },
+					},
+					ViewInfo = OperatorInfo { Pos = { 445.885, 17.573 } },
+				},
+				AnimCurves4 = LUTLookup {
+					CtrlWZoom = false,
+					Inputs = {
+						Lookup = Input {
+							SourceOp = "AnimCurves4Lookup",
+							Source = "Value",
+						},
+						Invert = Input { Value = 1, },
+						Scale = Input { Value = 0.01, },
+						FrameRenderScript = Input { Value = "\nlocal framerate = comp:GetPrefs(\"Comp.FrameFormat.Rate\")\nlocal clipLength = (comp.RenderEnd - comp.RenderStart)\nlocal ratioCorrection = (clipLength + 1) / clipLength\nlocal debug = \"\"\n\nlocal delayCount = 0\nif follower and follower.DelayTime then\n  delayCount = ceil(follower.DelayTime * framerate)\n  if delayCount > (clipLength - 1) then\n    delayCount = clipLength - 1\n  end\nend\n\nlocal animCount = ceil((self.AnimTime * framerate) - delayCount)\nif animCount <= 0 then\n  animCount = 1\nend\nif (animCount + delayCount) > clipLength then\n  animCount = clipLength - delayCount\nend\n\nlocal animStartCount = 0\nif 0 < self.AnimStartOffset then\n  animStartCount = floor(self.AnimStartOffset * framerate)\nelse\n  animStartCount = clipLength - floor(self.AnimStartOffset * -1 * framerate)\nend\nif animStartCount < 0 then\n  animStartCount = 0\nend\nif (animStartCount + delayCount + animCount) > clipLength then\n  animStartCount = clipLength - animCount - delayCount - 1\nend\n\nif self.debug then\n  local animEndFrame = (animStartCount + delayCount + animCount)\n  debug = debug .. \"Anim Start Offset : \" .. self.AnimStartOffset .. \"\\n\"\n  debug = debug .. \"Anim Time : \" .. self.AnimTime .. \"\\n\"\n  debug = debug .. \"Clip Length : \" .. clipLength .. \"(\" .. comp.RenderEnd .. \" - \".. comp.RenderStart .. \")\\n\"\n  debug = debug .. \"Anim Start Frame : \" .. animStartCount ..\"(\" .. (comp.RenderStart + animStartCount) .. \")\\n\"\n  debug = debug .. \"Anim End Frame : \" .. animEndFrame ..\"(\" .. (comp.RenderStart + animEndFrame) .. \")\\n\"\n  debug = debug .. \"Anim Count : \" .. animCount .. \"\\n\"\n  debug = debug .. \"DelayCount : \" .. delayCount .. \"\\n\"\n  self.debug = debug\nend\n\nself.Source = \"Duration\"\nself.ClipHigh = 1\nself.ClipLow = 1\nself.AnimTime = (animCount + delayCount) / framerate\nif 0 < self.AnimStartOffset then\n  self.AnimStartOffset = animStartCount / framerate\nelse\n  self.AnimStartOffset = ((clipLength - animStartCount) / framerate) * -1\nend\nself.TimeScale  = ratioCorrection / (animCount / clipLength)\nself.TimeOffset = (animStartCount / clipLength) / ratioCorrection", },
+						AnimStartOffset = Input { Value = -1.3, },
+						AnimTime = Input { Value = 0.3, }
+					},
+					UserControls = ordered() { AnimStartOffset = { INP_MaxAllowed = 1000000, INP_Integer = false, INPID_InputControl = "ScrewControl", INP_MaxScale = 1, INP_Default = 0, INP_MinScale = 0, INP_MinAllowed = -1000000, LINKID_DataType = "Number", ICS_ControlPage = "Controls", LINKS_Name = "Width: Anim Start Offset(sec)" }, AnimTime = { INP_MaxAllowed = 1000000, INP_Integer = false, INPID_InputControl = "ScrewControl", INP_MaxScale = 10, INP_Default = 0, INP_MinScale = 0, INP_MinAllowed = 0, LINKID_DataType = "Number", ICS_ControlPage = "Controls", LINKS_Name = "Width: Anim Time(sec)" } }
+				},
+				AnimCurves4Lookup = LUTBezier {
+					KeyColorSplines = {
+						[0] = {
+							[0] = { 0, RH = { 0.333333333333333, 0.333333333333333 }, Flags = { Linear = true } },
+							[1] = { 1, LH = { 0.666666666666667, 0.666666666666667 }, Flags = { Linear = true } }
+						}
+					},
+					SplineColor = { Red = 255, Green = 255, Blue = 255 },
+					CtrlWZoom = false,
+				},
+				AnimCurves2 = LUTLookup {
+					CtrlWZoom = false,
+					Inputs = {
+						Lookup = Input {
+							SourceOp = "AnimCurves2Lookup",
+							Source = "Value",
+						},
+						FrameRenderScript = Input { Value = "\nlocal framerate = comp:GetPrefs(\"Comp.FrameFormat.Rate\")\nlocal clipLength = (comp.RenderEnd - comp.RenderStart)\nlocal ratioCorrection = (clipLength + 1) / clipLength\nlocal debug = \"\"\n\nlocal delayCount = 0\nif follower and follower.DelayTime then\n  delayCount = ceil(follower.DelayTime * framerate)\n  if delayCount > (clipLength - 1) then\n    delayCount = clipLength - 1\n  end\nend\n\nlocal animCount = ceil((self.AnimTime * framerate) - delayCount)\nif animCount <= 0 then\n  animCount = 1\nend\nif (animCount + delayCount) > clipLength then\n  animCount = clipLength - delayCount\nend\n\nlocal animStartCount = 0\nif 0 < self.AnimStartOffset then\n  animStartCount = floor(self.AnimStartOffset * framerate)\nelse\n  animStartCount = clipLength - floor(self.AnimStartOffset * -1 * framerate)\nend\nif animStartCount < 0 then\n  animStartCount = 0\nend\nif (animStartCount + delayCount + animCount) > clipLength then\n  animStartCount = clipLength - animCount - delayCount - 1\nend\n\nif self.debug then\n  local animEndFrame = (animStartCount + delayCount + animCount)\n  debug = debug .. \"Anim Start Offset : \" .. self.AnimStartOffset .. \"\\n\"\n  debug = debug .. \"Anim Time : \" .. self.AnimTime .. \"\\n\"\n  debug = debug .. \"Clip Length : \" .. clipLength .. \"(\" .. comp.RenderEnd .. \" - \".. comp.RenderStart .. \")\\n\"\n  debug = debug .. \"Anim Start Frame : \" .. animStartCount ..\"(\" .. (comp.RenderStart + animStartCount) .. \")\\n\"\n  debug = debug .. \"Anim End Frame : \" .. animEndFrame ..\"(\" .. (comp.RenderStart + animEndFrame) .. \")\\n\"\n  debug = debug .. \"Anim Count : \" .. animCount .. \"\\n\"\n  debug = debug .. \"DelayCount : \" .. delayCount .. \"\\n\"\n  self.debug = debug\nend\n\nself.Source = \"Duration\"\nself.ClipHigh = 1\nself.ClipLow = 1\nself.AnimTime = (animCount + delayCount) / framerate\nif 0 < self.AnimStartOffset then\n  self.AnimStartOffset = animStartCount / framerate\nelse\n  self.AnimStartOffset = ((clipLength - animStartCount) / framerate) * -1\nend\nself.TimeScale  = ratioCorrection / (animCount / clipLength)\nself.TimeOffset = (animStartCount / clipLength) / ratioCorrection", },
+						AnimStartOffset = Input { Value = 1.3, },
+						AnimTime = Input { Value = 0.3, }
+					},
+					UserControls = ordered() { AnimStartOffset = { INP_MaxAllowed = 1000000, INP_Integer = false, INPID_InputControl = "ScrewControl", INP_MaxScale = 1, INP_Default = 0, INP_MinScale = 0, INP_MinAllowed = -1000000, LINKID_DataType = "Number", ICS_ControlPage = "Controls", LINKS_Name = "Length: Anim Start Offset(sec)" }, AnimTime = { INP_MaxAllowed = 1000000, INP_Integer = false, INPID_InputControl = "ScrewControl", INP_MaxScale = 10, INP_Default = 0, INP_MinScale = 0, INP_MinAllowed = 0, LINKID_DataType = "Number", ICS_ControlPage = "Controls", LINKS_Name = "Length: Anim Time(sec)" } }
+				},
+				AnimCurves2Lookup = LUTBezier {
+					KeyColorSplines = {
+						[0] = {
+							[0] = { 0, RH = { 0.333333333333333, 0.333333333333333 }, Flags = { Linear = true } },
+							[1] = { 1, LH = { 0.666666666666667, 0.666666666666667 }, Flags = { Linear = true } }
+						}
+					},
+					SplineColor = { Red = 255, Green = 255, Blue = 255 },
+					CtrlWZoom = false,
+				},
+				OutAnimText = TextPlus {
+					CtrlWShown = false,
+					NameSet = true,
+					SourceOp = "InAnimText",
+					Inputs = {
+						EffectMask = Input { },
+						SettingsNest = Input { },
+						ImageNest = Input { },
+						["Gamut.ColorSpaceNest"] = Input { },
+						["Gamut.GammaSpaceNest"] = Input { },
+						Layout = Input { },
+						LayoutRotation = Input { Value = 1, },
+						Background = Input { },
+						TransformTransform = Input { },
+						TransformRotation = Input { Value = 1, },
+						TransformShear = Input { },
+						TransformSize = Input { },
+						Properties1 = Input { },
+						Softness1 = Input { Value = 1, },
+						Position1 = Input { },
+						Rotation1 = Input { },
+						Shear1 = Input { },
+						Size1 = Input { },
+						TextText = Input { },
+						StyledText = Input {
+							SourceOp = "Follower2",
+							Source = "StyledText",
+						},
+						TabSpacing = Input { },
+						AdvancedFontControls = Input { },
+						ClearSelectedKerning = Input { },
+						ClearAllKerning = Input { },
+						ClearSelectedPlacement = Input { },
+						ClearAllPlacement = Input { },
+						Internal = Input { },
+						CommentsNest = Input { },
+						FrameRenderScriptNest = Input { },
+						StartRenderScripts = Input { },
+						EndRenderScripts = Input { },
+						Properties2 = Input { },
+						Softness2 = Input { Value = 1, },
+						Position2 = Input { },
+						Rotation2 = Input { },
+						Shear2 = Input { },
+						Size2 = Input { },
+					},
+					ViewInfo = OperatorInfo { Pos = { 176.387, 48.8572 } },
+				},
+				Follower2 = StyledTextFollower {
+					CtrlWZoom = false,
+					Inputs = {
+						Order = Input { Value = 7, },
+						Text = Input {
+							SourceOp = "Follower1",
+							Source = "StyledText",
+						},
+						TransformRotation = Input { Value = 1, },
+						CharacterAngleX = Input {
+							SourceOp = "AnimCurves3",
+							Source = "Value",
+						},
+						Softness1 = Input { Value = 1, },
+						Softness2 = Input { Value = 1, },
+						Softness3 = Input { Value = 1, },
+						Softness4 = Input { Value = 1, },
+						Softness5 = Input { Value = 1, },
+						Softness6 = Input { Value = 1, },
+						Softness7 = Input { Value = 1, },
+						Softness8 = Input { Value = 1, },
+						FrameRenderScript = Input { Value = "local framerate = comp:GetPrefs(\"Comp.FrameFormat.Rate\")\nlocal clipLength = (comp.RenderEnd - comp.RenderStart)\n\nlocal delayCount = ceil(self.DelayTime * framerate)\nif delayCount > (clipLength - 1) then\n  delayCount = clipLength - 1\n  self.DelayTime = delayCount / framerate\nend\n\nself.DelayType = 2\nself.Delay = delayCount", },
+						DelayTime = Input {
+							SourceOp = "Publish1",
+							Source = "Value",
+						}
+					},
+					UserControls = ordered() { DelayTime = { INP_Integer = false, INP_MinAllowed = 0, LINKID_DataType = "Number", LINKS_Name = "Delay Time(sec)", INPID_InputControl = "ScrewControl", ICS_ControlPage = "Timing", INP_Default = 0, } }
+				},
+				Follower1 = StyledTextFollower {
+					CtrlWZoom = false,
+					Inputs = {
+						Order = Input { Value = 7, },
+						Text = Input {
+							Value = StyledText {
+								Value = "ABCDEF"
+							},
+						},
+						TransformRotation = Input { Value = 1, },
+						CharacterAngleX = Input {
+							SourceOp = "AnimCurves1",
+							Source = "Value",
+						},
+						Softness1 = Input { Value = 1, },
+						Softness2 = Input { Value = 1, },
+						Softness3 = Input { Value = 1, },
+						Softness4 = Input { Value = 1, },
+						Softness5 = Input { Value = 1, },
+						Softness6 = Input { Value = 1, },
+						Softness7 = Input { Value = 1, },
+						Softness8 = Input { Value = 1, },
+						FrameRenderScript = Input { Value = "local framerate = comp:GetPrefs(\"Comp.FrameFormat.Rate\")\nlocal clipLength = (comp.RenderEnd - comp.RenderStart)\n\nlocal delayCount = ceil(self.DelayTime * framerate)\nif delayCount > (clipLength - 1) then\n  delayCount = clipLength - 1\n  self.DelayTime = delayCount / framerate\nend\n\nself.DelayType = 2\nself.Delay = delayCount", },
+						DelayTime = Input {
+							SourceOp = "Publish1",
+							Source = "Value",
+						}
+					},
+					UserControls = ordered() { DelayTime = { INP_Integer = false, INP_MinAllowed = 0, LINKID_DataType = "Number", LINKS_Name = "Delay Time(sec)", INPID_InputControl = "ScrewControl", ICS_ControlPage = "Timing", INP_Default = 0, } }
+				},
+				AnimCurves1 = LUTLookup {
+					CtrlWZoom = false,
+					Inputs = {
+						Lookup = Input {
+							SourceOp = "AnimCurvesonFollower1Lookup",
+							Source = "Value",
+						},
+						Invert = Input { Value = 1, },
+						Scale = Input { Value = 90, },
+						FrameRenderScript = Input { Value = "local follower = Follower1\nlocal framerate = comp:GetPrefs(\"Comp.FrameFormat.Rate\")\nlocal clipLength = (comp.RenderEnd - comp.RenderStart)\nlocal ratioCorrection = (clipLength + 1) / clipLength\nlocal debug = \"\"\n\nlocal delayCount = 0\nif follower and follower.DelayTime then\n  delayCount = ceil(follower.DelayTime * framerate)\n  if delayCount > (clipLength - 1) then\n    delayCount = clipLength - 1\n  end\nend\n\nlocal animCount = ceil((self.AnimTime * framerate) - delayCount)\nif animCount <= 0 then\n  animCount = 1\nend\nif (animCount + delayCount) > clipLength then\n  animCount = clipLength - delayCount\nend\n\nif self.debug then\n  local animEndFrame = animCount + delayCount\n  debug = debug .. \"Anim Time : \" .. self.AnimTime .. \"\\n\"\n  debug = debug .. \"Clip Length : \" .. clipLength .. \"(\" .. comp.RenderEnd .. \" - \".. comp.RenderStart .. \")\\n\"\n  debug = debug .. \"Anim Start Frame : \" .. 0 ..\"(\" .. comp.RenderStart .. \")\\n\"\n  debug = debug .. \"Anim End Frame : \" .. animEndFrame ..\"(\" .. (comp.RenderStart + animEndFrame) .. \")\\n\"\n  debug = debug .. \"Anim Count : \" .. animCount .. \"\\n\"\n  debug = debug .. \"Delay Count : \" .. delayCount .. \"\\n\"\n  self.debug = debug\nend\n\nself.Source = \"Duration\"\nself.ClipHigh = 1\nself.ClipLow = 1\nself.AnimTime = (animCount + delayCount) / framerate\nself.TimeScale = ratioCorrection / (animCount / clipLength)\nself.TimeOffset = 0", },
+						AnimTime = Input { Value = 0.9, }
+					},
+					UserControls = ordered() { AnimTime = { INP_MaxAllowed = 1000000, INP_Integer = false, INPID_InputControl = "ScrewControl", INP_MaxScale = 1, INP_Default = 0, INP_MinScale = 0, INP_MinAllowed = 0, LINKID_DataType = "Number", ICS_ControlPage = "Controls", LINKS_Name = "Wake up: Anim Time(sec)" } }
+				},
+				AnimCurvesonFollower1Lookup = LUTBezier {
+					KeyColorSplines = {
+						[0] = {
+							[0] = { 0, RH = { 0.333333333333333, 0.333333333333333 }, Flags = { Linear = true } },
+							[1] = { 1, LH = { 0.666666666666667, 0.666666666666667 }, Flags = { Linear = true } }
+						}
+					},
+					SplineColor = { Red = 255, Green = 255, Blue = 255 },
+					CtrlWZoom = false,
+					NameSet = true,
+				},
+				Publish1 = PublishNumber {
+					CtrlWZoom = false,
+					Inputs = {
+						Value = Input { Value = 0.7, },
+					},
+				},
+				AnimCurves3 = LUTLookup {
+					CtrlWZoom = false,
+					Inputs = {
+						Lookup = Input {
+							SourceOp = "AnimCurvesonFollower2Lookup",
+							Source = "Value",
+						},
+						Scale = Input { Value = 90, },
+						FrameRenderScript = Input { Value = "local follower = Follower2\nlocal framerate = comp:GetPrefs(\"Comp.FrameFormat.Rate\")\nlocal clipLength = (comp.RenderEnd - comp.RenderStart)\nlocal ratioCorrection = (clipLength + 1) / clipLength \nlocal debug = \"\"\n\nlocal delayCount = 0\nif follower and follower.DelayTime then\n  delayCount = ceil(follower.DelayTime * framerate)\n  if delayCount > (clipLength - 1) then\n    delayCount = clipLength - 1\n  end\nend\n\nlocal animCount = ceil((self.AnimTime * framerate) - delayCount)\nif animCount <= 0 then\n  animCount = 1\nend\nif (animCount + delayCount) > clipLength then\n  animCount = clipLength - delayCount\nend\n\nif self.debug then\n  local animStartFrame = clipLength - (animCount + delayCount)\n  debug = debug .. \"Anim Time : \" .. self.AnimTime .. \"\\n\"\n  debug = debug .. \"Clip Length : \" .. clipLength .. \"(\" .. comp.RenderEnd .. \" - \".. comp.RenderStart .. \")\\n\"\n  debug = debug .. \"Anim Start Frame : \" .. animStartFrame ..\"(\" .. (comp.RenderStart + animStartFrame) .. \")\\n\"\n  debug = debug .. \"Anim End Frame : \" .. clipLength ..\"(\" .. (comp.RenderStart + clipLength) .. \")\\n\"\n  debug = debug .. \"Anim Count : \" .. animCount .. \"\\n\"\n  debug = debug .. \"Delay Count : \" .. delayCount .. \"\\n\"\n  self.debug = debug\nend\n\nself.Source = \"Duration\"\nself.ClipHigh = 1\nself.ClipLow = 1\nself.AnimTime = (animCount + delayCount) / framerate\nself.TimeScale  = ratioCorrection / (animCount / clipLength)\nself.TimeOffset = (1 - ((animCount + delayCount) / clipLength)) / ratioCorrection", },
+						AnimTime = Input { Value = 0.9, }
+					},
+					UserControls = ordered() { AnimTime = { INP_MaxAllowed = 1000000, INP_Integer = false, INPID_InputControl = "ScrewControl", INP_MaxScale = 10, INP_Default = 0, INP_MinScale = 0, INP_MinAllowed = 0, LINKID_DataType = "Number", ICS_ControlPage = "Controls", LINKS_Name = "Sleep: Anim Time(sec)" } }
+				},
+				AnimCurvesonFollower2Lookup = LUTBezier {
+					KeyColorSplines = {
+						[0] = {
+							[0] = { 0, RH = { 0.333333333333333, 0.333333333333333 }, Flags = { Linear = true } },
+							[1] = { 1, LH = { 0.666666666666667, 0.666666666666667 }, Flags = { Linear = true } }
+						}
+					},
+					SplineColor = { Red = 255, Green = 255, Blue = 255 },
+					CtrlWZoom = false,
+				},
+				Background1 = Background {
+					CtrlWShown = false,
+					Inputs = {
+						EffectMask = Input {
+							SourceOp = "Rectangle1",
+							Source = "Mask",
+						},
+						Width = Input { Value = 1920, },
+						Height = Input { Value = 1080, },
+						UseFrameFormatSettings = Input { Value = 1, },
+						["Gamut.SLogVersion"] = Input { Value = FuID { "SLog2" }, },
+						TopLeftGreen = Input { Value = 0.92, },
+					},
+					ViewInfo = OperatorInfo { Pos = { 446.047, 61.2852 } },
+				},
+				Merge1 = Merge {
+					CtrlWZoom = false,
+					CtrlWShown = false,
+					Inputs = {
+						Background = Input {
+							SourceOp = "Dissolve1",
+							Source = "Output",
+						},
+						Foreground = Input {
+							SourceOp = "Background1",
+							Source = "Output",
+						},
+						PerformDepthMerge = Input { Value = 0, },
+					},
+					ViewInfo = OperatorInfo { Pos = { 446.031, 99.8549 } },
+				},
+				Dissolve1 = Dissolve {
+					Transitions = {
+						[0] = "DFTDissolve"
+					},
+					CtrlWShown = false,
+					Inputs = {
+						Mix = Input {
+							Value = 0,
+							Expression = "iif(time / comp.RenderEnd > 0.5, 1, 0)",
+						},
+						Background = Input {
+							SourceOp = "InAnimText",
+							Source = "Output",
+						},
+						Foreground = Input {
+							SourceOp = "OutAnimText",
+							Source = "Output",
+						},
+					},
+					ViewInfo = OperatorInfo { Pos = { 311.372, 100.283 } },
+				},
+				InAnimText = TextPlus {
+					CtrlWShown = false,
+					NameSet = true,
+					Inputs = {
+						Width = Input { Value = 1920, },
+						Height = Input { Value = 1080, },
+						UseFrameFormatSettings = Input { Value = 1, },
+						["Gamut.SLogVersion"] = Input { Value = FuID { "SLog2" }, },
+						LayoutRotation = Input { Value = 1, },
+						TransformRotation = Input { Value = 1, },
+						SelectElement = Input { Value = 1, },
+						Select = Input { Value = 1, },
+						Enabled2 = Input { Value = 1, },
+						Softness1 = Input { Value = 1, },
+						StyledText = Input {
+							SourceOp = "Follower1",
+							Source = "StyledText",
+						},
+						Font = Input { Value = "Open Sans", },
+						Style = Input { Value = "Regular", },
+						Size = Input { Value = 0.2032, },
+						VerticalJustificationNew = Input { Value = 3, },
+						HorizontalJustificationNew = Input { Value = 3, },
+						Thickness2 = Input { Value = 0.0668, },
+						Red2 = Input { Value = 0.3333333333333, },
+						Blue2 = Input { Value = 1, },
+						Softness2 = Input { Value = 1, },
+					},
+					ViewInfo = OperatorInfo { Pos = { 174.973, 100.283 } },
+				}
+			},
+		}
+	},
+	ActiveTool = "PataPata"
+}
