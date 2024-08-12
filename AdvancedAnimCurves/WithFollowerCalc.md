@@ -46,7 +46,7 @@ self.Delay = delayCount
 #### Controls
 
 Floowerに設定したAnimCurvesに以下を設定し  
-`AnimTime`でIn Anim時間を調整できるようにする
+`AnimTime`でアニメーション時間を調整できるようにする
 
 * Controlsタブに`AnimTime`として新しいコントロールを追加する
 
@@ -116,7 +116,7 @@ self.TimeOffset = 0
 ### Out Anim
 
 Floowerに設定したAnimCurvesに以下を設定し  
-`AnimTime`でOut Anim時間を調整できるようにする
+`AnimTime`でアニメーション時間を調整できるようにする
 
 #### Controls
 
@@ -189,7 +189,7 @@ self.TimeOffset = (1 - ((animCount + delayCount) / clipLength)) / ratioCorrectio
 ### Mid Anim
 
 Floowerに設定したAnimCurvesに以下を設定し  
-`AnimStartTime`, `AnimTime`でMid Anim時間を調整できるようにする
+`AnimStartOffset`, `AnimTime`でアニメーション開始時間, アニメーション時間を調整できるようにする
 
 #### Controls
 
