@@ -45,7 +45,7 @@ self.Delay = delayCount
 
 #### Controls
 
-Floowerに設定したAnimCurvesに以下を設定し
+Floowerに設定したAnimCurvesに以下を設定し  
 `AnimTime`でIn Anim時間を調整できるようにする
 
 * Controlsタブに`AnimTime`として新しいコントロールを追加する
@@ -69,6 +69,7 @@ Floowerに設定したAnimCurvesに以下を設定し
 Settings -> Frame Render Scriptに以下を設定する
 
 * `Follower1`となっているところは設定元のfollowerに置き換える
+* Followerを使用していない場合は、`local follower = Follower1`を行ごと削除する
 
 ```lua
 local follower = Follower1
@@ -114,7 +115,7 @@ self.TimeOffset = 0
 
 ### Out Anim
 
-Floowerに設定したAnimCurvesに以下を設定し
+Floowerに設定したAnimCurvesに以下を設定し  
 `AnimTime`でOut Anim時間を調整できるようにする
 
 #### Controls
@@ -140,6 +141,7 @@ Floowerに設定したAnimCurvesに以下を設定し
 Settings -> Frame Render Scriptに以下を設定する
 
 * `Follower1`となっているところは設定元のfollowerに置き換える
+* Followerを使用していない場合は、`local follower = Follower1`を行ごと削除する
 
 ```lua
 local follower = Follower1
@@ -186,7 +188,7 @@ self.TimeOffset = (1 - ((animCount + delayCount) / clipLength)) / ratioCorrectio
 
 ### Mid Anim
 
-Floowerに設定したAnimCurvesに以下を設定し
+Floowerに設定したAnimCurvesに以下を設定し  
 `AnimStartTime`, `AnimTime`でMid Anim時間を調整できるようにする
 
 #### Controls
@@ -225,6 +227,7 @@ Floowerに設定したAnimCurvesに以下を設定し
 Settings -> Frame Render Scriptに以下を設定する
 
 * `Follower1`となっているところは設定元のfollowerに置き換える
+* Followerを使用していない場合は、`local follower = Follower1`を行ごと削除する
 
 ```lua
 local follower = Follower1
@@ -285,4 +288,15 @@ else
 end
 self.TimeScale  = ratioCorrection / (animCount / clipLength)
 self.TimeOffset = (animStartCount / clipLength) / ratioCorrection
+```
+
+## Dissolve
+
+Background, Foregroundを計算式で切り替えることで  
+表示切替スイッチとして使用する
+
+### Expression
+
+```lua
+iif(time / comp.RenderEnd > 0.5, 1, 0)
 ```
