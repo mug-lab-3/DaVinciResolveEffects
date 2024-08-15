@@ -6,14 +6,14 @@
 ## Flow
 
 RectangleExの構成は以下の通り  
-※ ノード名はスクリプトで使用しているため変更不可
+※ `Rectangle1`, `Transform1`は[スクリプト内](#execute-script)で参照しているため名前変更不可
 
 ![Flow](flow.png)
 
 
 ## Area Control
 
-左上、右下をそれぞれ`Left Top`, `Right Bottom`としてコントロールを追加し  
+左上、右下をそれぞれ`Left Top`, `Right Bottom`として[Rectangle1](#flow)へコントロールを追加し  
 それを使用して四角形の位置・サイズ調整を行う
 
 ### Left Top
@@ -47,7 +47,7 @@ RectangleExの構成は以下の通り
 
 ## Calculated Parameters
 
-下記のパラメータはExpressionとし  
+[Rectangle1](#flow)の下記パラメータはExpressionとし、  
 `Left Top`, `Right Bottom`から計算で求める
 
 ## Width
@@ -71,7 +71,7 @@ Point(LeftTop.X + ((RightBottom.X - LeftTop.X))/2, RightBottom.Y + ((LeftTop.Y -
 
 ## Centering Button
 
-Transformを使用して位置を移動した場合  
+[Transform1](#flow)を使用して位置を移動した場合  
 `Left Top`, `Right Bottom`での制御位置とずれが生じてしまう   
 それを解消するためのボタンを用意する
 
@@ -98,8 +98,8 @@ Transformを使用して位置を移動した場合
 
 ### Execute Script
 
-Transformでの移動量をRectangleに加算した上で  
-Transformでの移動量を0に戻すことにより、移動位置を維持したまま  
+[Transform1](#flow)での移動量を[Rectangle](#flow)に加算した上で、  
+[Transform1](#flow)での移動量を0に戻すことにより、移動位置を維持したまま  
 `Left Top`, `Right Bottom`の制御位置ずれを解消する
 
 ```lua
