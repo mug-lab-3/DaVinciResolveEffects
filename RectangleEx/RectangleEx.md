@@ -6,9 +6,13 @@
 ## Flow
 
 RectangleExの構成は以下の通り  
-※ `Rectangle1`, `Transform1`は[スクリプト内](#execute-script)で参照しているため名前変更不可
+
+* メインとなるRectangleノード
+* 色変更用のBackgroundノード
+* 移動用のTransformノード
 
 ![Flow](flow.png)
+※ `Rectangle1`, `Transform1`は[スクリプト内](#execute-script)で参照しているため名前変更不可
 
 
 ## Area Control
@@ -50,7 +54,7 @@ RectangleExの構成は以下の通り
 [Rectangle1](#flow)の下記パラメータはExpressionに設定し、  
 `Left Top`, `Right Bottom`から計算で求める
 
-## Width
+### Width
 
 右端 - 左端 = 幅  
 左右入れ替わっても問題ないように絶対値(abs)を取るようにする
@@ -59,7 +63,7 @@ RectangleExの構成は以下の通り
 abs(RightBottom.X - LeftTop.X)
 ```
 
-## Height
+### Height
 
 上端 - 下端 = 高さ  
 上下入れ替わっても問題ないように絶対値(abs)を取るようにする
@@ -68,7 +72,7 @@ abs(RightBottom.X - LeftTop.X)
 abs(LeftTop.Y - RightBottom.Y)
 ```
 
-## Center
+### Center
 
 * 左端 + (幅 / 2) = 中央X
 * 下端 + (高さ / 2) = 中央Y
