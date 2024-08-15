@@ -47,10 +47,13 @@ RectangleExの構成は以下の通り
 
 ## Calculated Parameters
 
-[Rectangle1](#flow)の下記パラメータはExpressionとし、  
+[Rectangle1](#flow)の下記パラメータはExpressionに設定し、  
 `Left Top`, `Right Bottom`から計算で求める
 
 ## Width
+
+右端 - 左端 = 幅  
+左右入れ替わっても問題ないように絶対値(abs)を取るようにする
 
 ```lua
 abs(RightBottom.X - LeftTop.X)
@@ -58,14 +61,20 @@ abs(RightBottom.X - LeftTop.X)
 
 ## Height
 
+上端 - 下端 = 高さ  
+上下入れ替わっても問題ないように絶対値(abs)を取るようにする
+
 ```lua
 abs(LeftTop.Y - RightBottom.Y)
 ```
 
 ## Center
 
+* 左端 + (幅 / 2) = 中央X
+* 下端 + (高さ / 2) = 中央Y
+
 ```lua
-Point(LeftTop.X + ((RightBottom.X - LeftTop.X))/2, RightBottom.Y + ((LeftTop.Y - RightBottom.Y)/2))
+Point(LeftTop.X + ((RightBottom.X - LeftTop.X) / 2), RightBottom.Y + ((LeftTop.Y - RightBottom.Y) / 2))
 ```
 
 
