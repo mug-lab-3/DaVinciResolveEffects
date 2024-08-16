@@ -118,7 +118,7 @@
 					ControlGroup = 14,
 					Default = 1,
 				},
-			},
+			},			
 			Outputs = {
 				MainOutput1 = InstanceOutput {
 					SourceOp = "RectangleEx_Transform",
@@ -194,8 +194,8 @@
 						UseFrameFormatSettings = Input { Value = 1, },
 						ClippingMode = Input { Value = FuID { "None" }, },
 						Center = Input { Expression = "Point(LeftTop.X + ((RightBottom.X - LeftTop.X) / 2), RightBottom.Y + ((LeftTop.Y - RightBottom.Y) / 2))", },
-						Width = Input { Expression = "abs(RightBottom.X - LeftTop.X)", },
-						Height = Input { Expression = "abs(LeftTop.Y - RightBottom.Y)", },
+						Width = Input { Expression = "abs(RightBottom.X - LeftTop.X) + iif(Solid==0, BorderWidth, -BorderWidth)", },
+						Height = Input { Expression = "abs(LeftTop.Y - RightBottom.Y) + (iif(Solid==0,BorderWidth, -BorderWidth) * (MaskWidth / MaskHeight))", },
 						Position = Input { Value = 1, },
 						Style = Input { Value = 1, },
 						Color = Input { Value = 1, },
