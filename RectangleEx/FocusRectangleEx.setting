@@ -1,0 +1,504 @@
+{
+	Tools = ordered() {
+		FocusRectangleEx = GroupOperator {
+			Inputs = ordered() {
+				Input1 = InstanceInput {
+					SourceOp = "RectangleEx_Rectangle",
+					Source = "Position",
+				},
+				Input2 = InstanceInput {
+					SourceOp = "RectangleEx_Rectangle",
+					Source = "LeftTop",
+					Page = "Controls",
+					DefaultX = 0.25,
+					DefaultY = 0.75,
+				},
+				Input3 = InstanceInput {
+					SourceOp = "RectangleEx_Rectangle",
+					Source = "RightBottom",
+					Page = "Controls",
+					DefaultX = 0.75,
+					DefaultY = 0.25,
+				},
+				Input4 = InstanceInput {
+					SourceOp = "RectangleEx_Rectangle",
+					Source = "Offset",
+					Page = "Controls",
+				},
+				Input5 = InstanceInput {
+					SourceOp = "RectangleEx_Rectangle",
+					Source = "Centering",
+					Page = "Controls",
+				},
+				Input6 = InstanceInput {
+					SourceOp = "RectangleEx_Rectangle",
+					Source = "Anim",
+				},
+				Input7 = InstanceInput {
+					SourceOp = "AnimCurves3",
+					Source = "AnimTime",
+					Page = "Controls",
+					Default = 0.3,
+				},
+				Input8 = InstanceInput {
+					SourceOp = "AnimCurves8",
+					Source = "Offset",
+					Name = "Move Offset",
+					Default = -0.5,
+				},
+				Input9 = InstanceInput {
+					SourceOp = "AnimCurves8",
+					Source = "AnimTime",
+					Page = "Controls",
+					Default = 0.3,
+				},
+				Input10 = InstanceInput {
+					SourceOp = "RectangleEx_Rectangle",
+					Source = "Style",
+				},
+				Input11 = InstanceInput {
+					SourceOp = "RectangleEx_Rectangle",
+					Source = "SoftEdge",
+				},
+				Input12 = InstanceInput {
+					SourceOp = "RectangleEx_Rectangle",
+					Source = "BorderWidth",
+					Default = 0.005,
+				},
+				Input13 = InstanceInput {
+					SourceOp = "RectangleEx_Rectangle",
+					Source = "Invert",
+					Width = 0.5,
+				},
+				Input14 = InstanceInput {
+					SourceOp = "RectangleEx_Rectangle",
+					Source = "Solid",
+					Width = 0.5,
+					Default = 0,
+				},
+				Input15 = InstanceInput {
+					SourceOp = "RectangleEx_Rectangle",
+					Source = "JoinStyle",
+					Name = "Border Style",
+					ControlGroup = 5,
+					Default = 2,
+				},
+				Input16 = InstanceInput {
+					SourceOp = "RectangleEx_Rectangle",
+					Source = "CapStyle",
+					ControlGroup = 5,
+					Default = 1,
+				},
+				Input17 = InstanceInput {
+					SourceOp = "RectangleEx_Rectangle",
+					Source = "CornerRadius",
+					Default = 0,
+				},
+				Input18 = InstanceInput {
+					SourceOp = "RectangleEx_Background",
+					Source = "TopLeftRed",
+					Name = "Color",
+					ControlGroup = 14,
+					Default = 1,
+				},
+				Input19 = InstanceInput {
+					SourceOp = "RectangleEx_Background",
+					Source = "TopLeftGreen",
+					ControlGroup = 14,
+					Default = 0,
+				},
+				Input20 = InstanceInput {
+					SourceOp = "RectangleEx_Background",
+					Source = "TopLeftBlue",
+					ControlGroup = 14,
+					Default = 1,
+				},
+				Input21 = InstanceInput {
+					SourceOp = "RectangleEx_Background",
+					Source = "TopLeftAlpha",
+					ControlGroup = 14,
+					Default = 1,
+				},
+			},
+			Outputs = {
+				MainOutput1 = InstanceOutput {
+					SourceOp = "RectangleEx_Background",
+					Source = "Output",
+				}
+			},
+			ViewInfo = GroupInfo { Pos = { 0, 0 } },
+			Tools = ordered() {
+				RectangleEx_Rectangle_OutAnim = RectangleMask {
+					NameSet = true,
+					SourceOp = "RectangleEx_Rectangle",
+					Inputs = {
+						EffectMask = Input { },
+						SettingsNest = Input { },
+						WritePosition = Input {
+							SourceOp = "AnimCurves6",
+							Source = "Value",
+						},
+						WriteLength = Input {
+							SourceOp = "AnimCurves5",
+							Source = "Value",
+						},
+						Center = Input { Expression = "Point(AnimOffsetX +  (Offset.X -0.5)+ LeftTop.X + ((RightBottom.X - LeftTop.X) / 2), RightBottom.Y + ((LeftTop.Y - RightBottom.Y) / 2) + (Offset.Y - 0.5))" },
+						Width = Input {
+							Value = 0.505,
+							Expression = "abs(RightBottom.X - LeftTop.X) + iif(Solid==0, BorderWidth, -BorderWidth)"
+						},
+						Height = Input {
+							Value = 0.508888888888889,
+							Expression = "abs(LeftTop.Y - RightBottom.Y) + (iif(Solid==0,BorderWidth, -BorderWidth) * (MaskWidth / MaskHeight))"
+						},
+						["ShapeRasterizer.Nest"] = Input { },
+						CommentsNest = Input { },
+						FrameRenderScriptNest = Input { },
+						StartRenderScripts = Input { },
+						EndRenderScripts = Input { },
+						AnimOffsetX = Input {
+							SourceOp = "AnimCurves9",
+							Source = "Value",
+						}
+					},
+					ViewInfo = OperatorInfo { Pos = { 220, 49.5 } },
+					UserControls = ordered() { LeftTop = { INP_DefaultX = 0.25, INPID_PreviewControl = "CrosshairControl", INP_DefaultY = 0.75, LINKID_DataType = "Point", ICS_ControlPage = "Controls", INPID_InputControl = "OffsetControl", CHC_Style = "NormalCross", LINKS_Name = "Left Top", }, RightBottom = { INP_DefaultX = 0.75, INPID_PreviewControl = "CrosshairControl", INP_DefaultY = 0.25, LINKID_DataType = "Point", ICS_ControlPage = "Controls", INPID_InputControl = "OffsetControl", CHC_Style = "NormalCross", LINKS_Name = "Right Bottom", }, Position = { INP_MaxAllowed = 1000000, INP_Integer = false, LBLC_DropDownButton = true, INPID_InputControl = "LabelControl", LBLC_NumInputs = 4, INP_MaxScale = 1, INP_MinScale = 0, INP_MinAllowed = -1000000, LINKID_DataType = "Number", LBLC_NestLevel = 1, ICS_ControlPage = "Controls", LINKS_Name = "Position" }, Anim = { INP_Integer = false, LBLC_DropDownButton = true, LINKID_DataType = "Number", LBLC_NumInputs = 2, LBLC_NestLevel = 1, INPID_InputControl = "LabelControl", LINKS_Name = "Anim", }, Style = { INP_Integer = false, LBLC_DropDownButton = true, LINKID_DataType = "Number", LBLC_NumInputs = 9, LBLC_NestLevel = 1, INPID_InputControl = "LabelControl", LINKS_Name = "Style", }, Color = { INP_MaxAllowed = 1000000, INP_Integer = false, LBLC_DropDownButton = true, INPID_InputControl = "LabelControl", LBLC_NumInputs = 5, INP_MaxScale = 1, INP_MinScale = 0, INP_MinAllowed = -1000000, LINKID_DataType = "Number", LBLC_NestLevel = 1, ICS_ControlPage = "Controls", LINKS_Name = "Color" }, Offset = {
+							LINKS_Name = "Offset",
+							LINKID_DataType = "Point",
+							INPID_InputControl = "OffsetControl",
+							ICS_ControlPage = "Controls",
+						}, AnimOffsetX = {
+							LINKS_Name = "Anim Offset X",
+							LINKID_DataType = "Number",
+							INPID_InputControl = "ScrewControl",
+							INP_Integer = false,
+							ICS_ControlPage = "Controls",
+						} }
+				},
+				AnimCurves6 = LUTLookup {
+					CtrlWZoom = false,
+					Inputs = {
+						Curve = Input { Value = FuID { "Easing" }, },
+						EaseOut = Input { Value = FuID { "Sine" }, },
+						Lookup = Input {
+							SourceOp = "AnimCurvesonRectangleEx_Rectangle_OutAnimLookup",
+							Source = "Value",
+						},
+						Offset = Input {
+							Value = 1.90955766192733,
+							Expression = "(((RectangleEx_Rectangle_OutAnim.Height*(RectangleEx_Rectangle_OutAnim.MaskHeight/RectangleEx_Rectangle_OutAnim.MaskWidth))/2) + RectangleEx_Rectangle_OutAnim.Width*2 + (RectangleEx_Rectangle_OutAnim.Height*(RectangleEx_Rectangle_OutAnim.MaskHeight/RectangleEx_Rectangle_OutAnim.MaskWidth))) / ((RectangleEx_Rectangle_OutAnim.Width+(RectangleEx_Rectangle_OutAnim.Height*(RectangleEx_Rectangle_OutAnim.MaskHeight/RectangleEx_Rectangle_OutAnim.MaskWidth)))*2)\n+1",
+						},
+						FrameRenderScript = Input { Value = "local framerate = comp:GetPrefs(\"Comp.FrameFormat.Rate\")\nlocal clipLength = (comp.RenderEnd - comp.RenderStart)\nlocal ratioCorrection = (clipLength + 1) / clipLength \nlocal debug = \"\"\n\nlocal delayCount = 0\nif follower and follower.DelayTime then\n  delayCount = ceil(follower.DelayTime * framerate)\n  if delayCount > (clipLength - 1) then\n    delayCount = clipLength - 1\n  end\nend\n\nlocal animCount = ceil((self.AnimTime * framerate) - delayCount)\nif animCount <= 0 then\n  animCount = 1\nend\nif (animCount + delayCount) > clipLength then\n  animCount = clipLength - delayCount\nend\n\nself.Source = \"Duration\"\nself.ClipHigh = 1\nself.ClipLow = 1\nself.AnimTime = (animCount + delayCount) / framerate\nself.TimeScale  = ratioCorrection / (animCount / clipLength)\nself.TimeOffset = (1 - ((animCount + delayCount) / clipLength)) / ratioCorrection", },
+						AnimTime = Input { Expression = "AnimCurves5.AnimTime", }
+					},
+					UserControls = ordered() { AnimTime = { INP_Integer = false, INP_MinAllowed = 0, LINKID_DataType = "Number", ICS_ControlPage = "Controls", INPID_InputControl = "ScrewControl", LINKS_Name = "Anim Time", } }
+				},
+				AnimCurvesonRectangleEx_Rectangle_OutAnimLookup = LUTBezier {
+					KeyColorSplines = {
+						[0] = {
+							[0] = { 0, RH = { 0.333333333333333, 0.333333333333333 }, Flags = { Linear = true } },
+							[1] = { 1, LH = { 0.666666666666667, 0.666666666666667 }, Flags = { Linear = true } }
+						}
+					},
+					SplineColor = { Red = 255, Green = 255, Blue = 255 },
+					CtrlWZoom = false,
+				},
+				AnimCurves5 = LUTLookup {
+					CtrlWZoom = false,
+					Inputs = {
+						Curve = Input { Value = FuID { "Easing" }, },
+						EaseOut = Input { Value = FuID { "Sine" }, },
+						Lookup = Input {
+							SourceOp = "AnimCurvesonRectangleEx_Rectangle_OutAnimLookup1",
+							Source = "Value",
+						},
+						Invert = Input { Value = 1, },
+						FrameRenderScript = Input { Value = "local framerate = comp:GetPrefs(\"Comp.FrameFormat.Rate\")\nlocal clipLength = (comp.RenderEnd - comp.RenderStart)\nlocal ratioCorrection = (clipLength + 1) / clipLength \nlocal debug = \"\"\n\nlocal delayCount = 0\nif follower and follower.DelayTime then\n  delayCount = ceil(follower.DelayTime * framerate)\n  if delayCount > (clipLength - 1) then\n    delayCount = clipLength - 1\n  end\nend\n\nlocal animCount = ceil((self.AnimTime * framerate) - delayCount)\nif animCount <= 0 then\n  animCount = 1\nend\nif (animCount + delayCount) > clipLength then\n  animCount = clipLength - delayCount\nend\n\nself.Source = \"Duration\"\nself.ClipHigh = 1\nself.ClipLow = 1\nself.AnimTime = (animCount + delayCount) / framerate\nself.TimeScale  = ratioCorrection / (animCount / clipLength)\nself.TimeOffset = (1 - ((animCount + delayCount) / clipLength)) / ratioCorrection", },
+						AnimTime = Input { Expression = "AnimCurves3.AnimTime", }
+					},
+					UserControls = ordered() { AnimTime = { INP_Integer = false, INP_MinAllowed = 0, LINKID_DataType = "Number", ICS_ControlPage = "Controls", INPID_InputControl = "ScrewControl", LINKS_Name = "Anim Time", } }
+				},
+				AnimCurvesonRectangleEx_Rectangle_OutAnimLookup1 = LUTBezier {
+					KeyColorSplines = {
+						[0] = {
+							[0] = { 0, RH = { 0.333333333333333, 0.333333333333333 }, Flags = { Linear = true } },
+							[1] = { 1, LH = { 0.666666666666667, 0.666666666666667 }, Flags = { Linear = true } }
+						}
+					},
+					SplineColor = { Red = 255, Green = 255, Blue = 255 },
+					CtrlWZoom = false,
+				},
+				AnimCurves9 = LUTLookup {
+					CtrlWZoom = false,
+					Inputs = {
+						Curve = Input { Value = FuID { "Easing" }, },
+						EaseIn = Input { Value = FuID { "Sine" }, },
+						Lookup = Input {
+							SourceOp = "AnimCurves9Lookup",
+							Source = "Value",
+						},
+						Scale = Input {
+							Value = 0.5,
+							Expression = "AnimCurves8.Scale",
+						},
+						FrameRenderScript = Input { Value = "local framerate = comp:GetPrefs(\"Comp.FrameFormat.Rate\")\nlocal clipLength = (comp.RenderEnd - comp.RenderStart)\nlocal ratioCorrection = (clipLength + 1) / clipLength \nlocal debug = \"\"\n\nlocal delayCount = 0\nif follower and follower.DelayTime then\n  delayCount = ceil(follower.DelayTime * framerate)\n  if delayCount > (clipLength - 1) then\n    delayCount = clipLength - 1\n  end\nend\n\nlocal animCount = ceil((self.AnimTime * framerate) - delayCount)\nif animCount <= 0 then\n  animCount = 1\nend\nif (animCount + delayCount) > clipLength then\n  animCount = clipLength - delayCount\nend\n\nself.Source = \"Duration\"\nself.ClipHigh = 1\nself.ClipLow = 1\nself.AnimTime = (animCount + delayCount) / framerate\nself.TimeScale  = ratioCorrection / (animCount / clipLength)\nself.TimeOffset = (1 - ((animCount + delayCount) / clipLength)) / ratioCorrection", },
+						AnimTime = Input { Expression = "AnimCurves8.AnimTime", }
+					},
+					UserControls = ordered() {
+						AnimTime = {
+							LINKS_Name = "Anim Time",
+							LINKID_DataType = "Number",
+							INPID_InputControl = "ScrewControl",
+							INP_Integer = false,
+							INP_MinAllowed = 0,
+							ICS_ControlPage = "Controls",
+						}
+					}
+				},
+				AnimCurves9Lookup = LUTBezier {
+					KeyColorSplines = {
+						[0] = {
+							[0] = { 0, RH = { 0.333333333333333, 0.333333333333333 }, Flags = { Linear = true } },
+							[1] = { 1, LH = { 0.666666666666667, 0.666666666666667 }, Flags = { Linear = true } }
+						}
+					},
+					SplineColor = { Red = 255, Green = 255, Blue = 255 },
+					CtrlWZoom = false,
+				},
+				Instance_Dissolve1 = Dissolve {
+					Transitions = {
+						[0] = "DFTDissolve"
+					},
+					Inputs = {
+						Mix = Input { Expression = "iif(time / comp.RenderEnd > 0.5, 1, 0)", },
+						Background = Input {
+							SourceOp = "RectangleEx_Rectangle",
+							Source = "Mask",
+						},
+						Foreground = Input {
+							SourceOp = "RectangleEx_Rectangle_OutAnim",
+							Source = "Mask",
+						},
+					},
+					ViewInfo = OperatorInfo { Pos = { 275, 82.5 } },
+				},
+				RectangleEx_Rectangle = RectangleMask {
+					NameSet = true,
+					Inputs = {
+						Filter = Input { Value = FuID { "Fast Gaussian" }, },
+						BorderWidth = Input { Value = 0.005, },
+						Solid = Input { Value = 0, },
+						WritePosition = Input {
+							Value = 0.59044233807267,
+							Expression = "(((Height*(MaskHeight/MaskWidth))/2) + Width + (Height*(MaskHeight/MaskWidth))) / ((Width+(Height*(MaskHeight/MaskWidth)))*2)\n",
+						},
+						WriteLength = Input {
+							SourceOp = "AnimCurves3",
+							Source = "Value",
+						},
+						OutputSize = Input { Value = FuID { "Custom" }, },
+						MaskWidth = Input { Value = 1920, },
+						MaskHeight = Input { Value = 1080, },
+						PixelAspect = Input { Value = { 1, 1 }, },
+						UseFrameFormatSettings = Input { Value = 1, },
+						ClippingMode = Input { Value = FuID { "None" }, },
+						Center = Input {
+							Expression = "Point(AnimOffsetX +  (Offset.X -0.5)+ LeftTop.X + ((RightBottom.X - LeftTop.X) / 2), RightBottom.Y + ((LeftTop.Y - RightBottom.Y) / 2) + (Offset.Y - 0.5))",
+						},
+						Width = Input {
+							Value = 0.505,
+							Expression = "abs(RightBottom.X - LeftTop.X) + iif(Solid==0, BorderWidth, -BorderWidth)",
+						},
+						Height = Input {
+							Value = 0.508888888888889,
+							Expression = "abs(LeftTop.Y - RightBottom.Y) + (iif(Solid==0,BorderWidth, -BorderWidth) * (MaskWidth / MaskHeight))",
+						},
+						Position = Input { Value = 1, },
+						Anim = Input { Value = 1, },
+						Style = Input { Value = 1, },
+						Color = Input { Value = 1, },
+						AnimOffsetX = Input {
+							SourceOp = "AnimCurves8",
+							Source = "Value",
+						},
+					},
+					ViewInfo = OperatorInfo { Pos = { 165, 82.5 } },
+					UserControls = ordered() { 
+						LeftTop = {
+							INP_DefaultX = 0.25,
+							INPID_PreviewControl = "CrosshairControl", 
+							INP_DefaultY = 0.75,
+							LINKID_DataType = "Point",
+							ICS_ControlPage = "Controls",
+							INPID_InputControl = "OffsetControl",
+							CHC_Style = "NormalCross",
+							LINKS_Name = "Left Top",
+						}, 
+						RightBottom = {
+							INP_DefaultX = 0.75,
+							INPID_PreviewControl = "CrosshairControl",
+							INP_DefaultY = 0.25,
+							LINKID_DataType = "Point",
+							ICS_ControlPage = "Controls",
+							INPID_InputControl = "OffsetControl",
+							CHC_Style = "NormalCross",
+							LINKS_Name = "Right Bottom",
+						},
+						Position = {
+							INP_Integer = false,
+							LBLC_DropDownButton = true,
+							LINKID_DataType = "Number",
+							LBLC_NumInputs = 4,
+							LBLC_NestLevel = 1,
+							INPID_InputControl = "LabelControl",
+							ICS_ControlPage = "Controls",
+							LINKS_Name = "Position"
+						},
+						Anim = {
+							INP_Integer = false,
+							LBLC_DropDownButton = true,
+							LINKID_DataType = "Number",
+							LBLC_NumInputs = 2,
+							LBLC_NestLevel = 1,
+							INPID_InputControl = "LabelControl",
+							ICS_ControlPage = "Controls",
+							LINKS_Name = "Anim",
+						}, 
+						Style = {
+							INP_Integer = false,
+							LBLC_DropDownButton = true,
+							LINKID_DataType = "Number",
+							LBLC_NumInputs = 9,
+							LBLC_NestLevel = 1,
+							INPID_InputControl = "LabelControl",
+							ICS_ControlPage = "Controls",
+							LINKS_Name = "Style",
+						},
+						Color = {
+							INP_Integer = false,
+							LBLC_DropDownButton = true,
+							LINKID_DataType = "Number",
+							LBLC_NumInputs = 4,
+							LBLC_NestLevel = 1,
+							INPID_InputControl = "LabelControl",
+							ICS_ControlPage = "Controls",
+							LINKS_Name = "Color"
+						},
+						Offset = {
+							LINKS_Name = "Offset",
+							LINKID_DataType = "Point",
+							INPID_InputControl = "OffsetControl",
+							INPID_PreviewControl = "CrosshairControl",
+							CHC_Style = "DiagonalCross",
+							ICS_ControlPage = "Controls",
+						},
+						Centering = {
+							LINKS_Name = "Centering",
+							LINKID_DataType = "Number",
+							INPID_InputControl = "ButtonControl",
+							INP_Integer = false,
+							INP_MinScale = 0,
+							INP_MaxScale = 1,
+							INP_MinAllowed = -1000000,
+							INP_MaxAllowed = 1000000,
+							BTNCS_Execute = "comp:Lock()\n\nlocal centerOffsetX = (RectangleEx_Rectangle.Offset[1][1] - 0.5)\nlocal centerOffsetY = (RectangleEx_Rectangle.Offset[1][2] - 0.5)\n\nRectangleEx_Rectangle.LeftTop = {\n    RectangleEx_Rectangle.LeftTop[1][1] + centerOffsetX,\n    RectangleEx_Rectangle.LeftTop[1][2] + centerOffsetY,\n}\n\nRectangleEx_Rectangle.RightBottom = {\n    RectangleEx_Rectangle.RightBottom[1][1] + centerOffsetX,\n    RectangleEx_Rectangle.RightBottom[1][2] + centerOffsetY,\n}\n\nRectangleEx_Rectangle.Offset = {0.5, 0.5}\n\ncomp:Unlock()",
+							ICS_ControlPage = "Controls"
+						},
+						AnimOffsetX = {
+							LINKS_Name = "Anim Offset X",
+							LINKID_DataType = "Number",
+							INPID_InputControl = "ScrewControl",
+							INP_Integer = false,
+							ICS_ControlPage = "Controls",
+						}
+					}
+				},
+				AnimCurves3 = LUTLookup {
+					CtrlWZoom = false,
+					Inputs = {
+						Curve = Input { Value = FuID { "Easing" }, },
+						EaseIn = Input { Value = FuID { "Sine" }, },
+						Lookup = Input {
+							SourceOp = "AnimCurves3Lookup",
+							Source = "Value",
+						},
+						FrameRenderScript = Input { Value = "local framerate = comp:GetPrefs(\"Comp.FrameFormat.Rate\")\nlocal clipLength = (comp.RenderEnd - comp.RenderStart)\nlocal ratioCorrection = (clipLength + 1) / clipLength\nlocal debug = \"\"\n\nlocal delayCount = 0\nif follower and follower.DelayTime then\n  delayCount = ceil(follower.DelayTime * framerate)\n  if delayCount > (clipLength - 1) then\n    delayCount = clipLength - 1\n  end\nend\n\nlocal animCount = ceil((self.AnimTime * framerate) - delayCount)\nif animCount <= 0 then\n  animCount = 1\nend\nif (animCount + delayCount) > clipLength then\n  animCount = clipLength - delayCount\nend\n\nself.Source = \"Duration\"\nself.ClipHigh = 1\nself.ClipLow = 1\nself.AnimTime = (animCount + delayCount) / framerate\nself.TimeScale = ratioCorrection / (animCount / clipLength)\nself.TimeOffset = 0", },
+						AnimTime = Input { Value = 0.3, }
+					},
+					UserControls = ordered() { AnimTime = { INP_MaxAllowed = 1000000, INP_Integer = false, INPID_InputControl = "ScrewControl", INP_MaxScale = 1, INP_MinScale = 0, INP_MinAllowed = 0, LINKID_DataType = "Number", ICS_ControlPage = "Controls", LINKS_Name = "Focus Anim Time" } }
+				},
+				AnimCurves3Lookup = LUTBezier {
+					KeyColorSplines = {
+						[0] = {
+							[0] = { 0, RH = { 0.333333333333333, 0.333333333333333 }, Flags = { Linear = true } },
+							[1] = { 1, LH = { 0.666666666666667, 0.666666666666667 }, Flags = { Linear = true } }
+						}
+					},
+					SplineColor = { Red = 255, Green = 255, Blue = 255 },
+					CtrlWZoom = false,
+				},
+				AnimCurves8 = LUTLookup {
+					CtrlWZoom = false,
+					Inputs = {
+						Curve = Input { Value = FuID { "Easing" }, },
+						EaseOut = Input { Value = FuID { "Sine" }, },
+						Lookup = Input {
+							SourceOp = "AnimCurves8Lookup",
+							Source = "Value",
+						},
+						Scale = Input {
+							Value = 0.5,
+							Expression = "Offset * -1",
+						},
+						Offset = Input { Value = -0.5, },
+						FrameRenderScript = Input { Value = "local framerate = comp:GetPrefs(\"Comp.FrameFormat.Rate\")\nlocal clipLength = (comp.RenderEnd - comp.RenderStart)\nlocal ratioCorrection = (clipLength + 1) / clipLength\nlocal debug = \"\"\n\nlocal delayCount = 0\nif follower and follower.DelayTime then\n  delayCount = ceil(follower.DelayTime * framerate)\n  if delayCount > (clipLength - 1) then\n    delayCount = clipLength - 1\n  end\nend\n\nlocal animCount = ceil((self.AnimTime * framerate) - delayCount)\nif animCount <= 0 then\n  animCount = 1\nend\nif (animCount + delayCount) > clipLength then\n  animCount = clipLength - delayCount\nend\n\nself.Source = \"Duration\"\nself.ClipHigh = 1\nself.ClipLow = 1\nself.AnimTime = (animCount + delayCount) / framerate\nself.TimeScale = ratioCorrection / (animCount / clipLength)\nself.TimeOffset = 0", },
+						AnimTime = Input { Value = 0.3, }
+					},
+					UserControls = ordered() {
+						AnimTime = {
+							LINKS_Name = "Move Anim Time",
+							LINKID_DataType = "Number",
+							INPID_InputControl = "ScrewControl",
+							INP_Default = 0,
+							INP_Integer = false,
+							INP_MinScale = 0,
+							INP_MaxScale = 10,
+							INP_MinAllowed = 0,
+							INP_MaxAllowed = 1000000,
+							ICD_Center = 0,
+							ICS_ControlPage = "Controls"
+						}
+					}
+				},
+				AnimCurves8Lookup = LUTBezier {
+					KeyColorSplines = {
+						[0] = {
+							[0] = { 0, RH = { 0.333333333333333, 0.333333333333333 }, Flags = { Linear = true } },
+							[1] = { 1, LH = { 0.666666666666667, 0.666666666666667 }, Flags = { Linear = true } }
+						}
+					},
+					SplineColor = { Red = 255, Green = 255, Blue = 255 },
+					CtrlWZoom = false,
+				},
+				RectangleEx_Background = Background {
+					CtrlWZoom = false,
+					NameSet = true,
+					Inputs = {
+						EffectMask = Input {
+							SourceOp = "Instance_Dissolve1",
+							Source = "Output",
+						},
+						Width = Input { Value = 1920, },
+						Height = Input { Value = 1080, },
+						UseFrameFormatSettings = Input { Value = 1, },
+						["Gamut.SLogVersion"] = Input { Value = FuID { "SLog2" }, },
+						TopLeftRed = Input { Value = 1, },
+						TopLeftBlue = Input { Value = 1, },
+					},
+					ViewInfo = OperatorInfo { Pos = { 385, 82.5 } },
+				}
+			},
+		}
+	},
+	ActiveTool = "FocusRectangleEx"
+}
