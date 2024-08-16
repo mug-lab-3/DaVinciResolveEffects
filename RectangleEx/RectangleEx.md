@@ -9,18 +9,17 @@ RectangleExの構成は以下の通り
 
 * メインとなるRectangleノード
 * 色変更用のBackgroundノード
-* 移動用のTransformノード
 
 ![Flow](flow.png)
 
 * 既存のノードと重複しないようにRectangleExのプリフィックスをつける
-* `RectangleEx_Rectangle`, `RectangleEx_Transform`は[スクリプト内](#execute-script)で参照しているため名前変更不可
+* `RectangleEx_Rectangle`は[スクリプト内](#execute-script)で参照しているため名前変更不可
 
 
 ## Area Control
 
-左上、右下をそれぞれ`Left Top`, `Right Bottom`として[RectangleEx_Rectangle](#flow)へコントロールを追加し  
-それを使用して四角形の位置・サイズ調整を行う
+左上、右下をそれぞれ`Left Top`, `Right Bottom`,   
+並行移動用に`Offset`として[RectangleEx_Rectangle](#flow)へコントロールを追加し、それを使用して四角形の位置・サイズ調整・移動を行う
 
 ### Left Top
 
@@ -45,6 +44,20 @@ RectangleExの構成は以下の通り
 | Type | `Point` |
 | Page | `Controls` |
 | Default | `0.75` : `0.25` |
+| Input Ctrol | `OffsetControl` |
+| View Ctrl | `CrosshairControl` |
+| DispScale | 空欄 |
+| Style | `NormalCross` |
+
+### Offset
+
+| 設定先 | 値 |
+| ---- | ---- |
+| Name | `Offset` |
+| ID | `Offset` |
+| Type | `Point` |
+| Page | `Controls` |
+| Default | `0.5` : `0.5` |
 | Input Ctrol | `OffsetControl` |
 | View Ctrl | `CrosshairControl` |
 | DispScale | 空欄 |
@@ -79,11 +92,13 @@ abs(LeftTop.Y - RightBottom.Y) + (iif(Solid==0, BorderWidth, -BorderWidth) * (Ma
 
 ### Center
 
-* 左端 + (幅 / 2) = 中央X
-* 下端 + (高さ / 2) = 中央Y
+中央座標にoffsetを加えてCenterとする
+
+* オフセット + 左端 + (幅 / 2) = 中央X
+* オフセット + 下端 + (高さ / 2) = 中央Y
 
 ```lua
-Point(LeftTop.X + ((RightBottom.X - LeftTop.X) / 2), RightBottom.Y + ((LeftTop.Y - RightBottom.Y) / 2))
+Point((Offset.X - 0.5) + LeftTop.X + ((RightBottom.X - LeftTop.X) / 2), (Offset.Y - 0.5) + RightBottom.Y + ((LeftTop.Y - RightBottom.Y) / 2))
 ```
 
 
@@ -116,15 +131,14 @@ Point(LeftTop.X + ((RightBottom.X - LeftTop.X) / 2), RightBottom.Y + ((LeftTop.Y
 
 ### Execute Script
 
-[RectangleEx_Transform](#flow)での移動量を[Rectangle](#flow)に加算した上で、  
-[RectangleEx_Transform](#flow)での移動量を0に戻すことにより、移動位置を維持したまま  
-`Left Top`, `Right Bottom`の制御位置ずれを解消する
+`Offset`での移動量を`Left Top`, `Right Bottom`に加算した上で、  
+`Offset`の移動量を0に戻すことにより、移動位置を維持したまま  `Left Top`, `Right Bottom`の制御位置ずれを解消する
 
 ```lua
 comp:Lock()
 
-local centerOffsetX = (RectangleEx_Transform.Center[1][1] - 0.5)
-local centerOffsetY = (RectangleEx_Transform.Center[1][2] - 0.5)
+local centerOffsetX = (RectangleEx_Rectangle.Offset[1][1] - 0.5)
+local centerOffsetY = (RectangleEx_Rectangle.Offset[1][2] - 0.5)
 
 RectangleEx_Rectangle.LeftTop = {
     RectangleEx_Rectangle.LeftTop[1][1] + centerOffsetX,
@@ -136,7 +150,7 @@ RectangleEx_Rectangle.RightBottom = {
     RectangleEx_Rectangle.RightBottom[1][2] + centerOffsetY,
 }
 
-RectangleEx_Transform.Center = {0.5, 0.5}
+RectangleEx_Rectangle.Offset = {0.5, 0.5}
 
 comp:Unlock()
 ```
