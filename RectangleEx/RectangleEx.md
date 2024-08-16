@@ -78,6 +78,97 @@ RectangleExの構成は以下の通り
 [RectangleEx_Rectangle](#flow)の下記パラメータはExpressionに設定し、  
 `Left Top`, `Right Bottom`から計算で求める
 
+<details>
+<summary>途中式</summary>
+
+<details>
+<summary>1. 基本</summary>
+
+#### Width
+
+```lua
+RightBottom.X - LeftTop.X
+```
+
+#### Height
+
+```lua
+LeftTop.Y - RightBottom.Y
+```
+
+#### Center
+
+```lua
+Point(LeftTop.X + ((RightBottom.X - LeftTop.X) / 2), RightBottom.Y + ((LeftTop.Y - RightBottom.Y) / 2))
+```
+
+</details>
+
+
+<details>
+<summary>2. 入れ替え可能にする</summary>
+
+#### Width
+
+```lua
+abs(RightBottom.X - LeftTop.X)
+```
+
+#### Height
+
+```lua
+abs(LeftTop.Y - RightBottom.Y)
+```
+
+</details>
+
+
+<details>
+<summary>3. 線の太さを考慮する</summary>
+
+#### Width
+
+```lua
+abs(RightBottom.X - LeftTop.X) + BorderWidth
+```
+
+#### Height
+
+```lua
+abs(LeftTop.Y - RightBottom.Y) + (BorderWidth * (MaskWidth / MaskHeight))
+```
+
+</details>
+
+<details>
+<summary>4. 塗りつぶしを考慮する</summary>
+
+#### Width
+
+```lua
+abs(RightBottom.X - LeftTop.X) + iif(Solid == 0, BorderWidth, -BorderWidth)
+```
+
+#### Height
+
+```lua
+abs(LeftTop.Y - RightBottom.Y) + (iif(Solid == 0, BorderWidth, -BorderWidth) * (MaskWidth / MaskHeight))
+```
+
+</details>
+
+<details>
+<summary>5. 平行移動を可能にする</summary>
+
+```lua
+Point((Offset.X - 0.5) + LeftTop.X + ((RightBottom.X - LeftTop.X) / 2), (Offset.Y - 0.5) + RightBottom.Y + ((LeftTop.Y - RightBottom.Y) / 2))
+```
+
+</details>
+</details>
+</details>
+
+
 ### Width
 
 右端 - 左端 = 幅  
@@ -85,7 +176,7 @@ RectangleExの構成は以下の通り
 更に枠線の幅を考慮して塗りつぶしのときはSolidのときは外側、枠線のときは内側を指定できるようにする
 
 ```lua
-abs(RightBottom.X - LeftTop.X) + iif(Solid==0, BorderWidth, -BorderWidth)
+abs(RightBottom.X - LeftTop.X) + iif(Solid == 0, BorderWidth, -BorderWidth)
 ```
 
 ### Height
@@ -96,7 +187,7 @@ abs(RightBottom.X - LeftTop.X) + iif(Solid==0, BorderWidth, -BorderWidth)
 その際、アスペクト比の補正をかける
 
 ```lua
-abs(LeftTop.Y - RightBottom.Y) + (iif(Solid==0, BorderWidth, -BorderWidth) * (MaskWidth / MaskHeight))
+abs(LeftTop.Y - RightBottom.Y) + (iif(Solid == 0, BorderWidth, -BorderWidth) * (MaskWidth / MaskHeight))
 ```
 
 ### Center
