@@ -3,117 +3,117 @@
 		RectangleEx = GroupOperator {
 			Inputs = ordered() {
 				Input1 = InstanceInput {
-					SourceOp = "Rectangle1",
+					SourceOp = "RectangleEx_Rectangle",
 					Source = "Position",
 					Page = "Controls",
 				},
 				Input2 = InstanceInput {
-					SourceOp = "Rectangle1",
+					SourceOp = "RectangleEx_Rectangle",
 					Source = "LeftTop",
 					Page = "Controls",
 					DefaultX = 0.25,
 					DefaultY = 0.75,
 				},
 				Input3 = InstanceInput {
-					SourceOp = "Rectangle1",
+					SourceOp = "RectangleEx_Rectangle",
 					Source = "RightBottom",
 					Page = "Controls",
 					DefaultX = 0.75,
 					DefaultY = 0.25,
 				},
 				Input4 = InstanceInput {
-					SourceOp = "Transform1",
+					SourceOp = "RectangleEx_Transform",
 					Source = "Center",
 				},
 				Input5 = InstanceInput {
-					SourceOp = "Transform1",
+					SourceOp = "RectangleEx_Rectangle",
 					Source = "Angle",
 					Default = 0,
 				},
 				Input6 = InstanceInput {
-					SourceOp = "Transform1",
+					SourceOp = "RectangleEx_Transform",
 					Source = "Centering",
 					Page = "Controls",
 				},
 				Input7 = InstanceInput {
-					SourceOp = "Rectangle1",
+					SourceOp = "RectangleEx_Rectangle",
 					Source = "Style",
 					Page = "Controls",
 				},
 				Input8 = InstanceInput {
-					SourceOp = "Rectangle1",
+					SourceOp = "RectangleEx_Rectangle",
 					Source = "SoftEdge",
 				},
 				Input9 = InstanceInput {
-					SourceOp = "Rectangle1",
+					SourceOp = "RectangleEx_Rectangle",
 					Source = "BorderWidth",
 					Default = 0.01,
 				},
 				Input10 = InstanceInput {
-					SourceOp = "Rectangle1",
+					SourceOp = "RectangleEx_Rectangle",
 					Source = "Invert",
 					Width = 0.5,
 				},
 				Input11 = InstanceInput {
-					SourceOp = "Rectangle1",
+					SourceOp = "RectangleEx_Rectangle",
 					Source = "Solid",
 					Width = 0.5,
 					Default = 0,
 				},
 				Input12 = InstanceInput {
-					SourceOp = "Rectangle1",
+					SourceOp = "RectangleEx_Rectangle",
 					Source = "JoinStyle",
 					Name = "Border Style",
 					ControlGroup = 5,
 					Default = 2,
 				},
 				Input13 = InstanceInput {
-					SourceOp = "Rectangle1",
+					SourceOp = "RectangleEx_Rectangle",
 					Source = "CapStyle",
 					ControlGroup = 5,
 					Default = 1,
 				},
 				Input14 = InstanceInput {
-					SourceOp = "Rectangle1",
+					SourceOp = "RectangleEx_Rectangle",
 					Source = "WritePosition",
 					Default = 0,
 				},
 				Input15 = InstanceInput {
-					SourceOp = "Rectangle1",
+					SourceOp = "RectangleEx_Rectangle",
 					Source = "WriteLength",
 					Default = 1,
 				},
 				Input16 = InstanceInput {
-					SourceOp = "Rectangle1",
+					SourceOp = "RectangleEx_Rectangle",
 					Source = "CornerRadius",
 					Default = 0,
 				},
 				Input17 = InstanceInput {
-					SourceOp = "Rectangle1",
+					SourceOp = "RectangleEx_Rectangle",
 					Source = "Color",
 					Page = "Controls",
 				},
 				Input18 = InstanceInput {
-					SourceOp = "Background1",
+					SourceOp = "RectangleEx_Background",
 					Source = "TopLeftRed",
 					Name = "Color",
 					ControlGroup = 14,
 					Default = 1,
 				},
 				Input19 = InstanceInput {
-					SourceOp = "Background1",
+					SourceOp = "RectangleEx_Background",
 					Source = "TopLeftGreen",
 					ControlGroup = 14,
 					Default = 1,
 				},
 				Input20 = InstanceInput {
-					SourceOp = "Background1",
+					SourceOp = "RectangleEx_Background",
 					Source = "TopLeftBlue",
 					ControlGroup = 14,
 					Default = 1,
 				},
 				Input21 = InstanceInput {
-					SourceOp = "Background1",
+					SourceOp = "RectangleEx_Background",
 					Source = "TopLeftAlpha",
 					ControlGroup = 14,
 					Default = 1,
@@ -121,30 +121,86 @@
 			},
 			Outputs = {
 				MainOutput1 = InstanceOutput {
-					SourceOp = "Transform1",
+					SourceOp = "RectangleEx_Transform",
 					Source = "Output",
 				}
 			},
 			ViewInfo = GroupInfo { Pos = { 0, 0 } },
 			Tools = ordered() {
-				Rectangle1 = RectangleMask {
+				RectangleEx_Transform = Transform {
+					NameSet = true,
+					Inputs = {
+						Input = Input {
+							SourceOp = "RectangleEx_Background",
+							Source = "Output",
+						},
+					},
+					ViewInfo = OperatorInfo { Pos = { 712.643, 49.0714 } },
+					UserControls = ordered() {
+						Center = {
+							LINKS_Name = "Center",
+							LINKID_DataType = "Point",
+							INPID_InputControl = "OffsetControl",
+							INPID_PreviewControl = "CrosshairControl",
+							OFCD_DisplayXScale = 1,
+							OFCD_DisplayYScale = 1,
+							CHC_Style = "DiagonalCross",
+							ICS_ControlPage = "Controls",
+						},
+						Centering = {
+							INP_MaxAllowed = 1000000,
+							INP_Integer = false,
+							INPID_InputControl = "ButtonControl",
+							BTNCS_Execute = "comp:Lock()\n\nlocal centerOffsetX = (RectangleEx_Transform.Center[1][1] - 0.5)\nlocal centerOffsetY = (RectangleEx_Transform.Center[1][2] - 0.5)\n\nRectangleEx_Rectangle.LeftTop = {\n    RectangleEx_Rectangle.LeftTop[1][1] + centerOffsetX,\n    RectangleEx_Rectangle.LeftTop[1][2] + centerOffsetY,\n}\n\nRectangleEx_Rectangle.RightBottom = {\n    RectangleEx_Rectangle.RightBottom[1][1] + centerOffsetX,\n    RectangleEx_Rectangle.RightBottom[1][2] + centerOffsetY,\n}\n\nRectangleEx_Transform.Center = {0.5, 0.5}\n\ncomp:Unlock()",
+							INP_MaxScale = 1,
+							INP_MinScale = 0,
+							INP_MinAllowed = -1000000,
+							LINKID_DataType = "Number",
+							INP_External = false,
+							INP_Passive = true,
+							ICS_ControlPage = "Controls",
+							LINKS_Name = "Centering"
+						}
+					}
+				},
+				RectangleEx_Background = Background {
+					NameSet = true,
+					Inputs = {
+						EffectMask = Input {
+							SourceOp = "RectangleEx_Rectangle",
+							Source = "Mask",
+						},
+						Width = Input { Value = 1920, },
+						Height = Input { Value = 1080, },
+						UseFrameFormatSettings = Input { Value = 1, },
+						["Gamut.SLogVersion"] = Input { Value = FuID { "SLog2" }, },
+						TopLeftRed = Input { Value = 1, },
+						TopLeftGreen = Input { Value = 1, },
+						TopLeftBlue = Input { Value = 1, },
+					},
+					ViewInfo = OperatorInfo { Pos = { 605, 48.6429 } },
+				},
+				RectangleEx_Rectangle = RectangleMask {
+					CtrlWZoom = false,
 					NameSet = true,
 					Inputs = {
 						Filter = Input { Value = FuID { "Fast Gaussian" }, },
-						BorderWidth = Input { Value = 0.01, },
+						BorderWidth = Input { Value = 0.005, },
 						Solid = Input { Value = 0, },
+						OutputSize = Input { Value = FuID { "Custom" }, },
 						MaskWidth = Input { Value = 1920, },
 						MaskHeight = Input { Value = 1080, },
 						PixelAspect = Input { Value = { 1, 1 }, },
 						UseFrameFormatSettings = Input { Value = 1, },
 						ClippingMode = Input { Value = FuID { "None" }, },
-						Center = Input { Expression = "Point(LeftTop.X + ((RightBottom.X - LeftTop.X))/2, RightBottom.Y + ((LeftTop.Y - RightBottom.Y)/2))", },
+						Center = Input { Expression = "Point(LeftTop.X + ((RightBottom.X - LeftTop.X) / 2), RightBottom.Y + ((LeftTop.Y - RightBottom.Y) / 2))", },
 						Width = Input { Expression = "abs(RightBottom.X - LeftTop.X)", },
 						Height = Input { Expression = "abs(LeftTop.Y - RightBottom.Y)", },
-						Color = Input { Value = 1, },
 						Position = Input { Value = 1, },
+						Style = Input { Value = 1, },
+						Color = Input { Value = 1, },
 					},
-					ViewInfo = OperatorInfo { Pos = { 495, 49.5 } },
+					ViewInfo = OperatorInfo { Pos = { 499.714, 49.0714 } },
 					UserControls = ordered() {
 						LeftTop = {
 							INP_DefaultX = 0.25,
@@ -166,23 +222,19 @@
 							CHC_Style = "NormalCross",
 							LINKS_Name = "Right Bottom",
 						},
-						Color = {
-							LINKS_Name = "Color",
-							LINKID_DataType = "Number",
-							INPID_InputControl = "LabelControl",
-							INP_Integer = false,
-							LBLC_DropDownButton = true,
-							LBLC_NumInputs = 2,
-							LBLC_NestLevel = 1,
-						},
 						Position = {
 							LINKS_Name = "Position",
 							LINKID_DataType = "Number",
 							INPID_InputControl = "LabelControl",
 							INP_Integer = false,
+							INP_MinScale = 0,
+							INP_MaxScale = 1,
+							INP_MinAllowed = -1000000,
+							INP_MaxAllowed = 1000000,
 							LBLC_DropDownButton = true,
 							LBLC_NumInputs = 5,
 							LBLC_NestLevel = 1,
+							ICS_ControlPage = "Controls"
 						},
 						Style = {
 							LINKS_Name = "Style",
@@ -192,46 +244,22 @@
 							LBLC_DropDownButton = true,
 							LBLC_NumInputs = 9,
 							LBLC_NestLevel = 1,
-						}
-					}
-				},
-				Transform1 = Transform {
-					CtrlWZoom = false,
-					Inputs = {
-						Input = Input {
-							SourceOp = "Background1",
-							Source = "Output",
 						},
-					},
-					ViewInfo = OperatorInfo { Pos = { 715, 49.5 } },
-					UserControls = ordered() {
-						Centering = {
-							LINKS_Name = "Centering",
+						Color = {
+							LINKS_Name = "Color",
 							LINKID_DataType = "Number",
-							INPID_InputControl = "ButtonControl",
+							INPID_InputControl = "LabelControl",
 							INP_Integer = false,
-							BTNCS_Execute = "comp:Lock()\n\nlocal centerOffsetX = (Transform1.Center[1][1] - 0.5)\nlocal centerOffsetY = (Transform1.Center[1][2] - 0.5)\n\nRectAngle1.LeftTop = {\n    RectAngle1.LeftTop[1][1] + centerOffsetX,\n    RectAngle1.LeftTop[1][2] + centerOffsetY,\n}\n\nRectAngle1.RightBottom = {\n    RectAngle1.RightBottom[1][1] + centerOffsetX,\n    RectAngle1.RightBottom[1][2] + centerOffsetY,\n}\n\nTransform1.Center = {0.5, 0.5}\n\ncomp:Unlock()",
-							ICS_ControlPage = "Controls",
-							INP_External = false,
-							INP_Passive = true,
-						}
-					}
-				},
-				Background1 = Background {
-					Inputs = {
-						EffectMask = Input {
-							SourceOp = "Rectangle1",
-							Source = "Mask",
+							INP_MinScale = 0,
+							INP_MaxScale = 1,
+							INP_MinAllowed = -1000000,
+							INP_MaxAllowed = 1000000,
+							LBLC_DropDownButton = true,
+							LBLC_NumInputs = 5,
+							LBLC_NestLevel = 1,
+							ICS_ControlPage = "Controls"
 						},
-						Width = Input { Value = 1920, },
-						Height = Input { Value = 1080, },
-						UseFrameFormatSettings = Input { Value = 1, },
-						["Gamut.SLogVersion"] = Input { Value = FuID { "SLog2" }, },
-						TopLeftRed = Input { Value = 1, },
-						TopLeftGreen = Input { Value = 1, },
-						TopLeftBlue = Input { Value = 1, },
-					},
-					ViewInfo = OperatorInfo { Pos = { 605, 49.5 } },
+					}
 				}
 			},
 		}
