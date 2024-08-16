@@ -35,6 +35,9 @@ RectangleExの構成は以下の通り
 | DispScale | 空欄 |
 | Style | `NormalCross` |
 
+- [x] Animatable
+- [x] Passive
+
 ### Right Bottom
 
 | 設定先 | 値 |
@@ -49,6 +52,9 @@ RectangleExの構成は以下の通り
 | DispScale | 空欄 |
 | Style | `NormalCross` |
 
+- [x] Animatable
+- [x] Passive
+
 ### Offset
 
 | 設定先 | 値 |
@@ -62,6 +68,9 @@ RectangleExの構成は以下の通り
 | View Ctrl | `CrosshairControl` |
 | DispScale | 空欄 |
 | Style | `NormalCross` |
+
+- [x] Animatable
+- [x] Passive
 
 
 ## Calculated Parameters
@@ -104,9 +113,8 @@ Point((Offset.X - 0.5) + LeftTop.X + ((RightBottom.X - LeftTop.X) / 2), (Offset.
 
 ## Centering Button
 
-[RectangleEx_Transform](#flow)を使用して位置を移動した場合  
-`Left Top`, `Right Bottom`での制御位置とずれが生じてしまう   
-それを解消するためのボタンを用意する
+`Offset`を使用して位置を移動した場合、`Left Top`, `Right Bottom`での制御位置とずれが生じてしまう   
+それを解消するためのボタンを[RectangleEx_Rectangle](#flow)へ追加する
 
 ### Control
 
