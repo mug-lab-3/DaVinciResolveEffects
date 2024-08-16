@@ -69,7 +69,7 @@ abs(RightBottom.X - LeftTop.X) + iif(Solid==0, BorderWidth, -BorderWidth)
 ### Height
 
 上端 - 下端 = 高さ  
-上下入れ替わっても問題ないように絶対値(abs)を取るようにする
+上下入れ替わっても問題ないように絶対値(abs)を取るようにする  
 更に枠線の幅を考慮して塗りつぶしのときはSolidのときは外側、枠線のときは内側を指定できるようにする  
 その際、アスペクト比の補正をかける
 
