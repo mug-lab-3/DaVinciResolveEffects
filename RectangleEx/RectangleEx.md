@@ -59,19 +59,22 @@ RectangleExの構成は以下の通り
 ### Width
 
 右端 - 左端 = 幅  
-左右入れ替わっても問題ないように絶対値(abs)を取るようにする
+左右入れ替わっても問題ないように絶対値(abs)を取るようにする  
+更に枠線の幅を考慮して塗りつぶしのときはSolidのときは外側、枠線のときは内側を指定できるようにする
 
 ```lua
-abs(RightBottom.X - LeftTop.X)
+abs(RightBottom.X - LeftTop.X) + iif(Solid==0, BorderWidth, -BorderWidth)
 ```
 
 ### Height
 
 上端 - 下端 = 高さ  
 上下入れ替わっても問題ないように絶対値(abs)を取るようにする
+更に枠線の幅を考慮して塗りつぶしのときはSolidのときは外側、枠線のときは内側を指定できるようにする  
+その際、アスペクト比の補正をかける
 
 ```lua
-abs(LeftTop.Y - RightBottom.Y)
+abs(LeftTop.Y - RightBottom.Y) + (iif(Solid==0,BorderWidth, -BorderWidth) * (MaskWidth / MaskHeight))
 ```
 
 ### Center
