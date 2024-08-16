@@ -36,7 +36,7 @@ RectangleExの構成は以下の通り
 | Style | `NormalCross` |
 
 - [x] Animatable
-- [x] Passive
+- [ ] Passive
 
 ### Right Bottom
 
@@ -53,7 +53,7 @@ RectangleExの構成は以下の通り
 | Style | `NormalCross` |
 
 - [x] Animatable
-- [x] Passive
+- [ ] Passive
 
 ### Offset
 
@@ -70,7 +70,7 @@ RectangleExの構成は以下の通り
 | Style | `NormalCross` |
 
 - [x] Animatable
-- [x] Passive
+- [ ] Passive
 
 
 ## Calculated Parameters
