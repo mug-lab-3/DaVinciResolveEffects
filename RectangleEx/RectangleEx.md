@@ -74,7 +74,7 @@ abs(RightBottom.X - LeftTop.X) + iif(Solid==0, BorderWidth, -BorderWidth)
 その際、アスペクト比の補正をかける
 
 ```lua
-abs(LeftTop.Y - RightBottom.Y) + (iif(Solid==0,BorderWidth, -BorderWidth) * (MaskWidth / MaskHeight))
+abs(LeftTop.Y - RightBottom.Y) + (iif(Solid==0, BorderWidth, -BorderWidth) * (MaskWidth / MaskHeight))
 ```
 
 ### Center
