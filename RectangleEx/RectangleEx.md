@@ -34,9 +34,8 @@ RectangleExの構成は以下の通り
 | View Ctrl | `CrosshairControl` |
 | DispScale | 空欄 |
 | Style | `NormalCross` |
-
-- [x] Animatable
-- [ ] Passive
+| Animatable | ✅ |
+| Passive | チェックしない |
 
 ### Right Bottom
 
@@ -51,9 +50,9 @@ RectangleExの構成は以下の通り
 | View Ctrl | `CrosshairControl` |
 | DispScale | 空欄 |
 | Style | `NormalCross` |
+| Animatable | ✅ |
+| Passive | チェックしない |
 
-- [x] Animatable
-- [ ] Passive
 
 ### Offset
 
@@ -68,9 +67,8 @@ RectangleExの構成は以下の通り
 | View Ctrl | `CrosshairControl` |
 | DispScale | 空欄 |
 | Style | `NormalCross` |
-
-- [x] Animatable
-- [ ] Passive
+| Animatable | ✅ |
+| Passive | チェックしない |
 
 
 ## Calculated Parameters
@@ -224,9 +222,8 @@ Point((Offset.X - 0.5) + LeftTop.X + ((RightBottom.X - LeftTop.X) / 2), (Offset.
 | View Ctrl | `None` |
 | Width | 空欄 |
 | Execute | [Execute Script](#execute-script) |
-
-- [ ] Animatable
-- [x] Passive
+| Animatable | チェックしない |
+| Passive | ✅ |
 
 ### Execute Script
 
