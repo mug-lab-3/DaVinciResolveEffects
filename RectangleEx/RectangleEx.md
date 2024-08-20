@@ -158,6 +158,8 @@ abs(LeftTop.Y - RightBottom.Y) + (iif(Solid == 0, BorderWidth, -BorderWidth) * (
 <details>
 <summary>5. 平行移動を可能にする</summary>
 
+#### Center
+
 ```lua
 Point((Offset.X - 0.5) + LeftTop.X + ((RightBottom.X - LeftTop.X) / 2), (Offset.Y - 0.5) + RightBottom.Y + ((LeftTop.Y - RightBottom.Y) / 2))
 ```
