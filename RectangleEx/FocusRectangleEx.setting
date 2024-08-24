@@ -358,7 +358,7 @@
 							INP_Integer = false,
 							LBLC_DropDownButton = true,
 							LINKID_DataType = "Number",
-							LBLC_NumInputs = 2,
+							LBLC_NumInputs = 3,
 							LBLC_NestLevel = 1,
 							INPID_InputControl = "LabelControl",
 							ICS_ControlPage = "Controls",
@@ -402,7 +402,9 @@
 							INP_MinAllowed = -1000000,
 							INP_MaxAllowed = 1000000,
 							BTNCS_Execute = "comp:Lock()\n\nlocal centerOffsetX = (RectangleEx_Rectangle.Offset[1][1] - 0.5)\nlocal centerOffsetY = (RectangleEx_Rectangle.Offset[1][2] - 0.5)\n\nRectangleEx_Rectangle.LeftTop = {\n    RectangleEx_Rectangle.LeftTop[1][1] + centerOffsetX,\n    RectangleEx_Rectangle.LeftTop[1][2] + centerOffsetY,\n}\n\nRectangleEx_Rectangle.RightBottom = {\n    RectangleEx_Rectangle.RightBottom[1][1] + centerOffsetX,\n    RectangleEx_Rectangle.RightBottom[1][2] + centerOffsetY,\n}\n\nRectangleEx_Rectangle.Offset = {0.5, 0.5}\n\ncomp:Unlock()",
-							ICS_ControlPage = "Controls"
+							ICS_ControlPage = "Controls",
+							INP_External = false,
+							NP_Passive = true,
 						},
 						AnimOffsetX = {
 							LINKS_Name = "Anim Offset X",
