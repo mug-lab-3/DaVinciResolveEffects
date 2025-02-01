@@ -237,12 +237,23 @@ function Create()
         IC_Visible          = true,
     })
 
-    InEmojiSize = self:AddInput("Emoji Size", "EmojiSize", {
+    InEmojiSize = self:AddInput("Size", "EmojiSize", {
         LINKID_DataType    = "Number",
         INPID_InputControl = "SliderControl",
         INP_MinScale       = 0.0,
         INP_MaxScale       = 0.5,
         INP_Default        = 0.08,
+        IC_Visible         = true,
+    })
+
+    InEmojiTracking = self:AddInput("Tracking", "EmojiTracking", {
+        LINKID_DataType    = "Number",
+        INPID_InputControl = "SliderControl",
+        INP_MinScale       = -1.0,
+        INP_MaxScale       = 2.0,
+        INP_MinAllowed     = -4.0,
+        INP_MaxAllowed     = 5.0,
+        INP_Default        = 1.0,
         IC_Visible         = true,
     })
 
@@ -338,7 +349,9 @@ local UnicodeText = {
                                 i = i + 4
                             else
                                 -- Non-surrogate
-                                table.insert(utf32bytes[line], code_unit)
+                                if code_unit ~= 0xFE0F then
+                                    table.insert(utf32bytes[line], code_unit)
+                                end
                                 i = i + 2
                             end
                         end
@@ -374,7 +387,7 @@ local UnicodeText = {
 }
 
 local TextPosition = {
-    New = function(x, y, justify, align, tracking, lineSpacing)
+    New = function(x, y, justify, align, tracking, lineSpacing, emojiTracking)
         return {
             X = x,
             Y = y,
@@ -382,6 +395,7 @@ local TextPosition = {
             Align = align,
             Tracking = tracking,
             LineSpacing = lineSpacing,
+            EmojiTracking = emojiTracking
         }
     end
 }
@@ -593,7 +607,7 @@ local function isEmoji(unicode)
     return false
 end
 
-local function getLineDrawWidth(unicodeArray, tfm, emojiTfm, origSize, emojiSize, tracking)
+local function getLineDrawWidth(unicodeArray, tfm, emojiTfm, origSize, emojiSize, tracking, emojiTracking)
     local lineWidth = 0
 
     for i = 1, #unicodeArray do
@@ -623,7 +637,14 @@ local function getLineDrawWidth(unicodeArray, tfm, emojiTfm, origSize, emojiSize
         -- add the width of the character
         lineWidth = lineWidth + (currentTfm:CharacterWidth(unicodeArray[i]) * 10 * size)
         if i < #unicodeArray then
-            lineWidth = lineWidth + (origSize * (tracking - 1.0))
+            if isEmoji(unicodeArray[i]) then
+                lineWidth = lineWidth + (origSize * (emojiTracking - 1.0))
+            else
+                lineWidth = lineWidth + (origSize * (tracking - 1.0))
+                if 1 < i and isEmoji(unicodeArray[i - 1]) == true then
+                    lineWidth = lineWidth + (origSize * (emojiTracking - 1.0) / 2)
+                end
+            end
         end
     end
 
@@ -631,7 +652,7 @@ local function getLineDrawWidth(unicodeArray, tfm, emojiTfm, origSize, emojiSize
     return lineWidth
 end
 
-
+--local debug = true
 local function drawstring(img,
                           unicodeText,
                           position,
@@ -648,6 +669,7 @@ local function drawstring(img,
     local emojiTfm = TextStyleFontMetrics(TextStyleFont(emojiFont.Name, emojiFont.Style))
     local lineHeight = (tfm.TextAscent + tfm.TextDescent + tfm.TextExternalLeading) * 10 * size
     local emojiLineHeight = (emojiTfm.TextAscent + emojiTfm.TextDescent + emojiTfm.TextExternalLeading) * 10 * size
+    local adjustEmojiY = (tfm.TextAscent - emojiTfm.TextAscent) * 10 * size
 
     local origSize = size
 
@@ -662,6 +684,7 @@ local function drawstring(img,
     emojiMat:Scale(1.0 / tfm.Scale, 1.0 / tfm.Scale, 1.0)
     emojiMat:Scale(emojiSize, emojiSize, 1)
     emojiMat:Move(position.X, position.Y - (emojiLineHeight / 2), 0)
+    emojiMat:Move(0, adjustEmojiY, 0)
 
     local boxHeight = (lineHeight + ((position.LineSpacing - 1) * origSize)) * unicodeText:GetLineNum()
     local emojiBoxHeight = (emojiLineHeight + ((position.LineSpacing - 1) * origSize)) * unicodeText:GetLineNum()
@@ -682,7 +705,9 @@ local function drawstring(img,
     local prevLineDrawWidth = 0
     for line = 1, unicodeText:GetLineNum() do
         local unicodeArray = unicodeText:GetLine(line)
-        local lineWidth = getLineDrawWidth(unicodeArray, tfm, emojiTfm, origSize, emojiSize, position.Tracking)
+        local lineWidth = getLineDrawWidth(unicodeArray, tfm, emojiTfm, origSize, emojiSize,
+            position.Tracking,
+            position.EmojiTracking)
 
         if position.Justify == 0 then
             mat:Move(-prevLineDrawWidth, 0, 0)
@@ -705,20 +730,28 @@ local function drawstring(img,
         local prevWidth
         for i = 1, #unicodeArray do
             local characterCode = unicodeArray[i]
-            if characterCode == 0xFE0F then
-                goto continue
-            end
 
             local currentTmf
             local currentMat
+            local currentTracking
             if isEmoji(characterCode) then
                 currentTmf = emojiTfm
                 size = emojiSize
                 currentMat = emojiMat
+                currentTracking = position.EmojiTracking
+                if 1 < i and isEmoji(unicodeArray[i - 1]) == false then
+                    mat:Move((position.EmojiTracking - 1) * origSize / 2, 0, 0)
+                    emojiMat:Move((position.EmojiTracking - 1) * origSize / 2, 0, 0)
+                end
             else
                 currentTmf = tfm
                 currentMat = mat
                 size = origSize
+                currentTracking = position.Tracking
+                if 1 < i and isEmoji(unicodeArray[i - 1]) == true then
+                    -- mat:Move((position.EmojiTracking - 1) * (emojiSize / 2), 0, 0)
+                    -- emojiMat:Move((position.EmojiTracking - 1) * (emojiSize / 2), 0, 0)
+                end
             end
             local width = currentTmf:CharacterWidth(characterCode) * 10 * size
 
@@ -728,12 +761,36 @@ local function drawstring(img,
                 local xOffset = currentTmf:CharacterKerning(prevChar, characterCode) * 10 * size
                 mat:Move(xOffset, 0, 0)
                 emojiMat:Move(xOffset, 0, 0)
-                xPos = xPos + xOffset
             end
 
             -- move the cursor to the center of the character
             mat:Move(width / 2, 0, 0)
             emojiMat:Move(width / 2, 0, 0)
+
+
+            if debug == true then
+                local testMat = Matrix4()
+                local testMat = currentMat * testMat
+                local testMatTable = testMat:GetTable()
+                local testX = testMatTable[13]
+                local testY = testMatTable[14]
+                -- shapeNormal:MoveTo(0.2, testY)
+                local lineHeightB = (tfm.TextAscent + tfm.TextExternalLeading) * 10 * size
+                local emojiLineHeightB = (emojiTfm.TextAscent + emojiTfm.TextExternalLeading) * 10 *
+                    size
+
+                if isEmoji(characterCode) then
+                    shapeOutline1:AddRectangle(testX - (width / 2), testX + (width / 2), testY + (emojiLineHeight / 2),
+                        testY - (emojiLineHeight / 2))
+                    shapeNormal:AddRectangle(testX - (width / 2), testX + (width / 2), testY + (emojiLineHeightB / 2),
+                        testY - (emojiLineHeightB / 2))
+                else
+                    shapeOutline1:AddRectangle(testX - (width / 2), testX + (width / 2), testY + (lineHeight / 2),
+                        testY - (lineHeight / 2))
+                    shapeNormal:AddRectangle(testX - (width / 2), testX + (width / 2), testY + (lineHeightB / 2),
+                        testY - (lineHeightB / 2))
+                end
+            end
 
             -- get the shape of the character
             local characterShape = currentTmf:GetCharacterShape(characterCode, false)
@@ -757,12 +814,9 @@ local function drawstring(img,
             mat:Move(width / 2, 0, 0)
             emojiMat:Move(width / 2, 0, 0)
 
-            -- move the cursor to the end of the character
-            xPos = xPos + width + ((position.Tracking - 1) * size)
-
             if i < #unicodeArray then
-                mat:Move((position.Tracking - 1) * origSize, 0, 0)
-                emojiMat:Move((position.Tracking - 1) * origSize, 0, 0)
+                mat:Move((currentTracking - 1) * origSize, 0, 0)
+                emojiMat:Move((currentTracking - 1) * origSize, 0, 0)
             end
             prevWidth = width
             ::continue::
@@ -882,9 +936,15 @@ function Process(req)
     local align            = InAlign:GetValue(req).Value
     local tracking         = InTracking:GetValue(req).Value
     local lineSpacing      = InLineSpacing:GetValue(req).Value
-    local position         = TextPosition.New(x, y, justify, align, tracking, lineSpacing)
+    local emojiTracking    = InEmojiTracking:GetValue(req).Value
+    local position
+    if emojiFontEnabled == 1 then
+        position = TextPosition.New(x, y, justify, align, tracking, lineSpacing, emojiTracking)
+    else
+        position = TextPosition.New(x, y, justify, align, tracking, lineSpacing, tracking)
+    end
 
-    local quality          = 32
+    local quality = 32
     if req:IsQuick() then
         quality = 1
     end
@@ -949,10 +1009,12 @@ function NotifyChanged(inp, param, time)
             InEmojiFont:SetAttrs({ IC_Visible = true })
             InEmojiFontStyle:SetAttrs({ IC_Visible = true })
             InEmojiSize:SetAttrs({ IC_Visible = true })
+            InEmojiTracking:SetAttrs({ IC_Visible = true })
         else
             InEmojiFont:SetAttrs({ IC_Visible = false })
             InEmojiFontStyle:SetAttrs({ IC_Visible = false })
             InEmojiSize:SetAttrs({ IC_Visible = false })
+            InEmojiTracking:SetAttrs({ IC_Visible = false })
         end
     end
 end
