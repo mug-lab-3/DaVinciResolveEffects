@@ -204,6 +204,51 @@ function Create()
 
     self:EndControlNest()
 
+
+    self:BeginControlNest("Emoji", "EmojiLabel", true);
+
+    InEmojiFontEnabled = self:AddInput("Use alternative fonts for emojis", "EnableEmojiFontLabel", {
+        LINKID_DataType = "Number",
+        INPID_InputControl = "CheckboxControl",
+        INP_Integer = true,
+        INP_Default = 1.0,
+        ICD_Width = 1,
+        INP_DoNotifyChanged = true,
+    })
+
+    groupId = groupId + 1;
+    InEmojiFont = self:AddInput("Font", "EmojiFont", {
+        LINKID_DataType     = "Text",
+        INPID_InputControl  = "FontFileControl",
+        IC_ControlGroup     = groupId,
+        IC_ControlID        = 0,
+        INP_Level           = 1,
+        INP_DoNotifyChanged = true,
+        IC_Visible          = true,
+    })
+
+    InEmojiFontStyle = self:AddInput("Font Style", "EmojiFontStyle", {
+        LINKID_DataType     = "Text",
+        INPID_InputControl  = "FontFileControl",
+        IC_ControlGroup     = groupId,
+        IC_ControlID        = 1,
+        INP_Level           = 1,
+        INP_DoNotifyChanged = true,
+        IC_Visible          = true,
+    })
+
+    InEmojiSize = self:AddInput("Emoji Size", "EmojiSize", {
+        LINKID_DataType    = "Number",
+        INPID_InputControl = "SliderControl",
+        INP_MinScale       = 0.0,
+        INP_MaxScale       = 0.5,
+        INP_Default        = 0.08,
+        IC_Visible         = true,
+    })
+
+    self:EndControlNest()
+
+
     InImage = self:AddInput("Input", "Input", {
         LINKID_DataType = "Image",
         LINK_Main       = 1,
@@ -337,6 +382,15 @@ local TextPosition = {
             Align = align,
             Tracking = tracking,
             LineSpacing = lineSpacing,
+        }
+    end
+}
+
+local TextFont = {
+    New = function(name, style)
+        return {
+            Name = name,
+            Style = style,
         }
     end
 }
@@ -527,52 +581,99 @@ local TextColor = {
     end
 }
 
-local function getLineDrawWidth(unicodeArray, font, style, size, tracking)
+local function isEmoji(unicode)
+    if 0x231A <= unicode and unicode <= 0x2B55 then
+        return true
+    elseif 0x1F004 <= unicode and unicode <= 0x1FAF8 then
+        return true
+    elseif 0xFE0F == unicode then
+        return true
+    end
+
+    return false
+end
+
+local function getLineDrawWidth(unicodeArray, tfm, emojiTfm, origSize, emojiSize, tracking)
     local lineWidth = 0
 
-    local tfm = TextStyleFontMetrics(TextStyleFont(font, style))
     for i = 1, #unicodeArray do
         -- add the kerning between this character and the previous one
         if 1 < i then
-            local kerning = tfm:CharacterKerning(unicodeArray[i - 1], unicodeArray[i]) * 10 * size
+            local currentTfm
+            local size
+            if isEmoji(unicodeArray[i - 1]) then
+                currentTfm = emojiTfm
+                size = emojiSize
+            else
+                currentTfm = tfm
+                size = origSize
+            end
+            local kerning = currentTfm:CharacterKerning(unicodeArray[i - 1], unicodeArray[i]) * 10 * size
             lineWidth = lineWidth + kerning
         end
+        local currentTfm
+        local size
+        if isEmoji(unicodeArray[i]) then
+            currentTfm = emojiTfm
+            size = emojiSize
+        else
+            currentTfm = tfm
+            size = origSize
+        end
         -- add the width of the character
-        lineWidth = lineWidth + (tfm:CharacterWidth(unicodeArray[i]) * 10 * size)
+        lineWidth = lineWidth + (currentTfm:CharacterWidth(unicodeArray[i]) * 10 * size)
+        if i < #unicodeArray then
+            lineWidth = lineWidth + (origSize * (tracking - 1.0))
+        end
     end
-    lineWidth = lineWidth + ((#unicodeArray - 1) * size * (tracking - 1.0))
+
 
     return lineWidth
 end
+
 
 local function drawstring(img,
                           unicodeText,
                           position,
                           font,
-                          style,
+                          emojiFont,
                           size,
+                          emojiSize,
                           color,
                           quality,
                           thickness,
                           outlineNum)
     -- get the fonts metrics (see http://freetype.sourceforge.net/freetype2/docs/glyphs/index.html for a great guide)
-    local tfm = TextStyleFontMetrics(TextStyleFont(font, style))
+    local tfm = TextStyleFontMetrics(TextStyleFont(font.Name, font.Style))
+    local emojiTfm = TextStyleFontMetrics(TextStyleFont(emojiFont.Name, emojiFont.Style))
+    local lineHeight = (tfm.TextAscent + tfm.TextDescent + tfm.TextExternalLeading) * 10 * size
+    local emojiLineHeight = (emojiTfm.TextAscent + emojiTfm.TextDescent + emojiTfm.TextExternalLeading) * 10 * size
+
+    local origSize = size
 
     -- This is the distance between this line and the next one.
-    local lineHeight = (tfm.TextAscent + tfm.TextDescent + tfm.TextExternalLeading) * 10 * size
 
     local mat = Matrix4()
     mat:Scale(1.0 / tfm.Scale, 1.0 / tfm.Scale, 1.0)
-    mat:Scale(size, size, 1)
+    mat:Scale(origSize, origSize, 1)
     mat:Move(position.X, position.Y - (lineHeight / 2), 0)
 
-    local boxHeight = lineHeight * unicodeText:GetLineNum()
+    local emojiMat = Matrix4()
+    emojiMat:Scale(1.0 / tfm.Scale, 1.0 / tfm.Scale, 1.0)
+    emojiMat:Scale(emojiSize, emojiSize, 1)
+    emojiMat:Move(position.X, position.Y - (emojiLineHeight / 2), 0)
+
+    local boxHeight = (lineHeight + ((position.LineSpacing - 1) * origSize)) * unicodeText:GetLineNum()
+    local emojiBoxHeight = (emojiLineHeight + ((position.LineSpacing - 1) * origSize)) * unicodeText:GetLineNum()
     if position.Align == 0 then
         mat:Move(0, 0, 0)
+        emojiMat:Move(0, 0, 0)
     elseif position.Align == 1 then
         mat:Move(0, (boxHeight / 2) - (tfm.TextDescent * 10 * size), 0)
+        emojiMat:Move(0, (emojiBoxHeight / 2) - (emojiTfm.TextDescent * 10 * size), 0)
     elseif position.Align == 2 then
         mat:Move(0, boxHeight - (lineHeight / 2), 0)
+        emojiMat:Move(0, emojiBoxHeight - (emojiLineHeight / 2), 0)
     end
 
     local shapeNormal = Shape()
@@ -581,39 +682,63 @@ local function drawstring(img,
     local prevLineDrawWidth = 0
     for line = 1, unicodeText:GetLineNum() do
         local unicodeArray = unicodeText:GetLine(line)
-        local lineWidth = getLineDrawWidth(unicodeArray, font, style, size, position.Tracking)
+        local lineWidth = getLineDrawWidth(unicodeArray, tfm, emojiTfm, origSize, emojiSize, position.Tracking)
 
         if position.Justify == 0 then
             mat:Move(-prevLineDrawWidth, 0, 0)
             mat:Move(0, 0, 0)
+            emojiMat:Move(-prevLineDrawWidth, 0, 0)
+            emojiMat:Move(0, 0, 0)
         elseif position.Justify == 1 then
             mat:Move(-prevLineDrawWidth / 2, 0, 0)
             mat:Move(-(lineWidth / 2), 0, 0)
+            emojiMat:Move(-prevLineDrawWidth / 2, 0, 0)
+            emojiMat:Move(-(lineWidth / 2), 0, 0)
         elseif position.Justify == 2 then
             mat:Move(0, 0, 0)
             mat:Move(-lineWidth, 0, 0)
+            emojiMat:Move(0, 0, 0)
+            emojiMat:Move(-lineWidth, 0, 0)
         end
 
         local xPos = 0
+        local prevWidth
         for i = 1, #unicodeArray do
             local characterCode = unicodeArray[i]
-            local width = tfm:CharacterWidth(characterCode) * 10 * size
+            if characterCode == 0xFE0F then
+                goto continue
+            end
+
+            local currentTmf
+            local currentMat
+            if isEmoji(characterCode) then
+                currentTmf = emojiTfm
+                size = emojiSize
+                currentMat = emojiMat
+            else
+                currentTmf = tfm
+                currentMat = mat
+                size = origSize
+            end
+            local width = currentTmf:CharacterWidth(characterCode) * 10 * size
 
             -- if this is not the first character, apply kerning
             if 1 < i then
                 local prevChar = unicodeArray[i - 1]
-                local xOffset = tfm:CharacterKerning(prevChar, characterCode) * 10 * size
+                local xOffset = currentTmf:CharacterKerning(prevChar, characterCode) * 10 * size
                 mat:Move(xOffset, 0, 0)
+                emojiMat:Move(xOffset, 0, 0)
                 xPos = xPos + xOffset
             end
 
             -- move the cursor to the center of the character
             mat:Move(width / 2, 0, 0)
+            emojiMat:Move(width / 2, 0, 0)
 
             -- get the shape of the character
-            local characterShape = tfm:GetCharacterShape(characterCode, false)
+            local characterShape = currentTmf:GetCharacterShape(characterCode, false)
             if characterShape then
-                local base = characterShape:TransformOfShape(mat)
+                local base = characterShape:TransformOfShape(currentMat)
                 shapeNormal:AddShape(base)
                 if 1 <= outlineNum then
                     local outline1 = base:OutlineOfShape(
@@ -630,16 +755,24 @@ local function drawstring(img,
             end
 
             mat:Move(width / 2, 0, 0)
+            emojiMat:Move(width / 2, 0, 0)
 
             -- move the cursor to the end of the character
             xPos = xPos + width + ((position.Tracking - 1) * size)
+
             if i < #unicodeArray then
-                mat:Move((position.Tracking - 1) * size, 0, 0)
+                mat:Move((position.Tracking - 1) * origSize, 0, 0)
+                emojiMat:Move((position.Tracking - 1) * origSize, 0, 0)
             end
+            prevWidth = width
+            ::continue::
         end
 
         -- line end, move the cursor back to the start
         mat:Move(0, -lineHeight, 0)
+        mat:Move(0, -(position.LineSpacing - 1) * origSize, 0)
+        emojiMat:Move(0, -emojiLineHeight, 0)
+        emojiMat:Move(0, -(position.LineSpacing - 1) * origSize, 0)
         prevLineDrawWidth = lineWidth
     end
 
@@ -705,12 +838,29 @@ end
 
 function Process(req)
     local img              = InImage:GetValue(req)
+
+    -- font
     local font             = InFont:GetValue(req).Value
     local style            = InFontStyle:GetValue(req).Value
+    local mainFont         = TextFont.New(font, style)
+
+    -- emoji font
+    local emojiFontEnabled = InEmojiFontEnabled:GetValue(req).Value
+    local emojiFontName    = InEmojiFont:GetValue(req).Value
+    local emojiFontStyle   = InEmojiFontStyle:GetValue(req).Value
+    local emojiFont
+    if emojiFontEnabled == 1 then
+        emojiFont = TextFont.New(emojiFontName, emojiFontStyle)
+    else
+        emojiFont = TextFont.New(font, style)
+    end
+
+
     local roi              = req:GetRoI()
     local out              = img:CopyOf()
 
     local size             = InSize:GetValue(req).Value
+    local emojiSize        = InEmojiSize:GetValue(req).Value
 
     local r                = InR:GetValue(req).Value
     local g                = InG:GetValue(req).Value
@@ -756,9 +906,10 @@ function Process(req)
         out,
         sourceText,
         position,
-        font,
-        style,
+        mainFont,
+        emojiFont,
         size,
+        emojiSize,
         textColor,
         quality,
         thickness,
@@ -771,22 +922,37 @@ end
 function NotifyChanged(inp, param, time)
     -- when the tools FontFileControl is first created, the FontManager has not yet
     -- provided a FontList, so we can't set a default value. Instead we do it here.
-    if inp == InFont then
+    if (inp == InFont) or (inp == InEmojiFont) then
         local f = param.Value
 
         if f == nil or string.len(f) == 0 then
-            InFont:SetSource(Text("Open Sans"), time)
+            local fontList = FontManager:GetFontList()
+            if inp == InEmojiFont and fontList["Segoe UI Emoji"] then
+                inp:SetSource(Text("Segoe UI Emoji"), time)
+            else
+                inp:SetSource(Text("Open Sans"), time)
+            end
         end
-    elseif inp == InFontStyle then
+    elseif (inp == InFontStyle) or (inp == InEmojiFontStyle) then
         local f = param.Value
 
         if f == nil or string.len(f) == 0 then
-            InFontStyle:SetSource(Text("Regular"), time)
+            inp:SetSource(Text("Regular"), time)
         end
     elseif inp == InText then
         local f = param.Value
         if f == nil or string.len(f) == 0 then
             InText:SetSource(Text("Sample"), time)
+        end
+    elseif inp == InEmojiFontEnabled then
+        if param.Value == 1 then
+            InEmojiFont:SetAttrs({ IC_Visible = true })
+            InEmojiFontStyle:SetAttrs({ IC_Visible = true })
+            InEmojiSize:SetAttrs({ IC_Visible = true })
+        else
+            InEmojiFont:SetAttrs({ IC_Visible = false })
+            InEmojiFontStyle:SetAttrs({ IC_Visible = false })
+            InEmojiSize:SetAttrs({ IC_Visible = false })
         end
     end
 end
