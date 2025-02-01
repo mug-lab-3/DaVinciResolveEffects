@@ -624,6 +624,15 @@ local function getLineDrawWidth(unicodeArray, tfm, emojiTfm, origSize, emojiSize
             end
             local kerning = currentTfm:CharacterKerning(unicodeArray[i - 1], unicodeArray[i]) * 10 * size
             lineWidth = lineWidth + kerning
+            if isEmoji(unicodeArray[i]) then
+                if 1 < i and isEmoji(unicodeArray[i - 1]) == false then
+                    lineWidth = lineWidth + (origSize * (emojiTracking - 1.0) / 2)
+                end
+            else
+                if 1 < i and isEmoji(unicodeArray[i - 1]) == true then
+                    lineWidth = lineWidth - (origSize * (emojiTracking - 1.0) / 2)
+                end
+            end
         end
         local currentTfm
         local size
@@ -637,13 +646,9 @@ local function getLineDrawWidth(unicodeArray, tfm, emojiTfm, origSize, emojiSize
         -- add the width of the character
         lineWidth = lineWidth + (currentTfm:CharacterWidth(unicodeArray[i]) * 10 * size)
         if i < #unicodeArray then
+            lineWidth = lineWidth + (origSize * (tracking - 1.0))
             if isEmoji(unicodeArray[i]) then
                 lineWidth = lineWidth + (origSize * (emojiTracking - 1.0))
-            else
-                lineWidth = lineWidth + (origSize * (tracking - 1.0))
-                if 1 < i and isEmoji(unicodeArray[i - 1]) == true then
-                    lineWidth = lineWidth + (origSize * (emojiTracking - 1.0) / 2)
-                end
             end
         end
     end
