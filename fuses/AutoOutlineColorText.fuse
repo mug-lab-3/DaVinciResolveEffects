@@ -749,8 +749,8 @@ local function drawstring(img,
                 size = origSize
                 currentTracking = position.Tracking
                 if 1 < i and isEmoji(unicodeArray[i - 1]) == true then
-                    -- mat:Move((position.EmojiTracking - 1) * (emojiSize / 2), 0, 0)
-                    -- emojiMat:Move((position.EmojiTracking - 1) * (emojiSize / 2), 0, 0)
+                    mat:Move(-(position.EmojiTracking - 1) * (origSize / 2), 0, 0)
+                    emojiMat:Move(-(position.EmojiTracking - 1) * (origSize / 2), 0, 0)
                 end
             end
             local width = currentTmf:CharacterWidth(characterCode) * 10 * size
