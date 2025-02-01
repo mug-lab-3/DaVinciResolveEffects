@@ -1,242 +1,254 @@
 {
-  Tools = ordered() {
-    AutoOutlineText = GroupOperator {
-      Inputs = ordered() {
-        Input18 = InstanceInput {
-          SourceOp = "AutoOutlineColorText1",
-          Source = "LabelText",
-          Page = "Controls",
-        },
-        Input1 = InstanceInput {
-          SourceOp = "AutoOutlineColorText1",
-          Source = "Text",
-        },
-        Input2 = InstanceInput {
-          SourceOp = "AutoOutlineColorText1",
-          Source = "Font",
-          ControlGroup = 2,
-        },
-        Input3 = InstanceInput {
-          SourceOp = "AutoOutlineColorText1",
-          Source = "FontStyle",
-          ControlGroup = 2,
-        },
-        Input8 = InstanceInput {
-          SourceOp = "AutoOutlineColorText1",
-          Source = "Size",
-          Default = 0.1,
-        },
-        Input9 = InstanceInput {
-          SourceOp = "AutoOutlineColorText1",
-          Source = "Tracking",
-          Default = 1.1,
-        },
-        Input10 = InstanceInput {
-          SourceOp = "AutoOutlineColorText1",
-          Source = "LineSpacing",
-          Default = 1,
-        },
-        Input19 = InstanceInput {
-          SourceOp = "AutoOutlineColorText1",
-          Source = "LabelPosition",
-          Page = "Controls",
-        },
-        Input11 = InstanceInput {
-          SourceOp = "AutoOutlineColorText1",
-          Source = "Offset",
-        },
-        Input12 = InstanceInput {
-          SourceOp = "AutoOutlineColorText1",
-          Source = "Justification",
-          Default = 1,
-        },
-        Input13 = InstanceInput {
-          SourceOp = "AutoOutlineColorText1",
-          Source = "Alignment",
-          Default = 1,
-        },
-        Input20 = InstanceInput {
-          SourceOp = "AutoOutlineColorText1",
-          Source = "LabelMainColor",
-        },
-        Input14 = InstanceInput {
-          SourceOp = "AutoOutlineColorText1",
-          Source = "ColorTarget",
-          Default = 0,
-        },
-        Input4 = InstanceInput {
-          SourceOp = "AutoOutlineColorText1",
-          Source = "Red",
-          Name = "Color",
-          ControlGroup = 2,
-          Default = 0.6745098039216,
-        },
-        Input5 = InstanceInput {
-          SourceOp = "AutoOutlineColorText1",
-          Source = "Green",
-          ControlGroup = 2,
-          Default = 0,
-        },
-        Input6 = InstanceInput {
-          SourceOp = "AutoOutlineColorText1",
-          Source = "Blue",
-          ControlGroup = 2,
-          Default = 0.6745098039216,
-        },
-        Input7 = InstanceInput {
-          SourceOp = "AutoOutlineColorText1",
-          Source = "Alpha",
-          ControlGroup = 2,
-          Default = 1,
-        },
-        Input21 = InstanceInput {
-          SourceOp = "AutoOutlineColorText1",
-          Source = "LabelOutline",
-        },
-        Input15 = InstanceInput {
-          SourceOp = "AutoOutlineColorText1",
-          Source = "OutlineColorType",
-          Default = 0,
-        },
-        Input16 = InstanceInput {
-          SourceOp = "AutoOutlineColorText1",
-          Source = "OutlineNum",
-          Default = 2,
-        },
-        Input17 = InstanceInput {
-          SourceOp = "AutoOutlineColorText1",
-          Source = "OutlineTickness",
-          Default = 0.1,
-        },
-      },
-      Outputs = {
-        MainOutput1 = InstanceOutput {
-          SourceOp = "AutoOutlineColorText1",
-          Source = "Output",
-        },
-      },
-      ViewInfo = GroupInfo {
-        Pos = {
-          0,
-          0,
-        },
-      },
-      Tools = ordered() {
-        Background1 = Background {
-          Inputs = {
-            Width = Input {
-              Value = 1920,
-            },
-            Height = Input {
-              Value = 1080,
-            },
-            UseFrameFormatSettings = Input {
-              Value = 1,
-            },
-            ["Gamut.SLogVersion"] = Input {
-              Value = FuID {
-                "SLog2",
-              },
-            },
-            TopLeftAlpha = Input {
-              Value = 0,
-            },
-          },
-          ViewInfo = OperatorInfo {
-            Pos = {
-              212,
-              64.3334,
-            },
-          },
-        },
-        AutoOutlineColorText1 = Fuse.AutoOutlineColorText {
-          CtrlWZoom = false,
-          Inputs = {
-            Text = Input {
-              Value = "Sample Text",
-            },
-            Font = Input {
-              Value = "Open Sans",
-            },
-            FontStyle = Input {
-              Value = "Regular",
-            },
-            Size = Input {
-              Value = 0.1,
-            },
-            Tracking = Input {
-              Value = 1.1,
-            },
-            Red = Input {
-              Value = 0.6745098039216,
-            },
-            Green = Input {
-              Value = 0,
-            },
-            Blue = Input {
-              Value = 0.6745098039216,
-            },
-            OutlineNum = Input {
-              Value = 2,
-            },
-            OutlineTickness = Input {
-              Value = 0.1,
-            },
-            Input = Input {
-              SourceOp = "Background1",
-              Source = "Output",
-            },
-			LabelText = Input { Value = 1, },
-			LabelPosition = Input { Value = 1, },
-			LabelMainColor = Input { Value = 1, },
-			LabelOutline = Input { Value = 1, }
-          },
-          ViewInfo = OperatorInfo {
-            Pos = {
-              356.667,
-              66.7576,
-            },
-          },
-          UserControls = ordered() {
-            LabelText = {
-              LINKS_Name = "Text",
-              LINKID_DataType = "Number",
-              INPID_InputControl = "LabelControl",
-              INP_Integer = false,
-              INP_SplineType = "Default",
-              LBLC_DropDownButton = true,
-              LBLC_NumInputs = 6,
-              LBLC_NestLevel = 1,
-            },
-            LabelPosition = {
-              INPID_InputControl = "LabelControl",
-              LINKID_DataType = "Number",
-              LBLC_DropDownButton = true,
-              LINKS_Name = "Position",
-              LBLC_NumInputs = 3,
-              LBLC_NestLevel = 1,
-            },
-            LabelMainColor = {
-              INPID_InputControl = "LabelControl",
-              LINKID_DataType = "Number",
-              LBLC_DropDownButton = true,
-              LINKS_Name = "Main Color",
-              LBLC_NumInputs = 5,
-              LBLC_NestLevel = 1,
-            },
-            LabelOutline = {
-              INPID_InputControl = "LabelControl",
-              LINKID_DataType = "Number",
-              LBLC_DropDownButton = true,
-              LINKS_Name = "Outline",
-              LBLC_NumInputs = 3,
-              LBLC_NestLevel = 1,
-            },
-          },
-          Version = 1,
-        },
-      },
-    },
-  },
-  ActiveTool = "AutoOutlineText",
+	Tools = ordered() {
+		AutoOutlineText = GroupOperator {
+			CtrlWZoom = false,
+			CustomData = {
+				Path = {
+					Map = {
+						["Setting:"] = "Templates:\\Edit\\Titles\\"
+					}
+				},
+			},
+			Inputs = ordered() {
+				Input22 = InstanceInput {
+					SourceOp = "Background1_1",
+					Source = "TextLabel",
+				},
+				Input1 = InstanceInput {
+					SourceOp = "AutoOutlineColorText1_1",
+					Source = "Text",
+				},
+				Input2 = InstanceInput {
+					SourceOp = "AutoOutlineColorText1_1",
+					Source = "Font",
+					ControlGroup = 2,
+				},
+				Input3 = InstanceInput {
+					SourceOp = "AutoOutlineColorText1_1",
+					Source = "FontStyle",
+					ControlGroup = 2,
+				},
+				Input8 = InstanceInput {
+					SourceOp = "AutoOutlineColorText1_1",
+					Source = "Size",
+					Default = 0.08,
+				},
+				Input9 = InstanceInput {
+					SourceOp = "AutoOutlineColorText1_1",
+					Source = "Tracking",
+					Default = 1,
+				},
+				Input10 = InstanceInput {
+					SourceOp = "AutoOutlineColorText1_1",
+					Source = "LineSpacing",
+					Default = 1,
+				},
+				Input23 = InstanceInput {
+					SourceOp = "Background1_1",
+					Source = "PotisionLabel",
+				},
+				Input11 = InstanceInput {
+					SourceOp = "AutoOutlineColorText1_1",
+					Source = "Offset",
+				},
+				Input12 = InstanceInput {
+					SourceOp = "AutoOutlineColorText1_1",
+					Source = "Justification",
+					Default = 1,
+				},
+				Input13 = InstanceInput {
+					SourceOp = "AutoOutlineColorText1_1",
+					Source = "Alignment",
+					Default = 1,
+				},
+				Input24 = InstanceInput {
+					SourceOp = "Background1_1",
+					Source = "MainColor",
+				},
+				Input14 = InstanceInput {
+					SourceOp = "AutoOutlineColorText1_1",
+					Source = "ColorTarget",
+					Default = 0,
+				},
+				Input4 = InstanceInput {
+					SourceOp = "AutoOutlineColorText1_1",
+					Source = "Red",
+					Name = "Color",
+					ControlGroup = 2,
+					Default = 0.6745098039216,
+				},
+				Input5 = InstanceInput {
+					SourceOp = "AutoOutlineColorText1_1",
+					Source = "Green",
+					ControlGroup = 2,
+					Default = 0,
+				},
+				Input6 = InstanceInput {
+					SourceOp = "AutoOutlineColorText1_1",
+					Source = "Blue",
+					ControlGroup = 2,
+					Default = 0.6745098039216,
+				},
+				Input7 = InstanceInput {
+					SourceOp = "AutoOutlineColorText1_1",
+					Source = "Alpha",
+					ControlGroup = 2,
+					Default = 1,
+				},
+				Input25 = InstanceInput {
+					SourceOp = "Background1_1",
+					Source = "Outline",
+				},
+				Input15 = InstanceInput {
+					SourceOp = "AutoOutlineColorText1_1",
+					Source = "OutlineColorType",
+					Default = 0,
+				},
+				Input16 = InstanceInput {
+					SourceOp = "AutoOutlineColorText1_1",
+					Source = "OutlineNum",
+					Default = 2,
+				},
+				Input17 = InstanceInput {
+					SourceOp = "AutoOutlineColorText1_1",
+					Source = "OutlineTickness",
+					Default = 0.08,
+				},
+				Input26 = InstanceInput {
+					SourceOp = "Background1_1",
+					Source = "EmojiLabel",
+				},
+				Input18 = InstanceInput {
+					SourceOp = "AutoOutlineColorText1_1",
+					Source = "EnableEmojiFontLabel",
+					Width = 1,
+					Default = 1,
+				},
+				Input19 = InstanceInput {
+					SourceOp = "AutoOutlineColorText1_1",
+					Source = "EmojiFont",
+					ControlGroup = 14,
+				},
+				Input20 = InstanceInput {
+					SourceOp = "AutoOutlineColorText1_1",
+					Source = "EmojiFontStyle",
+					ControlGroup = 14,
+				},
+				Input21 = InstanceInput {
+					SourceOp = "AutoOutlineColorText1_1",
+					Source = "EmojiSize",
+					Default = 0.08,
+				}
+			},
+			Outputs = {
+				MainOutput1 = InstanceOutput {
+					SourceOp = "AutoOutlineColorText1_1",
+					Source = "Output",
+				}
+			},
+			ViewInfo = GroupInfo {
+				Pos = { 61.3334, 176.455 },
+				Flags = {
+					AllowPan = false,
+					AutoSnap = true,
+					RemoveRouters = true
+				},
+				Size = { 315.334, 67.5756, 157.667, 24.2424 },
+				Direction = "Horizontal",
+				PipeStyle = "Direct",
+				Scale = 1,
+				Offset = { 0, 0 }
+			},
+			Tools = ordered() {
+				AutoOutlineColorText1_1 = Fuse.AutoOutlineColorText {
+					CtrlWShown = false,
+					Inputs = {
+						Text = Input { Value = "🎉Sample Text👍", },
+						Font = Input { Value = "Open Sans", },
+						FontStyle = Input { Value = "Regular", },
+						Red = Input { Value = 0.6745098039216, },
+						Green = Input { Value = 0, },
+						Blue = Input { Value = 0.6745098039216, },
+						OutlineNum = Input { Value = 2, },
+						EmojiFont = Input { Value = "Segoe UI Emoji", },
+						EmojiFontStyle = Input { Value = "Regular", },
+						Input = Input {
+							SourceOp = "Background1_1",
+							Source = "Output",
+						}
+					},
+					ViewInfo = OperatorInfo { Pos = { 94, 9.36357 } },
+					Version = 1
+				},
+				Background1_1 = Background {
+					CtrlWShown = false,
+					Inputs = {
+						GlobalOut = Input { Value = 590, },
+						Width = Input { Value = 3840, },
+						Height = Input { Value = 2160, },
+						UseFrameFormatSettings = Input { Value = 1, },
+						["Gamut.SLogVersion"] = Input { Value = FuID { "SLog2" }, },
+						TopLeftAlpha = Input { Value = 0, },
+						TextLabel = Input { Value = 1, },
+						PotisionLabel = Input { Value = 1, },
+						MainColor = Input { Value = 1, },
+						Outline = Input { Value = 1, },
+						EmojiLabel = Input { Value = 1, }
+					},
+					ViewInfo = OperatorInfo { Pos = { -95.334, 8.15157 } },
+					UserControls = ordered() {
+						TextLabel = {
+							INP_Integer = false,
+							LBLC_DropDownButton = true,
+							INPID_InputControl = "LabelControl",
+							LBLC_NumInputs = 6,
+							INP_SplineType = "Default",
+							INP_External = false,
+							LINKID_DataType = "Number",
+							LBLC_NestLevel = 1,
+							INP_Passive = true,
+							LINKS_Name = "Text",
+						},
+						PotisionLabel = {
+							INP_Integer = false,
+							LBLC_DropDownButton = true,
+							INPID_InputControl = "LabelControl",
+							LBLC_NumInputs = 3,
+							INP_SplineType = "Default",
+							INP_External = false,
+							LINKID_DataType = "Number",
+							LBLC_NestLevel = 1,
+							INP_Passive = true,
+							LINKS_Name = "Potision",
+						},
+						MainColor = {
+							LBLC_DropDownButton = true,
+							INPID_InputControl = "LabelControl",
+							LBLC_NumInputs = 5,
+							LBLC_NestLevel = 1,
+							LINKID_DataType = "Number",
+							LINKS_Name = "Main Color",
+						},
+						Outline = {
+							LBLC_DropDownButton = true,
+							INPID_InputControl = "LabelControl",
+							LBLC_NumInputs = 3,
+							LBLC_NestLevel = 1,
+							LINKID_DataType = "Number",
+							LINKS_Name = "Outline",
+						},
+						EmojiLabel = {
+							LBLC_DropDownButton = true,
+							INPID_InputControl = "LabelControl",
+							LBLC_NumInputs = 4,
+							LBLC_NestLevel = 1,
+							LINKID_DataType = "Number",
+							LINKS_Name = "Emoji",
+						}
+					}
+				}
+			},
+		}
+	},
+	ActiveTool = "AutoOutlineText"
 }
