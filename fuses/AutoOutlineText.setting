@@ -2,15 +2,8 @@
 	Tools = ordered() {
 		AutoOutlineText = GroupOperator {
 			CtrlWZoom = false,
-			CustomData = {
-				Path = {
-					Map = {
-						["Setting:"] = "Templates:\\Edit\\Titles\\"
-					}
-				},
-			},
 			Inputs = ordered() {
-				Input22 = InstanceInput {
+				Input23 = InstanceInput {
 					SourceOp = "Background1_1",
 					Source = "TextLabel",
 				},
@@ -43,9 +36,9 @@
 					Source = "LineSpacing",
 					Default = 1,
 				},
-				Input23 = InstanceInput {
+				Input24 = InstanceInput {
 					SourceOp = "Background1_1",
-					Source = "PotisionLabel",
+					Source = "PositionLabel",
 				},
 				Input11 = InstanceInput {
 					SourceOp = "AutoOutlineColorText1_1",
@@ -61,9 +54,9 @@
 					Source = "Alignment",
 					Default = 1,
 				},
-				Input24 = InstanceInput {
+				Input25 = InstanceInput {
 					SourceOp = "Background1_1",
-					Source = "MainColor",
+					Source = "MainColorLabel",
 				},
 				Input14 = InstanceInput {
 					SourceOp = "AutoOutlineColorText1_1",
@@ -95,9 +88,9 @@
 					ControlGroup = 2,
 					Default = 1,
 				},
-				Input25 = InstanceInput {
+				Input26 = InstanceInput {
 					SourceOp = "Background1_1",
-					Source = "Outline",
+					Source = "OutlineLabel",
 				},
 				Input15 = InstanceInput {
 					SourceOp = "AutoOutlineColorText1_1",
@@ -114,7 +107,7 @@
 					Source = "OutlineTickness",
 					Default = 0.08,
 				},
-				Input26 = InstanceInput {
+				Input27 = InstanceInput {
 					SourceOp = "Background1_1",
 					Source = "EmojiLabel",
 				},
@@ -138,6 +131,11 @@
 					SourceOp = "AutoOutlineColorText1_1",
 					Source = "EmojiSize",
 					Default = 0.08,
+				},
+				Input22 = InstanceInput {
+					SourceOp = "AutoOutlineColorText1_1",
+					Source = "EmojiTracking",
+					Default = 1,
 				}
 			},
 			Outputs = {
@@ -147,23 +145,103 @@
 				}
 			},
 			ViewInfo = GroupInfo {
-				Pos = { 61.3334, 176.455 },
+				Pos = { 882, 122.182 },
 				Flags = {
 					AllowPan = false,
 					AutoSnap = true,
 					RemoveRouters = true
 				},
-				Size = { 315.334, 67.5756, 157.667, 24.2424 },
+				Size = { 344.666, 66.9696, 172.333, 24.2424 },
 				Direction = "Horizontal",
 				PipeStyle = "Direct",
 				Scale = 1,
 				Offset = { 0, 0 }
 			},
 			Tools = ordered() {
-				AutoOutlineColorText1_1 = Fuse.AutoOutlineColorText {
+				Background1_1 = Background {
 					CtrlWShown = false,
 					Inputs = {
-						Text = Input { Value = "🎉Sample Text👍", },
+						GlobalOut = Input { Value = 590, },
+						Width = Input { Value = 3840, },
+						Height = Input { Value = 2160, },
+						UseFrameFormatSettings = Input { Value = 1, },
+						["Gamut.SLogVersion"] = Input { Value = FuID { "SLog2" }, },
+						TopLeftAlpha = Input { Value = 0, },
+						TextLabel = Input { Value = 1, },
+						PositionLabel = Input { Value = 1, },
+						MainColorLabel = Input { Value = 1, },
+						OutlineLabel = Input { Value = 1, },
+						EmojiLabel = Input { Value = 1, }
+					},
+					ViewInfo = OperatorInfo { Pos = { -109.666, 8.45457 } },
+					UserControls = ordered() {
+						TextLabel = {
+							INP_Integer = true,
+							LBLC_DropDownButton = true,
+							INPID_InputControl = "LabelControl",
+							LBLC_NumInputs = 6,
+							INP_SplineType = "Default",
+							INP_External = false,
+							LINKID_DataType = "Number",
+							LBLC_NestLevel = 1,
+							INP_Passive = true,
+							LINKS_Name = "Text",
+						},
+						PositionLabel = {
+							INP_Integer = false,
+							LBLC_DropDownButton = true,
+							INPID_InputControl = "LabelControl",
+							LBLC_NumInputs = 3,
+							INP_SplineType = "Default",
+							INP_External = false,
+							LINKID_DataType = "Number",
+							LBLC_NestLevel = 1,
+							INP_Passive = true,
+							LINKS_Name = "Position",
+						},
+						MainColorLabel = {
+							INP_Integer = false,
+							LBLC_DropDownButton = true,
+							INPID_InputControl = "LabelControl",
+							LBLC_NumInputs = 5,
+							INP_SplineType = "Default",
+							INP_External = false,
+							LINKID_DataType = "Number",
+							INP_Passive = true,
+							LBLC_NestLevel = 1,
+							LINKS_Name = "MainColor",
+						},
+						OutlineLabel = {
+							INP_Integer = true,
+							LBLC_DropDownButton = true,
+							INPID_InputControl = "LabelControl",
+							LBLC_NumInputs = 3,
+							INP_SplineType = "Default",
+							INP_External = false,
+							LINKID_DataType = "Number",
+							LBLC_NestLevel = 1,
+							INP_Passive = true,
+							LINKS_Name = "Outline",
+						},
+						EmojiLabel = {
+							INP_Integer = true,
+							LBLC_DropDownButton = true,
+							INPID_InputControl = "LabelControl",
+							LBLC_NumInputs = 5,
+							INP_SplineType = "Default",
+							INP_External = false,
+							LINKID_DataType = "Number",
+							INP_Passive = true,
+							LBLC_NestLevel = 1,
+							LINKS_Name = "Emoji",
+						}
+					}
+				},
+				AutoOutlineColorText1_1 = Fuse.AutoOutlineColorText {
+					CtrlWZoom = false,
+					CtrlWShown = false,
+					Inputs = {
+						Text = Input { Value = "☺️Sample Text☺️\nHello world🚀", },
 						Font = Input { Value = "Open Sans", },
 						FontStyle = Input { Value = "Regular", },
 						Red = Input { Value = 0.6745098039216, },
@@ -177,75 +255,8 @@
 							Source = "Output",
 						}
 					},
-					ViewInfo = OperatorInfo { Pos = { 94, 9.36357 } },
+					ViewInfo = OperatorInfo { Pos = { 109, 9.06058 } },
 					Version = 1
-				},
-				Background1_1 = Background {
-					CtrlWShown = false,
-					Inputs = {
-						GlobalOut = Input { Value = 590, },
-						Width = Input { Value = 3840, },
-						Height = Input { Value = 2160, },
-						UseFrameFormatSettings = Input { Value = 1, },
-						["Gamut.SLogVersion"] = Input { Value = FuID { "SLog2" }, },
-						TopLeftAlpha = Input { Value = 0, },
-						TextLabel = Input { Value = 1, },
-						PotisionLabel = Input { Value = 1, },
-						MainColor = Input { Value = 1, },
-						Outline = Input { Value = 1, },
-						EmojiLabel = Input { Value = 1, }
-					},
-					ViewInfo = OperatorInfo { Pos = { -95.334, 8.15157 } },
-					UserControls = ordered() {
-						TextLabel = {
-							INP_Integer = false,
-							LBLC_DropDownButton = true,
-							INPID_InputControl = "LabelControl",
-							LBLC_NumInputs = 6,
-							INP_SplineType = "Default",
-							INP_External = false,
-							LINKID_DataType = "Number",
-							LBLC_NestLevel = 1,
-							INP_Passive = true,
-							LINKS_Name = "Text",
-						},
-						PotisionLabel = {
-							INP_Integer = false,
-							LBLC_DropDownButton = true,
-							INPID_InputControl = "LabelControl",
-							LBLC_NumInputs = 3,
-							INP_SplineType = "Default",
-							INP_External = false,
-							LINKID_DataType = "Number",
-							LBLC_NestLevel = 1,
-							INP_Passive = true,
-							LINKS_Name = "Potision",
-						},
-						MainColor = {
-							LBLC_DropDownButton = true,
-							INPID_InputControl = "LabelControl",
-							LBLC_NumInputs = 5,
-							LBLC_NestLevel = 1,
-							LINKID_DataType = "Number",
-							LINKS_Name = "Main Color",
-						},
-						Outline = {
-							LBLC_DropDownButton = true,
-							INPID_InputControl = "LabelControl",
-							LBLC_NumInputs = 3,
-							LBLC_NestLevel = 1,
-							LINKID_DataType = "Number",
-							LINKS_Name = "Outline",
-						},
-						EmojiLabel = {
-							LBLC_DropDownButton = true,
-							INPID_InputControl = "LabelControl",
-							LBLC_NumInputs = 4,
-							LBLC_NestLevel = 1,
-							LINKID_DataType = "Number",
-							LINKS_Name = "Emoji",
-						}
-					}
 				}
 			},
 		}
