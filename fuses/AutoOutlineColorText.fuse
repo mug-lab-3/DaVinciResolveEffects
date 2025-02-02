@@ -126,8 +126,10 @@ function Create()
         { MBTNC_AddButton = "Inner", MBTNCD_ButtonWidth = 1 / 2, },
         { MBTNC_AddButton = "Outer", MBTNCD_ButtonWidth = 1 / 2, },
         INP_Integer = true,
+        INP_DoNotifyChanged = true,
     })
 
+    groupId = groupId + 1;
     InR = self:AddInput("Red", "Red", {
         LINKID_DataType    = "Number",
         INPID_InputControl = "ColorControl",
@@ -136,7 +138,7 @@ function Create()
         INP_Default        = 1.0,
         ICS_Name           = "Color",
         CLRC_ShowWheel     = false,
-        IC_ControlGroup    = 1,
+        IC_ControlGroup    = groupId,
         IC_ControlID       = 0, -- Red ID
     })
 
@@ -146,7 +148,7 @@ function Create()
         INP_MinScale       = 0.0,
         INP_MaxScale       = 1.0,
         INP_Default        = 1.0,
-        IC_ControlGroup    = 1,
+        IC_ControlGroup    = groupId,
         IC_ControlID       = 1, -- Green ID
     })
 
@@ -156,7 +158,7 @@ function Create()
         INP_MinScale       = 0.0,
         INP_MaxScale       = 1.0,
         INP_Default        = 1.0,
-        IC_ControlGroup    = 1,
+        IC_ControlGroup    = groupId,
         IC_ControlID       = 2, -- Blue ID
     })
 
@@ -166,7 +168,7 @@ function Create()
         INP_MinScale       = 0.0,
         INP_MaxScale       = 1.0,
         INP_Default        = 1.0,
-        IC_ControlGroup    = 1,
+        IC_ControlGroup    = groupId,
         IC_ControlID       = 3, -- Alpha ID
     })
 
@@ -178,9 +180,11 @@ function Create()
         LINKID_DataType    = "Number",
         INPID_InputControl = "MultiButtonControl",
         INP_Default        = 0,
-        { MBTNC_AddButton = "Mono",           MBTNCD_ButtonWidth = 1 / 2, },
-        { MBTNC_AddButton = "Complementary ", MBTNCD_ButtonWidth = 1 / 2, },
+        { MBTNC_AddButton = "Mono",    MBTNCD_ButtonWidth = 1 / 3, },
+        { MBTNC_AddButton = "Comp",    MBTNCD_ButtonWidth = 1 / 3, },
+        { MBTNC_AddButton = "Custom ", MBTNCD_ButtonWidth = 1 / 3, },
         INP_Integer = true,
+        INP_DoNotifyChanged = true,
     })
 
     InOutlineNum = self:AddInput("Num", "OutlineNum", {
@@ -202,12 +206,105 @@ function Create()
         INP_Default        = 0.08,
     })
 
+
+    self:BeginControlNest("Color 1", "OutlineColor1", true);
+    groupId = groupId + 1;
+    InR2 = self:AddInput("Red", "Red2", {
+        LINKID_DataType    = "Number",
+        INPID_InputControl = "ColorControl",
+        INP_MinScale       = 0.0,
+        INP_MaxScale       = 1.0,
+        INP_Default        = 1.0,
+        ICS_Name           = "Color",
+        CLRC_ShowWheel     = false,
+        IC_ControlGroup    = groupId,
+        IC_ControlID       = 0, -- Red ID
+    })
+
+    InG2 = self:AddInput("Green", "Green2", {
+        LINKID_DataType    = "Number",
+        INPID_InputControl = "ColorControl",
+        INP_MinScale       = 0.0,
+        INP_MaxScale       = 1.0,
+        INP_Default        = 1.0,
+        IC_ControlGroup    = groupId,
+        IC_ControlID       = 1, -- Green ID
+    })
+
+    InB2 = self:AddInput("Blue", "Blue2", {
+        LINKID_DataType    = "Number",
+        INPID_InputControl = "ColorControl",
+        INP_MinScale       = 0.0,
+        INP_MaxScale       = 1.0,
+        INP_Default        = 1.0,
+        IC_ControlGroup    = groupId,
+        IC_ControlID       = 2, -- Blue ID
+    })
+
+    InA2 = self:AddInput("Alpha", "Alpha2", {
+        LINKID_DataType    = "Number",
+        INPID_InputControl = "ColorControl",
+        INP_MinScale       = 0.0,
+        INP_MaxScale       = 1.0,
+        INP_Default        = 1.0,
+        IC_ControlGroup    = groupId,
+        IC_ControlID       = 3, -- Alpha ID
+    })
+    self:EndControlNest()
+
+    self:BeginControlNest("Color 2", "OutlineColor2", true);
+
+    groupId = groupId + 1;
+
+    InR3 = self:AddInput("Red", "Red3", {
+        LINKID_DataType    = "Number",
+        INPID_InputControl = "ColorControl",
+        INP_MinScale       = 0.0,
+        INP_MaxScale       = 1.0,
+        INP_Default        = 0.0,
+        ICS_Name           = "Color",
+        CLRC_ShowWheel     = false,
+        IC_ControlGroup    = groupId,
+        IC_ControlID       = 0, -- Red ID
+    })
+
+    InG3 = self:AddInput("Green", "Green3", {
+        LINKID_DataType    = "Number",
+        INPID_InputControl = "ColorControl",
+        INP_MinScale       = 0.0,
+        INP_MaxScale       = 1.0,
+        INP_Default        = 0.0,
+        IC_ControlGroup    = groupId,
+        IC_ControlID       = 1, -- Green ID
+    })
+
+    InB3 = self:AddInput("Blue", "Blue3", {
+        LINKID_DataType    = "Number",
+        INPID_InputControl = "ColorControl",
+        INP_MinScale       = 0.0,
+        INP_MaxScale       = 1.0,
+        INP_Default        = 0.0,
+        IC_ControlGroup    = groupId,
+        IC_ControlID       = 2, -- Blue ID
+    })
+
+    InA3 = self:AddInput("Alpha", "Alpha3", {
+        LINKID_DataType    = "Number",
+        INPID_InputControl = "ColorControl",
+        INP_MinScale       = 0.0,
+        INP_MaxScale       = 1.0,
+        INP_Default        = 1.0,
+        IC_ControlGroup    = groupId,
+        IC_ControlID       = 3, -- Alpha ID
+    })
+    self:EndControlNest()
+
     self:EndControlNest()
 
 
     self:BeginControlNest("Emoji", "EmojiLabel", true);
 
-    InEmojiFontEnabled = self:AddInput("Use alternative fonts for emojis", "EnableEmojiFontLabel", {
+    InEmojiFontEnabled = self:AddInput("Use alternative fonts for emojis", "EnableEmojiFontEnabled", {
         LINKID_DataType = "Number",
         INPID_InputControl = "CheckboxControl",
         INP_Integer = true,
@@ -255,6 +352,43 @@ function Create()
         INP_MaxAllowed     = 5.0,
         INP_Default        = 1.0,
         IC_Visible         = true,
+    })
+
+    InCustomEmojiOutline = self:AddInput("Match outline count with normal characters", "CustomEmojiOutline", {
+        LINKID_DataType     = "Number",
+        INPID_InputControl  = "CheckboxControl",
+        INP_Integer         = true,
+        INP_Default         = 1,
+        ICD_Width           = 1,
+        INP_MinAllowed      = 0,
+        INP_MaxAllowed      = 1,
+        INP_DoNotifyChanged = true,
+    })
+
+    InEmojiOutlineNum = self:AddInput("Outline Num", "EmojiOutlineNum", {
+        LINKID_DataType    = "Number",
+        INPID_InputControl = "SliderControl",
+        INP_MinScale       = 0,
+        INP_MaxScale       = 2,
+        INP_Default        = 0,
+        INP_MinAllowed     = 0,
+        INP_MaxAllowed     = 2,
+        INP_Integer        = true,
+    })
+
+    self:EndControlNest()
+
+
+    self:BeginControlNest("Debug", "DebugLabel", true);
+
+    InDebug = self:AddInput("Enable", "DebugEnable", {
+        LINKID_DataType    = "Number",
+        INPID_InputControl = "CheckboxControl",
+        INP_Integer        = true,
+        INP_Default        = 0,
+        ICD_Width          = 1,
+        INP_MinAllowed     = 0,
+        INP_MaxAllowed     = 1,
     })
 
     self:EndControlNest()
@@ -375,9 +509,11 @@ local UnicodeText = {
                     return this.Unicode[line]
                 else
                     print(
-                        string.format("Requested line number is out of range: request=%d, line=%d",
+                        string.format(
+                            "Requested line number is out of range: request=%d, line=%d",
                             line,
-                            this.GetLineNum(this))
+                            this.GetLineNum(this)
+                        )
                     )
                     return {}
                 end
@@ -408,12 +544,6 @@ local TextFont = {
         }
     end
 }
-
-local sSourceText = UnicodeText.New()
-local sInnerColor = Pixel { R = 0, G = 0, B = 0, A = 1.0 }
-local sOuterColor1 = Pixel { R = 0, G = 0, B = 0, A = 1.0 }
-local sOuterColor2 = Pixel { R = 0, G = 0, B = 0, A = 1.0 }
-
 
 local function rgbToHsv(r, g, b)
     local max = math.max(r, g, b)
@@ -545,9 +675,11 @@ local function getClosestContrastingColor(color)
 end
 
 local TextColor = {
-    New = function(baseColor, target, type)
+    New = function(baseColor, customColor1, customColor2, target, type)
         return {
             BaseColor = Pixel { R = baseColor.R, G = baseColor.G, B = baseColor.B, A = baseColor.A },
+            CustomColor1 = Pixel { R = customColor1.R, G = customColor1.G, B = customColor1.B, A = customColor1.A },
+            CustomColor2 = Pixel { R = customColor2.R, G = customColor2.G, B = customColor2.B, A = customColor2.A },
             Target = target,
             Type = type,
 
@@ -557,19 +689,22 @@ local TextColor = {
 
             _updateColor = function(this)
                 local c1, c2
-                if this.Type == 0 then
+                if this.Type == 0 then --Mono
                     c1 = adjustLuminanceForContrast(this.BaseColor)
                     c2 = adjustLuminanceForContrast(c1)
-                else
+                elseif this.Type == 1 then --Comp
                     c1 = getComplementaryColor(this.BaseColor)
                     c2 = getComplementaryColor(c1)
+                elseif this.Type == 2 then -- Custom
+                    c1 = this.CustomColor1
+                    c2 = this.CustomColor2
                 end
                 if this._innerColor == nil then
-                    if this.Target == 0 then
+                    if this.Target == 0 then -- Inner
                         this._innerColor = this.BaseColor
                         this._outlineColor1 = c1
                         this._outlineColor2 = c2
-                    else
+                    elseif this.Target == 1 then -- Outer
                         this._outlineColor1 = this.BaseColor
                         this._innerColor = c1
                         this._outlineColor2 = c1
@@ -612,28 +747,6 @@ local function getLineDrawWidth(unicodeArray, tfm, emojiTfm, origSize, emojiSize
 
     for i = 1, #unicodeArray do
         -- add the kerning between this character and the previous one
-        if 1 < i then
-            local currentTfm
-            local size
-            if isEmoji(unicodeArray[i - 1]) then
-                currentTfm = emojiTfm
-                size = emojiSize
-            else
-                currentTfm = tfm
-                size = origSize
-            end
-            local kerning = currentTfm:CharacterKerning(unicodeArray[i - 1], unicodeArray[i]) * 10 * size
-            lineWidth = lineWidth + kerning
-            if isEmoji(unicodeArray[i]) then
-                if 1 < i and isEmoji(unicodeArray[i - 1]) == false then
-                    lineWidth = lineWidth + (origSize * (emojiTracking - 1.0) / 2)
-                end
-            else
-                if 1 < i and isEmoji(unicodeArray[i - 1]) == true then
-                    lineWidth = lineWidth - (origSize * (emojiTracking - 1.0) / 2)
-                end
-            end
-        end
         local currentTfm
         local size
         if isEmoji(unicodeArray[i]) then
@@ -643,13 +756,20 @@ local function getLineDrawWidth(unicodeArray, tfm, emojiTfm, origSize, emojiSize
             currentTfm = tfm
             size = origSize
         end
+
         -- add the width of the character
         lineWidth = lineWidth + (currentTfm:CharacterWidth(unicodeArray[i]) * 10 * size)
+
+        -- Tracking
         if i < #unicodeArray then
-            lineWidth = lineWidth + (origSize * (tracking - 1.0))
-            if isEmoji(unicodeArray[i]) then
-                lineWidth = lineWidth + (origSize * (emojiTracking - 1.0))
+            local offset = 0
+            if isEmoji(unicodeArray[i]) or isEmoji(unicodeArray[i + 1]) then
+                offset = offset + (tracking - 1) * origSize
+                offset = offset + (emojiTracking - 1) * origSize
+            else
+                offset = offset + (tracking - 1) * origSize
             end
+            lineWidth = lineWidth + offset
         end
     end
 
@@ -657,7 +777,37 @@ local function getLineDrawWidth(unicodeArray, tfm, emojiTfm, origSize, emojiSize
     return lineWidth
 end
 
---local debug = true
+local function debugRectangle(img, baseMat, offsetX, offsetY, width, height, color, debug)
+    if debug == 1 then
+        local baseMatTable = baseMat:GetTable()
+        local baseX        = baseMatTable[13]
+        local baseY        = baseMatTable[14]
+        local thickness    = 0.0006
+
+        local shape        = Shape()
+        shape:AddRectangle(
+            (baseX + offsetX) + thickness / 2,
+            (baseX + offsetX) + width - (thickness / 2),
+            (baseY + offsetY),
+            ((baseY + offsetY) + height),
+            0,
+            8
+        )
+
+        local shapeOutline =
+            shape:OutlineOfShape(thickness, "OLT_Solid", "OJT_Round", 8, "SWM_Normal", 8)
+
+        local cs = ChannelStyle()
+        cs.Color = color
+
+        local ic = ImageChannel(img, 1)
+        local fs = FillStyle()
+        ic:SetStyleFill(fs)
+        ic:ShapeFill(shapeOutline)
+        ic:PutToImage("CM_Merge", cs)
+    end
+end
+
 local function drawstring(img,
                           unicodeText,
                           position,
@@ -668,7 +818,9 @@ local function drawstring(img,
                           color,
                           quality,
                           thickness,
-                          outlineNum)
+                          outlineNum,
+                          emojiOutlineNum,
+                          debug)
     -- get the fonts metrics (see http://freetype.sourceforge.net/freetype2/docs/glyphs/index.html for a great guide)
     local tfm = TextStyleFontMetrics(TextStyleFont(font.Name, font.Style))
     local emojiTfm = TextStyleFontMetrics(TextStyleFont(emojiFont.Name, emojiFont.Style))
@@ -710,55 +862,48 @@ local function drawstring(img,
     local prevLineDrawWidth = 0
     for line = 1, unicodeText:GetLineNum() do
         local unicodeArray = unicodeText:GetLine(line)
-        local lineWidth = getLineDrawWidth(unicodeArray, tfm, emojiTfm, origSize, emojiSize,
+        local lineWidth = getLineDrawWidth(
+            unicodeArray,
+            tfm,
+            emojiTfm,
+            origSize,
+            emojiSize,
             position.Tracking,
-            position.EmojiTracking)
+            position.EmojiTracking
+        )
 
         if position.Justify == 0 then
             mat:Move(-prevLineDrawWidth, 0, 0)
-            mat:Move(0, 0, 0)
             emojiMat:Move(-prevLineDrawWidth, 0, 0)
-            emojiMat:Move(0, 0, 0)
         elseif position.Justify == 1 then
             mat:Move(-prevLineDrawWidth / 2, 0, 0)
             mat:Move(-(lineWidth / 2), 0, 0)
             emojiMat:Move(-prevLineDrawWidth / 2, 0, 0)
             emojiMat:Move(-(lineWidth / 2), 0, 0)
         elseif position.Justify == 2 then
-            mat:Move(0, 0, 0)
             mat:Move(-lineWidth, 0, 0)
-            emojiMat:Move(0, 0, 0)
             emojiMat:Move(-lineWidth, 0, 0)
         end
 
-        local xPos = 0
-        local prevWidth
         for i = 1, #unicodeArray do
             local characterCode = unicodeArray[i]
 
             local currentTmf
             local currentMat
-            local currentTracking
+            local currentOutlineNum
             if isEmoji(characterCode) then
-                currentTmf = emojiTfm
                 size = emojiSize
+                currentTmf = emojiTfm
                 currentMat = emojiMat
-                currentTracking = position.EmojiTracking
-                if 1 < i and isEmoji(unicodeArray[i - 1]) == false then
-                    mat:Move((position.EmojiTracking - 1) * origSize / 2, 0, 0)
-                    emojiMat:Move((position.EmojiTracking - 1) * origSize / 2, 0, 0)
-                end
+                currentOutlineNum = emojiOutlineNum
             else
+                size = origSize
                 currentTmf = tfm
                 currentMat = mat
-                size = origSize
-                currentTracking = position.Tracking
-                if 1 < i and isEmoji(unicodeArray[i - 1]) == true then
-                    mat:Move(-(position.EmojiTracking - 1) * (origSize / 2), 0, 0)
-                    emojiMat:Move(-(position.EmojiTracking - 1) * (origSize / 2), 0, 0)
-                end
+                currentOutlineNum = outlineNum
             end
             local width = currentTmf:CharacterWidth(characterCode) * 10 * size
+            local halfWidth = width / 2
 
             -- if this is not the first character, apply kerning
             if 1 < i then
@@ -769,69 +914,56 @@ local function drawstring(img,
             end
 
             -- move the cursor to the center of the character
-            mat:Move(width / 2, 0, 0)
-            emojiMat:Move(width / 2, 0, 0)
-
-
-            if debug == true then
-                local testMat = Matrix4()
-                local testMat = currentMat * testMat
-                local testMatTable = testMat:GetTable()
-                local testX = testMatTable[13]
-                local testY = testMatTable[14]
-                -- shapeNormal:MoveTo(0.2, testY)
-                local lineHeightB = (tfm.TextAscent + tfm.TextExternalLeading) * 10 * size
-                local emojiLineHeightB = (emojiTfm.TextAscent + emojiTfm.TextExternalLeading) * 10 *
-                    size
-
-                if isEmoji(characterCode) then
-                    shapeOutline1:AddRectangle(testX - (width / 2), testX + (width / 2), testY + (emojiLineHeight / 2),
-                        testY - (emojiLineHeight / 2))
-                    shapeNormal:AddRectangle(testX - (width / 2), testX + (width / 2), testY + (emojiLineHeightB / 2),
-                        testY - (emojiLineHeightB / 2))
-                else
-                    shapeOutline1:AddRectangle(testX - (width / 2), testX + (width / 2), testY + (lineHeight / 2),
-                        testY - (lineHeight / 2))
-                    shapeNormal:AddRectangle(testX - (width / 2), testX + (width / 2), testY + (lineHeightB / 2),
-                        testY - (lineHeightB / 2))
-                end
-            end
+            mat:Move(halfWidth, 0, 0)
+            emojiMat:Move(halfWidth, 0, 0)
 
             -- get the shape of the character
             local characterShape = currentTmf:GetCharacterShape(characterCode, false)
             if characterShape then
                 local base = characterShape:TransformOfShape(currentMat)
                 shapeNormal:AddShape(base)
-                if 1 <= outlineNum then
+                if 1 <= currentOutlineNum then
                     local outline1 = base:OutlineOfShape(
                         thickness * size, "OLT_Solid", "OJT_Round", 8, "SWM_Normal", 8
                     )
                     shapeOutline1:AddShape(outline1)
                 end
-                if 2 <= outlineNum then
+                if 2 <= currentOutlineNum then
                     local outline2 = base:OutlineOfShape(
                         thickness * 2 * size, "OLT_Solid", "OJT_Round", 8, "SWM_Normal", 8
                     )
                     shapeOutline2:AddShape(outline2)
                 end
+                debugRectangle(img, currentMat, -width / 2, -lineHeight / 2, width, lineHeight,
+                    Pixel { R = 1, G = 1, B = 0, A = 1 }, debug)
             end
 
-            mat:Move(width / 2, 0, 0)
-            emojiMat:Move(width / 2, 0, 0)
+            mat:Move(halfWidth, 0, 0)
+            emojiMat:Move(halfWidth, 0, 0)
 
+            -- Tracking
             if i < #unicodeArray then
-                mat:Move((currentTracking - 1) * origSize, 0, 0)
-                emojiMat:Move((currentTracking - 1) * origSize, 0, 0)
+                local baseTracking = (position.Tracking - 1) * origSize
+                local emojiTracking = 0
+                if isEmoji(unicodeArray[i]) or isEmoji(unicodeArray[i + 1]) then
+                    emojiTracking = (position.EmojiTracking - 1) * origSize
+                    debugRectangle(img, mat, baseTracking, -lineHeight / 2, emojiTracking, lineHeight,
+                        Pixel { R = 0, G = 1, B = 1, A = 1 }, debug)
+                end
+                local tracking = baseTracking + emojiTracking
+                debugRectangle(img, mat, 0, -lineHeight / 2, baseTracking, lineHeight,
+                    Pixel { R = 1, G = 0, B = 1, A = 1 }, debug)
+                mat:Move(tracking, 0, 0)
+                emojiMat:Move(tracking, 0, 0)
             end
-            prevWidth = width
+
             ::continue::
         end
 
         -- line end, move the cursor back to the start
-        mat:Move(0, -lineHeight, 0)
-        mat:Move(0, -(position.LineSpacing - 1) * origSize, 0)
-        emojiMat:Move(0, -emojiLineHeight, 0)
-        emojiMat:Move(0, -(position.LineSpacing - 1) * origSize, 0)
+        local scaledLineSpacing = (position.LineSpacing - 1) * origSize
+        mat:Move(0, -(lineHeight + scaledLineSpacing), 0)
+        emojiMat:Move(0, -(emojiLineHeight + scaledLineSpacing), 0)
         prevLineDrawWidth = lineWidth
     end
 
@@ -839,15 +971,15 @@ local function drawstring(img,
     local fs = FillStyle()
     local cs = ChannelStyle()
     ic:SetStyleFill(fs)
-    if outlineNum >= 2 then
-        -- print("R: "..sOuterColor2.R.." G: "..sOuterColor2.G.." B: "..sOuterColor2.B.." A: "..sOuterColor2.A)
+    if (outlineNum >= 2) or (emojiOutlineNum >= 2) then
         cs.Color = color:GetOutlineColor2()
+        -- print("[outline2] R: " .. cs.Color.R .. " G: " .. cs.Color.G .. " B: " .. cs.Color.B .. " A: " .. cs.Color.A)
         ic:ShapeFill(shapeOutline2)
         ic:PutToImage("CM_Merge", cs)
     end
-    if outlineNum >= 1 then
-        -- print("R: "..sOuterColor1.R.." G: "..sOuterColor1.G.." B: "..sOuterColor1.B.." A: "..sOuterColor1.A)
+    if (outlineNum >= 1) or (emojiOutlineNum >= 1) then
         cs.Color = color:GetOutlineColor1()
+        -- print("[outline1] R: " .. cs.Color.R .. " G: " .. cs.Color.G .. " B: " .. cs.Color.B .. " A: " .. cs.Color.A)
         ic:ShapeFill(shapeOutline1)
         ic:PutToImage("CM_Merge", cs)
     end
@@ -861,42 +993,9 @@ function OnAddToFlow()
     -- print("OnAddToFlow")
 end
 
-function PreCalcProcess(req)
-    -- print("PreCalcProcess")
-    local text = InText:GetValue(req).Value
-    sSourceText = UnicodeText.New()
-    sSourceText:SetText(text)
-
-    local r = InR:GetValue(req).Value
-    local g = InG:GetValue(req).Value
-    local b = InB:GetValue(req).Value
-    local a = InA:GetValue(req).Value
-    if InColorTarget:GetValue(req).Value == 0 then
-        sInnerColor = Pixel { R = r, G = g, B = b, A = a }
-        sOuterColor1 = adjustLuminanceForContrast(sInnerColor)
-        sOuterColor2 = adjustLuminanceForContrast(sOuterColor1)
-    else
-        sOuterColor1 = Pixel { R = r, G = g, B = b, A = a }
-        sInnerColor = adjustLuminanceForContrast(sOuterColor1)
-        sOuterColor2 = adjustLuminanceForContrast(sOuterColor1)
-    end
-
-    local img = InImage:GetValue(req)
-    local dod = req:GetInputDoD(InImage)
-    -- print("Input DoD:   ", dod, dod:ValidWidth().."x"..dod:ValidHeight())
-    -- print("Request ROI: ", "not available during PreCalc")
-    local datawnd = dod:Intersect(img.DataWindow)
-    local out = Image({
-        IMG_Like = img,
-        IMG_DataWindow = datawnd,
-        IMG_ValidWindow = nil,
-        IMG_NoData = true,
-    })
-    OutImage:Set(req, out)
-end
-
 function Process(req)
     local img              = InImage:GetValue(req)
+    local out              = img:CopyOf()
 
     -- font
     local font             = InFont:GetValue(req).Value
@@ -914,23 +1013,41 @@ function Process(req)
         emojiFont = TextFont.New(font, style)
     end
 
+    local size       = InSize:GetValue(req).Value
+    local emojiSize  = InEmojiSize:GetValue(req).Value
 
-    local roi              = req:GetRoI()
-    local out              = img:CopyOf()
+    -- Outline
+    local thickness  = InOutlineThickness:GetValue(req).Value
+    local outlineNum = InOutlineNum:GetValue(req).Value
+    local emojiOutlineNum
+    if InCustomEmojiOutline:GetValue(req).Value == 1 then
+        emojiOutlineNum = outlineNum
+    else
+        emojiOutlineNum = InEmojiOutlineNum:GetValue(req).Value
+    end
 
-    local size             = InSize:GetValue(req).Value
-    local emojiSize        = InEmojiSize:GetValue(req).Value
-
+    -- Color
     local r                = InR:GetValue(req).Value
     local g                = InG:GetValue(req).Value
     local b                = InB:GetValue(req).Value
     local a                = InA:GetValue(req).Value
+    local r2               = InR2:GetValue(req).Value
+    local g2               = InG2:GetValue(req).Value
+    local b2               = InB2:GetValue(req).Value
+    local a2               = InA2:GetValue(req).Value
+    local r3               = InR3:GetValue(req).Value
+    local g3               = InG3:GetValue(req).Value
+    local b3               = InB3:GetValue(req).Value
+    local a3               = InA3:GetValue(req).Value
     local colorTarget      = InColorTarget:GetValue(req).Value
     local outlineColorType = InOutlineColorType:GetValue(req).Value
-    local textColor        = TextColor.New(Pixel { R = r, G = g, B = b, A = a }, colorTarget, outlineColorType)
-
-    local thickness        = InOutlineThickness:GetValue(req).Value
-    local outlineNum       = InOutlineNum:GetValue(req).Value
+    local textColor        = TextColor.New(
+        Pixel { R = r, G = g, B = b, A = a },
+        Pixel { R = r2, G = g2, B = b2, A = a2 },
+        Pixel { R = r3, G = g3, B = b3, A = a3 },
+        colorTarget,
+        outlineColorType
+    )
 
     -- Position
     local aspectRatio      = (out.Height * out.YScale) / (out.Width * out.XScale)
@@ -948,6 +1065,9 @@ function Process(req)
     else
         position = TextPosition.New(x, y, justify, align, tracking, lineSpacing, tracking)
     end
+
+    -- Debug
+    local debug = InDebug:GetValue(req).Value
 
     local quality = 32
     if req:IsQuick() then
@@ -978,7 +1098,9 @@ function Process(req)
         textColor,
         quality,
         thickness,
-        outlineNum
+        outlineNum,
+        emojiOutlineNum,
+        debug
     )
 
     OutImage:Set(req, out)
@@ -989,8 +1111,7 @@ function NotifyChanged(inp, param, time)
     -- provided a FontList, so we can't set a default value. Instead we do it here.
     if (inp == InFont) or (inp == InEmojiFont) then
         local f = param.Value
-
-        if f == nil or string.len(f) == 0 then
+        if (f == nil) or (string.len(f) == 0) then
             local fontList = FontManager:GetFontList()
             if inp == InEmojiFont and fontList["Segoe UI Emoji"] then
                 inp:SetSource(Text("Segoe UI Emoji"), time)
@@ -1000,7 +1121,6 @@ function NotifyChanged(inp, param, time)
         end
     elseif (inp == InFontStyle) or (inp == InEmojiFontStyle) then
         local f = param.Value
-
         if f == nil or string.len(f) == 0 then
             inp:SetSource(Text("Regular"), time)
         end
@@ -1008,6 +1128,33 @@ function NotifyChanged(inp, param, time)
         local f = param.Value
         if f == nil or string.len(f) == 0 then
             InText:SetSource(Text("Sample"), time)
+        end
+    elseif inp == InColorTarget then
+        if param.Value ~= 0 and InOutlineColorType:GetSource(time).Value == 2 then -- Custom
+            inp:SetSource(Number(0), time)                                         -- Inner
+        end
+    elseif inp == InOutlineColorType then
+        if param.Value == 2 then -- Custom
+            InR2:SetAttrs({ IC_Visible = true })
+            InG2:SetAttrs({ IC_Visible = true })
+            InB2:SetAttrs({ IC_Visible = true })
+            InA2:SetAttrs({ IC_Visible = true })
+            InR3:SetAttrs({ IC_Visible = true })
+            InG3:SetAttrs({ IC_Visible = true })
+            InB3:SetAttrs({ IC_Visible = true })
+            InA3:SetAttrs({ IC_Visible = true })
+            if InColorTarget:GetSource(time).Value ~= 0 then
+                InColorTarget:SetSource(Number(0), time) -- Inner
+            end
+        else
+            InR2:SetAttrs({ IC_Visible = false })
+            InG2:SetAttrs({ IC_Visible = false })
+            InB2:SetAttrs({ IC_Visible = false })
+            InA2:SetAttrs({ IC_Visible = false })
+            InR3:SetAttrs({ IC_Visible = false })
+            InG3:SetAttrs({ IC_Visible = false })
+            InB3:SetAttrs({ IC_Visible = false })
+            InA3:SetAttrs({ IC_Visible = false })
         end
     elseif inp == InEmojiFontEnabled then
         if param.Value == 1 then
@@ -1020,6 +1167,12 @@ function NotifyChanged(inp, param, time)
             InEmojiFontStyle:SetAttrs({ IC_Visible = false })
             InEmojiSize:SetAttrs({ IC_Visible = false })
             InEmojiTracking:SetAttrs({ IC_Visible = false })
+        end
+    elseif inp == InCustomEmojiOutline then
+        if param.Value == 0 then -- unchecked
+            InEmojiOutlineNum:SetAttrs({ IC_Visible = true })
+        else
+            InEmojiOutlineNum:SetAttrs({ IC_Visible = false })
         end
     end
 end
