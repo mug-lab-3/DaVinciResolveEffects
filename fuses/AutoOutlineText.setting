@@ -2,8 +2,15 @@
 	Tools = ordered() {
 		AutoOutlineText = GroupOperator {
 			CtrlWZoom = false,
+			CustomData = {
+				Path = {
+					Map = {
+						["Setting:"] = "Templates:\\Edit\\Titles\\"
+					}
+				},
+			},
 			Inputs = ordered() {
-				Input23 = InstanceInput {
+				Input34 = InstanceInput {
 					SourceOp = "Background1_1",
 					Source = "TextLabel",
 				},
@@ -21,74 +28,74 @@
 					Source = "FontStyle",
 					ControlGroup = 2,
 				},
-				Input8 = InstanceInput {
+				Input4 = InstanceInput {
 					SourceOp = "AutoOutlineColorText1_1",
 					Source = "Size",
 					Default = 0.08,
 				},
-				Input9 = InstanceInput {
+				Input5 = InstanceInput {
 					SourceOp = "AutoOutlineColorText1_1",
 					Source = "Tracking",
 					Default = 1,
 				},
-				Input10 = InstanceInput {
+				Input6 = InstanceInput {
 					SourceOp = "AutoOutlineColorText1_1",
 					Source = "LineSpacing",
 					Default = 1,
 				},
-				Input24 = InstanceInput {
+				Input35 = InstanceInput {
 					SourceOp = "Background1_1",
 					Source = "PositionLabel",
 				},
-				Input11 = InstanceInput {
+				Input7 = InstanceInput {
 					SourceOp = "AutoOutlineColorText1_1",
 					Source = "Offset",
 				},
-				Input12 = InstanceInput {
+				Input8 = InstanceInput {
 					SourceOp = "AutoOutlineColorText1_1",
 					Source = "Justification",
 					Default = 1,
 				},
-				Input13 = InstanceInput {
+				Input9 = InstanceInput {
 					SourceOp = "AutoOutlineColorText1_1",
 					Source = "Alignment",
 					Default = 1,
 				},
-				Input25 = InstanceInput {
+				Input36 = InstanceInput {
 					SourceOp = "Background1_1",
 					Source = "MainColorLabel",
 				},
-				Input14 = InstanceInput {
+				Input10 = InstanceInput {
 					SourceOp = "AutoOutlineColorText1_1",
 					Source = "ColorTarget",
 					Default = 0,
 				},
-				Input4 = InstanceInput {
+				Input11 = InstanceInput {
 					SourceOp = "AutoOutlineColorText1_1",
 					Source = "Red",
 					Name = "Color",
-					ControlGroup = 2,
+					ControlGroup = 10,
 					Default = 0.6745098039216,
 				},
-				Input5 = InstanceInput {
+				Input12 = InstanceInput {
 					SourceOp = "AutoOutlineColorText1_1",
 					Source = "Green",
-					ControlGroup = 2,
+					ControlGroup = 10,
 					Default = 0,
 				},
-				Input6 = InstanceInput {
+				Input13 = InstanceInput {
 					SourceOp = "AutoOutlineColorText1_1",
 					Source = "Blue",
-					ControlGroup = 2,
+					ControlGroup = 10,
 					Default = 0.6745098039216,
 				},
-				Input7 = InstanceInput {
+				Input14 = InstanceInput {
 					SourceOp = "AutoOutlineColorText1_1",
 					Source = "Alpha",
-					ControlGroup = 2,
+					ControlGroup = 10,
 					Default = 1,
 				},
-				Input26 = InstanceInput {
+				Input37 = InstanceInput {
 					SourceOp = "Background1_1",
 					Source = "OutlineLabel",
 				},
@@ -107,35 +114,114 @@
 					Source = "OutlineTickness",
 					Default = 0.08,
 				},
-				Input27 = InstanceInput {
+				Input38 = InstanceInput {
 					SourceOp = "Background1_1",
-					Source = "EmojiLabel",
+					Source = "Color1Label",
 				},
 				Input18 = InstanceInput {
 					SourceOp = "AutoOutlineColorText1_1",
-					Source = "EnableEmojiFontLabel",
-					Width = 1,
+					Source = "Red2",
+					Name = "Color",
+					ControlGroup = 14,
 					Default = 1,
 				},
 				Input19 = InstanceInput {
 					SourceOp = "AutoOutlineColorText1_1",
-					Source = "EmojiFont",
+					Source = "Green2",
 					ControlGroup = 14,
+					Default = 1,
 				},
 				Input20 = InstanceInput {
 					SourceOp = "AutoOutlineColorText1_1",
-					Source = "EmojiFontStyle",
+					Source = "Blue2",
 					ControlGroup = 14,
+					Default = 1,
 				},
 				Input21 = InstanceInput {
+					SourceOp = "AutoOutlineColorText1_1",
+					Source = "Alpha2",
+					ControlGroup = 14,
+					Default = 1,
+				},
+				Input39 = InstanceInput {
+					SourceOp = "Background1_1",
+					Source = "Color2Lable",
+				},
+				Input22 = InstanceInput {
+					SourceOp = "AutoOutlineColorText1_1",
+					Source = "Red3",
+					Name = "Color",
+					ControlGroup = 15,
+					Default = 0,
+				},
+				Input23 = InstanceInput {
+					SourceOp = "AutoOutlineColorText1_1",
+					Source = "Green3",
+					ControlGroup = 15,
+					Default = 0,
+				},
+				Input24 = InstanceInput {
+					SourceOp = "AutoOutlineColorText1_1",
+					Source = "Blue3",
+					ControlGroup = 15,
+					Default = 0,
+				},
+				Input25 = InstanceInput {
+					SourceOp = "AutoOutlineColorText1_1",
+					Source = "Alpha3",
+					ControlGroup = 15,
+					Default = 1,
+				},
+				Input40 = InstanceInput {
+					SourceOp = "Background1_1",
+					Source = "EmojiLabel",
+				},
+				Input26 = InstanceInput {
+					SourceOp = "AutoOutlineColorText1_1",
+					Source = "EnableEmojiFontEnabled",
+					Width = 1,
+					Default = 1,
+				},
+				Input27 = InstanceInput {
+					SourceOp = "AutoOutlineColorText1_1",
+					Source = "EmojiFont",
+					ControlGroup = 17,
+				},
+				Input28 = InstanceInput {
+					SourceOp = "AutoOutlineColorText1_1",
+					Source = "EmojiFontStyle",
+					ControlGroup = 17,
+				},
+				Input29 = InstanceInput {
 					SourceOp = "AutoOutlineColorText1_1",
 					Source = "EmojiSize",
 					Default = 0.08,
 				},
-				Input22 = InstanceInput {
+				Input30 = InstanceInput {
 					SourceOp = "AutoOutlineColorText1_1",
 					Source = "EmojiTracking",
 					Default = 1,
+				},
+				Input31 = InstanceInput {
+					SourceOp = "AutoOutlineColorText1_1",
+					Source = "CustomEmojiOutline",
+					Width = 1,
+					Default = 1,
+				},
+				Input32 = InstanceInput {
+					SourceOp = "AutoOutlineColorText1_1",
+					Source = "EmojiOutlineNum",
+					Default = 2,
+				},
+				Input41 = InstanceInput {
+					SourceOp = "Background1_1",
+					Source = "DebugLabel",
+				},
+				Input33 = InstanceInput {
+					SourceOp = "AutoOutlineColorText1_1",
+					Source = "DebugEnable",
+					Width = 1,
+					Default = 0,
 				}
 			},
 			Outputs = {
@@ -145,13 +231,13 @@
 				}
 			},
 			ViewInfo = GroupInfo {
-				Pos = { 882, 122.182 },
+				Pos = { 900.667, 26.7576 },
 				Flags = {
 					AllowPan = false,
 					AutoSnap = true,
 					RemoveRouters = true
 				},
-				Size = { 344.666, 66.9696, 172.333, 24.2424 },
+				Size = { 300.666, 68.7886, 150.333, 24.2424 },
 				Direction = "Horizontal",
 				PipeStyle = "Direct",
 				Scale = 1,
@@ -171,9 +257,12 @@
 						PositionLabel = Input { Value = 1, },
 						MainColorLabel = Input { Value = 1, },
 						OutlineLabel = Input { Value = 1, },
-						EmojiLabel = Input { Value = 1, }
+						EmojiLabel = Input { Value = 1, },
+						Color1Label = Input { Value = 1, },
+						Color2Lable = Input { Value = 1, },
+						DebugLabel = Input { Value = 1, }
 					},
-					ViewInfo = OperatorInfo { Pos = { -109.666, 8.45457 } },
+					ViewInfo = OperatorInfo { Pos = { -87.666, 8.54507 } },
 					UserControls = ordered() {
 						TextLabel = {
 							INP_Integer = true,
@@ -215,7 +304,7 @@
 							INP_Integer = true,
 							LBLC_DropDownButton = true,
 							INPID_InputControl = "LabelControl",
-							LBLC_NumInputs = 3,
+							LBLC_NumInputs = 13,
 							INP_SplineType = "Default",
 							INP_External = false,
 							LINKID_DataType = "Number",
@@ -227,13 +316,45 @@
 							INP_Integer = true,
 							LBLC_DropDownButton = true,
 							INPID_InputControl = "LabelControl",
-							LBLC_NumInputs = 5,
+							LBLC_NumInputs = 7,
 							INP_SplineType = "Default",
 							INP_External = false,
 							LINKID_DataType = "Number",
 							INP_Passive = true,
 							LBLC_NestLevel = 1,
 							LINKS_Name = "Emoji",
+						},
+						Color1Label = {
+							INP_Integer = false,
+							LBLC_DropDownButton = true,
+							INPID_InputControl = "LabelControl",
+							LBLC_NumInputs = 4,
+							INP_SplineType = "Default",
+							INP_External = false,
+							LINKID_DataType = "Number",
+							LBLC_NestLevel = 2,
+							INP_Passive = true,
+							LINKS_Name = "Color 1",
+						},
+						Color2Lable = {
+							INP_Integer = false,
+							LBLC_DropDownButton = true,
+							INPID_InputControl = "LabelControl",
+							LBLC_NumInputs = 4,
+							INP_SplineType = "Default",
+							INP_External = false,
+							LINKID_DataType = "Number",
+							LBLC_NestLevel = 2,
+							INP_Passive = true,
+							LINKS_Name = "Color 2",
+						},
+						DebugLabel = {
+							LBLC_DropDownButton = true,
+							INPID_InputControl = "LabelControl",
+							LBLC_NumInputs = 1,
+							LBLC_NestLevel = 1,
+							LINKID_DataType = "Number",
+							LINKS_Name = "Debug",
 						}
 					}
 				},
@@ -250,12 +371,13 @@
 						OutlineNum = Input { Value = 2, },
 						EmojiFont = Input { Value = "Segoe UI Emoji", },
 						EmojiFontStyle = Input { Value = "Regular", },
+						EmojiOutlineNum = Input { Value = 2, },
 						Input = Input {
 							SourceOp = "Background1_1",
 							Source = "Output",
 						}
 					},
-					ViewInfo = OperatorInfo { Pos = { 109, 9.06058 } },
+					ViewInfo = OperatorInfo { Pos = { 87, 10.9701 } },
 					Version = 1
 				}
 			},
