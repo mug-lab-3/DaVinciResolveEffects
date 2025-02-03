@@ -1,13 +1,13 @@
 --[[--
-Auto Outline Color Text
+Mug Lazy Text
 --]] --
 
 --******************************************************************************************************
 FuRegisterClass("AutoOutlineColorText", CT_Tool, {
-    REGS_Name             = "Auto Outline Color Text",
+    REGS_Name             = "Mug Lazy Text",
     REGS_Category         = "Fuses\\Mug",
-    REGS_OpIconString     = "AOCT",
-    REGS_OpDescription    = "Auto Outline Color Text",
+    REGS_OpIconString     = "MLT",
+    REGS_OpDescription    = "Mug Lazy Text",
     REGS_HelpTopic        = "https://x.com/MugLab3",     --This can be a URL
     REGS_URL              = "https://www.youtube.com/@MugLabVideoEditing",
     REGS_IconID           = "Icons.Tools.Icons.Example", -- This can be Inline as an array of Values
