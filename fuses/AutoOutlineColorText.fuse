@@ -23,6 +23,7 @@ FuRegisterClass("AutoOutlineColorText", CT_Tool, {
 })
 
 function Create()
+    self:AddControlPage("Controls")
     local groupId = 0;
 
     self:BeginControlNest("Text", "TextLabel", true);
@@ -82,40 +83,6 @@ function Create()
         INP_MaxAllowed     = 10.0,
         INP_Default        = 1.0,
     })
-
-    self:EndControlNest()
-
-
-    self:BeginControlNest("Position", "PositionLabel", true);
-
-    InOffset = self:AddInput("Offset", "Offset", {
-        LINKID_DataType      = "Point",
-        INPID_InputControl   = "OffsetControl",
-        INPID_PreviewControl = "CrosshairControl",
-    })
-
-    InJustify = self:AddInput("Justification", "Justification", {
-        LINKID_DataType    = "Number",
-        INPID_InputControl = "MultiButtonControl",
-        INP_Default        = 1,
-        { MBTNC_AddButton = "Left",   MBTNCD_ButtonWidth = 1 / 3, },
-        { MBTNC_AddButton = "Center", MBTNCD_ButtonWidth = 1 / 3, },
-        { MBTNC_AddButton = "Right",  MBTNCD_ButtonWidth = 1 / 3, },
-        INP_Integer = true,
-    })
-
-    InAlign = self:AddInput("Alignment", "Alignment", {
-        LINKID_DataType    = "Number",
-        INPID_InputControl = "MultiButtonControl",
-        INP_Default        = 1,
-        { MBTNC_AddButton = "Top",    MBTNCD_ButtonWidth = 1 / 3, },
-        { MBTNC_AddButton = "Center", MBTNCD_ButtonWidth = 1 / 3, },
-        { MBTNC_AddButton = "Bottom", MBTNCD_ButtonWidth = 1 / 3, },
-        INP_Integer = true,
-    })
-
-    self:EndControlNest()
-
 
     self:BeginControlNest("Main Color", "MainColorLabel", true);
 
@@ -302,6 +269,100 @@ function Create()
     self:EndControlNest()
 
 
+    self:EndControlNest()
+
+    ------------- Position -------------
+    self:AddControlPage("Position")
+    self:BeginControlNest("Position", "PositionLabel", true);
+
+    InOffset = self:AddInput("Offset", "Offset", {
+        LINKID_DataType      = "Point",
+        INPID_InputControl   = "OffsetControl",
+        INPID_PreviewControl = "CrosshairControl",
+    })
+
+    InJustify = self:AddInput("Justification", "Justification", {
+        LINKID_DataType    = "Number",
+        INPID_InputControl = "MultiButtonControl",
+        INP_Default        = 1,
+        { MBTNC_AddButton = "Left",   MBTNCD_ButtonWidth = 1 / 3, },
+        { MBTNC_AddButton = "Center", MBTNCD_ButtonWidth = 1 / 3, },
+        { MBTNC_AddButton = "Right",  MBTNCD_ButtonWidth = 1 / 3, },
+        INP_Integer = true,
+    })
+
+    InAlign = self:AddInput("Alignment", "Alignment", {
+        LINKID_DataType    = "Number",
+        INPID_InputControl = "MultiButtonControl",
+        INP_Default        = 1,
+        { MBTNC_AddButton = "Top",    MBTNCD_ButtonWidth = 1 / 3, },
+        { MBTNC_AddButton = "Center", MBTNCD_ButtonWidth = 1 / 3, },
+        { MBTNC_AddButton = "Bottom", MBTNCD_ButtonWidth = 1 / 3, },
+        INP_Integer = true,
+    })
+    self:EndControlNest()
+
+    self:BeginControlNest("Fitting", "FittingLabel", true);
+    groupId = groupId + 1;
+    InFittingPaddingWidth = self:AddInput("Width", "FittingPaddingWidth", {
+        LINKID_DataType = "Number",
+        INPID_InputControl = "SliderControl",
+        INPID_PreviewControl = "RectangleControl",
+        PC_ControlGroup = groupId,
+        PC_ControlID = 0,
+        INP_MaxScale = 1,
+        INP_Default = 0.92,
+    })
+    InFittingPaddingHeight = self:AddInput("Height", "FittingPaddingHeight", {
+        LINKID_DataType = "Number",
+        INPID_InputControl = "SliderControl",
+        INPID_PreviewControl = "RectangleControl",
+        PC_ControlGroup = groupId,
+        PC_ControlID = 1,
+        INP_MaxScale = 1,
+        INP_Default = 0.85,
+    })
+    InFittingTop = self:AddInput("Top", "FittingTop", {
+        LINKID_DataType    = "Number",
+        INPID_InputControl = "MultiButtonControl",
+        MBTNC_Type         = "Normal",
+        MBTNC_ShowName     = false,
+        INP_Default        = 0,
+        { MBTNC_AddButton = "↖", MBTNCD_ButtonWidth = 1 / 3, },
+        { MBTNC_AddButton = "↑", MBTNCD_ButtonWidth = 1 / 3, },
+        { MBTNC_AddButton = "↗", MBTNCD_ButtonWidth = 1 / 3, },
+        INP_Integer = true,
+        INP_DoNotifyChanged = true,
+    })
+    InFittingMiddle = self:AddInput("Middle", "FittingMiddle", {
+        LINKID_DataType    = "Number",
+        INPID_InputControl = "MultiButtonControl",
+        MBTNC_Type         = "Normal",
+        MBTNC_ShowName     = false,
+        INP_Default        = 0,
+        { MBTNC_AddButton = "←", MBTNCD_ButtonWidth = 1 / 3, },
+        { MBTNC_AddButton = "+", MBTNCD_ButtonWidth = 1 / 3, },
+        { MBTNC_AddButton = "→", MBTNCD_ButtonWidth = 1 / 3, },
+        INP_Integer = true,
+        INP_DoNotifyChanged = true,
+    })
+    InFittingBottom = self:AddInput("Bottom", "FittingBottom", {
+        LINKID_DataType    = "Number",
+        INPID_InputControl = "MultiButtonControl",
+        MBTNC_Type         = "Normal",
+        MBTNC_ShowName     = false,
+        INP_Default        = 0,
+        { MBTNC_AddButton = "↙", MBTNCD_ButtonWidth = 1 / 3, },
+        { MBTNC_AddButton = "↓", MBTNCD_ButtonWidth = 1 / 3, },
+        { MBTNC_AddButton = "↘", MBTNCD_ButtonWidth = 1 / 3, },
+        INP_Integer = true,
+        INP_DoNotifyChanged = true,
+    })
+    self:EndControlNest()
+
+    ------------- Emoji -------------
+    self:AddControlPage("Emoji")
+
     self:BeginControlNest("Emoji", "EmojiLabel", true);
 
     InEmojiFontEnabled = self:AddInput("Use alternative fonts for emojis", "EnableEmojiFontEnabled", {
@@ -378,6 +439,9 @@ function Create()
 
     self:EndControlNest()
 
+
+    ------------- Debug -------------
+    self:AddControlPage("Debug")
 
     self:BeginControlNest("Debug", "DebugLabel", true);
 
@@ -1155,6 +1219,60 @@ function NotifyChanged(inp, param, time)
             InG3:SetAttrs({ IC_Visible = false })
             InB3:SetAttrs({ IC_Visible = false })
             InA3:SetAttrs({ IC_Visible = false })
+        end
+    elseif inp == InFittingTop then
+        if 0 < param.Value then
+            local x = (1 - InFittingPaddingWidth:GetSource(time).Value) / 2
+            local y = (1 - InFittingPaddingHeight:GetSource(time).Value) / 2
+            if param.Value == 1 then                 -- Top Left
+                InAlign:SetSource(Number(0), time)   -- Top
+                InJustify:SetSource(Number(0), time) -- Left
+                InOffset:SetSource(Point(0 + x, 1 - y), time)
+            elseif param.Value == 2 then             -- Top Center
+                InAlign:SetSource(Number(0), time)   -- Top
+                InJustify:SetSource(Number(1), time) -- Center
+                InOffset:SetSource(Point(0.5, 1 - y), time)
+            elseif param.Value == 3 then             -- Top Right
+                InAlign:SetSource(Number(0), time)   -- Top
+                InJustify:SetSource(Number(2), time) -- Right
+                InOffset:SetSource(Point(1 - x, 1 - y), time)
+            end
+        end
+    elseif inp == InFittingMiddle then
+        if 0 <= param.Value then
+            local x = (1 - InFittingPaddingWidth:GetSource(time).Value) / 2
+            local y = (1 - InFittingPaddingHeight:GetSource(time).Value) / 2
+            if param.Value == 1 then                 -- Middle Left
+                InAlign:SetSource(Number(1), time)   -- Middle
+                InJustify:SetSource(Number(0), time) -- Left
+                InOffset:SetSource(Point(0 + x, 0.5), time)
+            elseif param.Value == 2 then             -- Middle Center
+                InAlign:SetSource(Number(1), time)   -- Middle
+                InJustify:SetSource(Number(1), time) -- Center
+                InOffset:SetSource(Point(0.5, 0.5), time)
+            elseif param.Value == 3 then             -- Middle Right
+                InAlign:SetSource(Number(1), time)   -- Middle
+                InJustify:SetSource(Number(2), time) -- Right
+                InOffset:SetSource(Point(1 - x, 0.5), time)
+            end
+        end
+    elseif inp == InFittingBottom then
+        if 0 <= param.Value then
+            local x = (1 - InFittingPaddingWidth:GetSource(time).Value) / 2
+            local y = (1 - InFittingPaddingHeight:GetSource(time).Value) / 2
+            if param.Value == 1 then                 -- Bottom Left
+                InAlign:SetSource(Number(2), time)   -- Bottom
+                InJustify:SetSource(Number(0), time) -- Left
+                InOffset:SetSource(Point(0 + x, 0 + y), time)
+            elseif param.Value == 2 then             -- Bottom Center
+                InAlign:SetSource(Number(2), time)   -- Bottom
+                InJustify:SetSource(Number(1), time) -- Center
+                InOffset:SetSource(Point(0.5, 0 + y), time)
+            elseif param.Value == 3 then             -- Bottom Right
+                InAlign:SetSource(Number(2), time)   -- Bottom
+                InJustify:SetSource(Number(2), time) -- Right
+                InOffset:SetSource(Point(1 - x, 0 + y), time)
+            end
         end
     elseif inp == InEmojiFontEnabled then
         if param.Value == 1 then
