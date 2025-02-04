@@ -22,6 +22,283 @@ FuRegisterClass("AutoOutlineColorText", CT_Tool, {
     REG_Version           = 1,
 })
 
+local TypeInHighlight = {
+    New = function(range, mainColor, outline)
+        return {
+            Range = {
+                Low = range.Low,
+                High = range.High,
+            },
+            ColorTarget = mainColor.ColorTarget,
+            MainColor = {
+                R = mainColor.R,
+                G = mainColor.G,
+                B = mainColor.B,
+                A = mainColor.A,
+            },
+            Outline = {
+                UseMainOutline = outline.UseMainOutline,
+                Type = outline.Type,
+                Num = outline.Num,
+                Thickness = outline.Thickness,
+                Color1 = {
+                    R = outline.Color1.R,
+                    G = outline.Color1.G,
+                    B = outline.Color1.B,
+                    A = outline.Color1.A,
+                },
+                Color2 = {
+                    R = outline.Color2.R,
+                    G = outline.Color2.G,
+                    B = outline.Color2.B,
+                    A = outline.Color2.A,
+                },
+            }
+        }
+    end
+}
+
+local function createHighlightControl(num)
+    local highlightControlID = 500
+    InHighlight = {}
+
+    self:AddControlPage("Highlight")
+    for i = 1, num do
+        local id = "Highlight" .. i
+        local name = "Highlight " .. i
+        self:BeginControlNest(name, id, true);
+
+        highlightControlID = highlightControlID + 1
+        local rangeLow = self:AddInput("Low", "RangeLow" .. id, {
+            LINKID_DataType = "Number",
+            INPID_InputControl = "RangeControl",
+            INP_Default = 0.0,
+            INP_MinAllowed = 0,
+            INP_MaxAllowed = 0,
+            IC_ControlGroup = highlightControlID,
+            IC_ControlID = 0,
+            INP_Integer = true,
+        })
+        local rangeHigh = self:AddInput("High", "RangeHigh" .. id, {
+            LINKID_DataType = "Number",
+            INPID_InputControl = "RangeControl",
+            INP_Default = 0.0,
+            INP_MinAllowed = 0,
+            INP_MaxAllowed = 0,
+            IC_ControlGroup = highlightControlID,
+            IC_ControlID = 1,
+            INP_Integer = true,
+        })
+
+        local colorTarget = self:AddInput("Target", "ColorTarget" .. id, {
+            LINKID_DataType    = "Number",
+            INPID_InputControl = "MultiButtonControl",
+            INP_Default        = 0,
+            { MBTNC_AddButton = "Inner", MBTNCD_ButtonWidth = 1 / 2, },
+            { MBTNC_AddButton = "Outer", MBTNCD_ButtonWidth = 1 / 2, },
+            INP_Integer = true,
+            INP_DoNotifyChanged = true,
+        })
+
+        highlightControlID = highlightControlID + 1
+        local mainColorR = self:AddInput("Red", "MainColorRed" .. id, {
+            LINKID_DataType    = "Number",
+            INPID_InputControl = "ColorControl",
+            INP_MinScale       = 0.0,
+            INP_MaxScale       = 1.0,
+            INP_Default        = 1.0,
+            ICS_Name           = "Color",
+            CLRC_ShowWheel     = false,
+            IC_ControlGroup    = highlightControlID,
+            IC_ControlID       = 0, -- Red ID
+        })
+        local mainColorG = self:AddInput("Green", "MainColorGreen" .. id, {
+            LINKID_DataType    = "Number",
+            INPID_InputControl = "ColorControl",
+            INP_MinScale       = 0.0,
+            INP_MaxScale       = 1.0,
+            INP_Default        = 1.0,
+            IC_ControlGroup    = highlightControlID,
+            IC_ControlID       = 1, -- Green ID
+        })
+        local mainColorB = self:AddInput("Blue", "MainColorBlue" .. id, {
+            LINKID_DataType    = "Number",
+            INPID_InputControl = "ColorControl",
+            INP_MinScale       = 0.0,
+            INP_MaxScale       = 1.0,
+            INP_Default        = 1.0,
+            IC_ControlGroup    = highlightControlID,
+            IC_ControlID       = 2, -- Blue ID
+        })
+        local mainColorA = self:AddInput("Alpha", "MainColorAlpha" .. id, {
+            LINKID_DataType    = "Number",
+            INPID_InputControl = "ColorControl",
+            INP_MinScale       = 0.0,
+            INP_MaxScale       = 1.0,
+            INP_Default        = 1.0,
+            IC_ControlGroup    = highlightControlID,
+            IC_ControlID       = 3, -- Alpha ID
+        })
+
+        local useMainOutline = self:AddInput("Use main outline settings", "UseMainOutline" .. id, {
+            LINKID_DataType     = "Number",
+            INPID_InputControl  = "CheckboxControl",
+            INP_Integer         = true,
+            INP_Default         = 1,
+            ICD_Width           = 1,
+            INP_MinAllowed      = 0,
+            INP_MaxAllowed      = 1,
+            INP_DoNotifyChanged = true,
+        })
+
+        local outlineType = self:AddInput("Type", "OutlineColorType" .. id, {
+            LINKID_DataType    = "Number",
+            INPID_InputControl = "MultiButtonControl",
+            INP_Default        = 0,
+            { MBTNC_AddButton = "Mono",    MBTNCD_ButtonWidth = 1 / 3, },
+            { MBTNC_AddButton = "Comp",    MBTNCD_ButtonWidth = 1 / 3, },
+            { MBTNC_AddButton = "Custom ", MBTNCD_ButtonWidth = 1 / 3, },
+            INP_Integer = true,
+            INP_DoNotifyChanged = true,
+        })
+
+        local outlineNum = self:AddInput("Num", "OutlineNum" .. id, {
+            LINKID_DataType    = "Number",
+            INPID_InputControl = "SliderControl",
+            INP_MinScale       = 0,
+            INP_MaxScale       = 2,
+            INP_Default        = 1,
+            INP_MinAllowed     = 0,
+            INP_MaxAllowed     = 2,
+            INP_Integer        = true,
+        })
+
+        local outlineThickness = self:AddInput("Thickness", "OutlineThickness" .. id, {
+            LINKID_DataType    = "Number",
+            INPID_InputControl = "SliderControl",
+            INP_MinScale       = 0.0,
+            INP_MaxScale       = 0.1,
+            INP_Default        = 0.08,
+        })
+
+        self:BeginControlNest("Color 1", "OutlineColor1Label" .. id, true)
+        highlightControlID = highlightControlID + 1
+        local outlineColor1R = self:AddInput("Red", "OutlineColor1Red" .. id, {
+            LINKID_DataType    = "Number",
+            INPID_InputControl = "ColorControl",
+            INP_MinScale       = 0.0,
+            INP_MaxScale       = 1.0,
+            INP_Default        = 1.0,
+            ICS_Name           = "Color",
+            CLRC_ShowWheel     = false,
+            IC_ControlGroup    = highlightControlID,
+            IC_ControlID       = 0, -- Red ID
+        })
+        local outlineColor1G = self:AddInput("Green", "OutlineColor1Green" .. id, {
+            LINKID_DataType    = "Number",
+            INPID_InputControl = "ColorControl",
+            INP_MinScale       = 0.0,
+            INP_MaxScale       = 1.0,
+            INP_Default        = 1.0,
+            IC_ControlGroup    = highlightControlID,
+            IC_ControlID       = 1, -- Green ID
+        })
+        local outlineColor1B = self:AddInput("Blue", "OutlineColor1Blue" .. id, {
+            LINKID_DataType    = "Number",
+            INPID_InputControl = "ColorControl",
+            INP_MinScale       = 0.0,
+            INP_MaxScale       = 1.0,
+            INP_Default        = 1.0,
+            IC_ControlGroup    = highlightControlID,
+            IC_ControlID       = 2, -- Blue ID
+        })
+        local outlineColor1A = self:AddInput("Alpha", "OutlineColor1Alpha" .. id, {
+            LINKID_DataType    = "Number",
+            INPID_InputControl = "ColorControl",
+            INP_MinScale       = 0.0,
+            INP_MaxScale       = 1.0,
+            INP_Default        = 1.0,
+            IC_ControlGroup    = highlightControlID,
+            IC_ControlID       = 3, -- Alpha ID
+        })
+        self:EndControlNest()
+
+        self:BeginControlNest("Color 2", "OutlineColor1Labe2" .. id, true)
+        highlightControlID = highlightControlID + 1
+        local outlineColor2R = self:AddInput("Red", "OutlineColor2Red" .. id, {
+            LINKID_DataType    = "Number",
+            INPID_InputControl = "ColorControl",
+            INP_MinScale       = 0.0,
+            INP_MaxScale       = 1.0,
+            INP_Default        = 0.0,
+            ICS_Name           = "Color",
+            CLRC_ShowWheel     = false,
+            IC_ControlGroup    = highlightControlID,
+            IC_ControlID       = 0, -- Red ID
+        })
+        local outlineColor2G = self:AddInput("Green", "OutlineColor2Green" .. id, {
+            LINKID_DataType    = "Number",
+            INPID_InputControl = "ColorControl",
+            INP_MinScale       = 0.0,
+            INP_MaxScale       = 1.0,
+            INP_Default        = 0.0,
+            IC_ControlGroup    = highlightControlID,
+            IC_ControlID       = 1, -- Green ID
+        })
+        local outlineColor2B = self:AddInput("Blue", "OutlineColor2Blue" .. id, {
+            LINKID_DataType    = "Number",
+            INPID_InputControl = "ColorControl",
+            INP_MinScale       = 0.0,
+            INP_MaxScale       = 1.0,
+            INP_Default        = 0.0,
+            IC_ControlGroup    = highlightControlID,
+            IC_ControlID       = 2, -- Blue ID
+        })
+        local outlineColor2A = self:AddInput("Alpha", "OutlineColor2Alpha" .. id, {
+            LINKID_DataType    = "Number",
+            INPID_InputControl = "ColorControl",
+            INP_MinScale       = 0.0,
+            INP_MaxScale       = 1.0,
+            INP_Default        = 1.0,
+            IC_ControlGroup    = highlightControlID,
+            IC_ControlID       = 3, -- Alpha ID
+        })
+        self:EndControlNest()
+
+        self:EndControlNest()
+
+        local highlightControl = TypeInHighlight.New(
+            { Low = rangeLow, High = rangeHigh },
+            {
+                ColorTarget = colorTarget,
+                R = mainColorR,
+                G = mainColorG,
+                B = mainColorB,
+                A = mainColorA,
+            },
+            {
+                UseMainOutline = useMainOutline,
+                Type = outlineType,
+                Num = outlineNum,
+                Thickness = outlineThickness,
+                Color1 = {
+                    R = outlineColor1R,
+                    G = outlineColor1G,
+                    B = outlineColor1B,
+                    A = outlineColor1A,
+                },
+                Color2 = {
+                    R = outlineColor2R,
+                    G = outlineColor2G,
+                    B = outlineColor2B,
+                    A = outlineColor2A,
+                },
+            }
+        )
+        table.insert(InHighlight, highlightControl)
+    end
+end
+
 function Create()
     self:AddControlPage("Controls")
     local groupId = 0;
@@ -32,7 +309,7 @@ function Create()
         LINKID_DataType     = "Text",
         INPID_InputControl  = "TextEditControl",
         TEC_Lines           = 5,
-        INP_DoNotifyChanged = false,
+        INP_DoNotifyChanged = true,
     })
 
     -- Font group
@@ -332,6 +609,7 @@ function Create()
         { MBTNC_AddButton = "↑", MBTNCD_ButtonWidth = 1 / 3, },
         { MBTNC_AddButton = "↗", MBTNCD_ButtonWidth = 1 / 3, },
         INP_Integer = true,
+        INP_External = false,
         INP_DoNotifyChanged = true,
     })
     InFittingMiddle = self:AddInput("Middle", "FittingMiddle", {
@@ -344,6 +622,7 @@ function Create()
         { MBTNC_AddButton = "+", MBTNCD_ButtonWidth = 1 / 3, },
         { MBTNC_AddButton = "→", MBTNCD_ButtonWidth = 1 / 3, },
         INP_Integer = true,
+        INP_External = false,
         INP_DoNotifyChanged = true,
     })
     InFittingBottom = self:AddInput("Bottom", "FittingBottom", {
@@ -356,9 +635,14 @@ function Create()
         { MBTNC_AddButton = "↓", MBTNCD_ButtonWidth = 1 / 3, },
         { MBTNC_AddButton = "↘", MBTNCD_ButtonWidth = 1 / 3, },
         INP_Integer = true,
+        INP_External = false,
         INP_DoNotifyChanged = true,
     })
     self:EndControlNest()
+
+    ------------- Highlight -------------
+    InHighlightNum = 3
+    createHighlightControl(InHighlightNum)
 
     ------------- Emoji -------------
     self:AddControlPage("Emoji")
@@ -605,6 +889,20 @@ local TextFont = {
         return {
             Name = name,
             Style = style,
+        }
+    end
+}
+
+local Highlight = {
+    New = function(range, textColor, outlineNum, outlineThickness)
+        return {
+            Range = {
+                Low = range.Low,
+                High = range.High,
+            },
+            TextColor = textColor,
+            OutlineNum = outlineNum,
+            OutlineThickness = outlineThickness,
         }
     end
 }
@@ -884,6 +1182,7 @@ local function drawstring(img,
                           thickness,
                           outlineNum,
                           emojiOutlineNum,
+                          hightLight,
                           debug)
     -- get the fonts metrics (see http://freetype.sourceforge.net/freetype2/docs/glyphs/index.html for a great guide)
     local tfm = TextStyleFontMetrics(TextStyleFont(font.Name, font.Style))
@@ -923,7 +1222,16 @@ local function drawstring(img,
     local shapeNormal = Shape()
     local shapeOutline1 = Shape()
     local shapeOutline2 = Shape()
+    local shapeHighlight = {}
+    for i = 1, #hightLight do
+        table.insert(shapeHighlight, {
+            Base = Shape(),
+            Outline1 = Shape(),
+            Outline2 = Shape()
+        })
+    end
     local prevLineDrawWidth = 0
+    local characterIndex = 1
     for line = 1, unicodeText:GetLineNum() do
         local unicodeArray = unicodeText:GetLine(line)
         local lineWidth = getLineDrawWidth(
@@ -985,18 +1293,40 @@ local function drawstring(img,
             local characterShape = currentTmf:GetCharacterShape(characterCode, false)
             if characterShape then
                 local base = characterShape:TransformOfShape(currentMat)
-                shapeNormal:AddShape(base)
-                if 1 <= currentOutlineNum then
-                    local outline1 = base:OutlineOfShape(
-                        thickness * size, "OLT_Solid", "OJT_Round", 8, "SWM_Normal", 8
-                    )
-                    shapeOutline1:AddShape(outline1)
+                local isHighlight = false
+                for j = 1, #hightLight do
+                    local highlight = hightLight[j]
+                    if highlight.Range.Low <= characterIndex and characterIndex <= highlight.Range.High then
+                        shapeHighlight[j].Base:AddShape(base)
+                        if 1 <= highlight.OutlineNum then
+                            local outline1 = base:OutlineOfShape(
+                                highlight.OutlineThickness * size, "OLT_Solid", "OJT_Round", 8, "SWM_Normal", 8
+                            )
+                            shapeHighlight[j].Outline1:AddShape(outline1)
+                        end
+                        if 2 <= highlight.OutlineNum then
+                            local outline2 = base:OutlineOfShape(
+                                highlight.OutlineThickness * 2 * size, "OLT_Solid", "OJT_Round", 8, "SWM_Normal", 8
+                            )
+                            shapeHighlight[j].Outline2:AddShape(outline2)
+                        end
+                        isHighlight = true
+                    end
                 end
-                if 2 <= currentOutlineNum then
-                    local outline2 = base:OutlineOfShape(
-                        thickness * 2 * size, "OLT_Solid", "OJT_Round", 8, "SWM_Normal", 8
-                    )
-                    shapeOutline2:AddShape(outline2)
+                if isHighlight == false then
+                    shapeNormal:AddShape(base)
+                    if 1 <= currentOutlineNum then
+                        local outline1 = base:OutlineOfShape(
+                            thickness * size, "OLT_Solid", "OJT_Round", 8, "SWM_Normal", 8
+                        )
+                        shapeOutline1:AddShape(outline1)
+                    end
+                    if 2 <= currentOutlineNum then
+                        local outline2 = base:OutlineOfShape(
+                            thickness * 2 * size, "OLT_Solid", "OJT_Round", 8, "SWM_Normal", 8
+                        )
+                        shapeOutline2:AddShape(outline2)
+                    end
                 end
                 debugRectangle(img, currentMat, -width / 2, -lineHeight / 2, width, lineHeight,
                     Pixel { R = 1, G = 1, B = 0, A = 1 }, debug)
@@ -1020,6 +1350,8 @@ local function drawstring(img,
                 mat:Move(tracking, 0, 0)
                 emojiMat:Move(tracking, 0, 0)
             end
+
+            characterIndex = characterIndex + 1
 
             ::continue::
         end
@@ -1051,6 +1383,22 @@ local function drawstring(img,
     cs.Color = color:GetInnerColor()
     ic:ShapeFill(shapeNormal)
     ic:PutToImage("CM_Merge", cs)
+    -- highlight
+    for i = 1, #hightLight do
+        if hightLight[i].OutlineNum >= 2 then
+            cs.Color = hightLight[i].TextColor:GetOutlineColor2()
+            ic:ShapeFill(shapeHighlight[i].Outline2)
+            ic:PutToImage("CM_Merge", cs)
+        end
+        if hightLight[i].OutlineNum >= 1 then
+            cs.Color = hightLight[i].TextColor:GetOutlineColor1()
+            ic:ShapeFill(shapeHighlight[i].Outline1)
+            ic:PutToImage("CM_Merge", cs)
+        end
+        cs.Color = hightLight[i].TextColor:GetInnerColor()
+        ic:ShapeFill(shapeHighlight[i].Base)
+        ic:PutToImage("CM_Merge", cs)
+    end
 end
 
 function OnAddToFlow()
@@ -1130,6 +1478,57 @@ function Process(req)
         position = TextPosition.New(x, y, justify, align, tracking, lineSpacing, tracking)
     end
 
+    -- Highlight
+    local hightLight = {}
+    for i = 1, #InHighlight do
+        local hightLightOutlineNum = InHighlight[i].Outline.Num:GetValue(req).Value
+        local hightLightOutlineThickness = InHighlight[i].Outline.Thickness:GetValue(req).Value
+        local hightLightTextColor = TextColor.New(
+            Pixel {
+                R = InHighlight[i].MainColor.R:GetValue(req).Value,
+                G = InHighlight[i].MainColor.G:GetValue(req).Value,
+                B = InHighlight[i].MainColor.B:GetValue(req).Value,
+                A = InHighlight[i].MainColor.A:GetValue(req).Value
+            },
+            Pixel {
+                R = InHighlight[i].Outline.Color1.R:GetValue(req).Value,
+                G = InHighlight[i].Outline.Color1.G:GetValue(req).Value,
+                B = InHighlight[i].Outline.Color1.B:GetValue(req).Value,
+                A = InHighlight[i].Outline.Color1.A:GetValue(req).Value
+            },
+            Pixel {
+                R = InHighlight[i].Outline.Color2.R:GetValue(req).Value,
+                G = InHighlight[i].Outline.Color2.G:GetValue(req).Value,
+                B = InHighlight[i].Outline.Color2.B:GetValue(req).Value,
+                A = InHighlight[i].Outline.Color2.A:GetValue(req).Value
+            },
+            InHighlight[i].ColorTarget:GetValue(req).Value,
+            InHighlight[i].Outline.Type:GetValue(req).Value
+        )
+        if InHighlight[i].Outline.UseMainOutline:GetValue(req).Value == 1 then
+            hightLightOutlineNum = outlineNum
+            hightLightOutlineThickness = thickness
+            hightLightTextColor = TextColor.New(
+                hightLightTextColor.BaseColor,
+                textColor.CustomColor1,
+                textColor.CustomColor2,
+                textColor.Target,
+                textColor.Type)
+        end
+        table.insert(
+            hightLight,
+            Highlight.New(
+                {
+                    Low = InHighlight[i].Range.Low:GetValue(req).Value,
+                    High = InHighlight[i].Range.High:GetValue(req).Value
+                },
+                hightLightTextColor,
+                hightLightOutlineNum,
+                hightLightOutlineThickness
+            )
+        )
+    end
+
     -- Debug
     local debug = InDebug:GetValue(req).Value
 
@@ -1164,6 +1563,7 @@ function Process(req)
         thickness,
         outlineNum,
         emojiOutlineNum,
+        hightLight,
         debug
     )
 
@@ -1190,8 +1590,23 @@ function NotifyChanged(inp, param, time)
         end
     elseif inp == InText then
         local f = param.Value
-        if f == nil or string.len(f) == 0 then
-            InText:SetSource(Text("Sample"), time)
+        if f and 0 < string.len(f) then
+            local sourceText = UnicodeText.New()
+            sourceText:SetText(f)
+            local length = 0
+            for i = 1, #sourceText.Unicode do
+                length = length + #sourceText.Unicode[i]
+            end
+            for i = 1, #InHighlight do
+                InHighlight[i].Range.Low:SetAttrs({
+                    INP_MaxAllowed = length,
+                    INP_MaxScale = length
+                })
+                InHighlight[i].Range.High:SetAttrs({
+                    INP_MaxAllowed = length,
+                    INP_MaxScale = length
+                })
+            end
         end
     elseif inp == InColorTarget then
         if param.Value ~= 0 and InOutlineColorType:GetSource(time).Value == 2 then -- Custom
@@ -1291,6 +1706,58 @@ function NotifyChanged(inp, param, time)
             InEmojiOutlineNum:SetAttrs({ IC_Visible = true })
         else
             InEmojiOutlineNum:SetAttrs({ IC_Visible = false })
+        end
+    else
+        for i = 1, #InHighlight do
+            if inp == InHighlight[i].Outline.UseMainOutline then
+                if param.Value == 0 then
+                    InHighlight[i].Outline.Type:SetAttrs({ IC_Visible = true })
+                    InHighlight[i].Outline.Num:SetAttrs({ IC_Visible = true })
+                    InHighlight[i].Outline.Thickness:SetAttrs({ IC_Visible = true })
+                    if InHighlight[i].Outline.Type:GetSource(time).Value == 2 then -- Custom
+                        InHighlight[i].Outline.Color1.R:SetAttrs({ IC_Visible = true })
+                        InHighlight[i].Outline.Color1.G:SetAttrs({ IC_Visible = true })
+                        InHighlight[i].Outline.Color1.B:SetAttrs({ IC_Visible = true })
+                        InHighlight[i].Outline.Color1.A:SetAttrs({ IC_Visible = true })
+                        InHighlight[i].Outline.Color2.R:SetAttrs({ IC_Visible = true })
+                        InHighlight[i].Outline.Color2.G:SetAttrs({ IC_Visible = true })
+                        InHighlight[i].Outline.Color2.B:SetAttrs({ IC_Visible = true })
+                        InHighlight[i].Outline.Color2.A:SetAttrs({ IC_Visible = true })
+                    end
+                else
+                    InHighlight[i].Outline.Type:SetAttrs({ IC_Visible = false })
+                    InHighlight[i].Outline.Num:SetAttrs({ IC_Visible = false })
+                    InHighlight[i].Outline.Thickness:SetAttrs({ IC_Visible = false })
+                    InHighlight[i].Outline.Color1.R:SetAttrs({ IC_Visible = false })
+                    InHighlight[i].Outline.Color1.G:SetAttrs({ IC_Visible = false })
+                    InHighlight[i].Outline.Color1.B:SetAttrs({ IC_Visible = false })
+                    InHighlight[i].Outline.Color1.A:SetAttrs({ IC_Visible = false })
+                    InHighlight[i].Outline.Color2.R:SetAttrs({ IC_Visible = false })
+                    InHighlight[i].Outline.Color2.G:SetAttrs({ IC_Visible = false })
+                    InHighlight[i].Outline.Color2.B:SetAttrs({ IC_Visible = false })
+                    InHighlight[i].Outline.Color2.A:SetAttrs({ IC_Visible = false })
+                end
+            elseif inp == InHighlight[i].Outline.Type then
+                if param.Value == 2 then -- Custom
+                    InHighlight[i].Outline.Color1.R:SetAttrs({ IC_Visible = true })
+                    InHighlight[i].Outline.Color1.G:SetAttrs({ IC_Visible = true })
+                    InHighlight[i].Outline.Color1.B:SetAttrs({ IC_Visible = true })
+                    InHighlight[i].Outline.Color1.A:SetAttrs({ IC_Visible = true })
+                    InHighlight[i].Outline.Color2.R:SetAttrs({ IC_Visible = true })
+                    InHighlight[i].Outline.Color2.G:SetAttrs({ IC_Visible = true })
+                    InHighlight[i].Outline.Color2.B:SetAttrs({ IC_Visible = true })
+                    InHighlight[i].Outline.Color2.A:SetAttrs({ IC_Visible = true })
+                else
+                    InHighlight[i].Outline.Color1.R:SetAttrs({ IC_Visible = false })
+                    InHighlight[i].Outline.Color1.G:SetAttrs({ IC_Visible = false })
+                    InHighlight[i].Outline.Color1.B:SetAttrs({ IC_Visible = false })
+                    InHighlight[i].Outline.Color1.A:SetAttrs({ IC_Visible = false })
+                    InHighlight[i].Outline.Color2.R:SetAttrs({ IC_Visible = false })
+                    InHighlight[i].Outline.Color2.G:SetAttrs({ IC_Visible = false })
+                    InHighlight[i].Outline.Color2.B:SetAttrs({ IC_Visible = false })
+                    InHighlight[i].Outline.Color2.A:SetAttrs({ IC_Visible = false })
+                end
+            end
         end
     end
 end
