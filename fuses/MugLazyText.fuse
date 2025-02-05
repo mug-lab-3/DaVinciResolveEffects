@@ -171,7 +171,7 @@ local function createHighlightControl(num)
             INPID_InputControl = "ColorControl",
             INP_MinScale       = 0.0,
             INP_MaxScale       = 1.0,
-            INP_Default        = 1.0,
+            INP_Default        = 0.0,
             IC_ControlGroup    = highlightControlID,
             IC_ControlID       = 1, -- Green ID
         })
