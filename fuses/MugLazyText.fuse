@@ -1558,42 +1558,55 @@ local function drawstring(img,
         prevLineDrawWidth = lineWidth
     end
 
-    local ic = ImageChannel(img, quality)
+
     local fs = FillStyle()
     local cs = ChannelStyle()
-    ic:SetStyleFill(fs)
     if (outlineNum >= 2) or (emojiOutlineNum >= 2) then
         cs.Color = color:GetOutlineColor2()
         -- print("[outline2] R: " .. cs.Color.R .. " G: " .. cs.Color.G .. " B: " .. cs.Color.B .. " A: " .. cs.Color.A)
+        local ic = ImageChannel(img, quality)
+        ic:SetStyleFill(fs)
         ic:ShapeFill(shapeOutline2)
         ic:PutToImage("CM_Merge", cs)
     end
     if (outlineNum >= 1) or (emojiOutlineNum >= 1) then
         cs.Color = color:GetOutlineColor1()
         -- print("[outline1] R: " .. cs.Color.R .. " G: " .. cs.Color.G .. " B: " .. cs.Color.B .. " A: " .. cs.Color.A)
+        local ic = ImageChannel(img, quality)
+        ic:SetStyleFill(fs)
         ic:ShapeFill(shapeOutline1)
         ic:PutToImage("CM_Merge", cs)
     end
-    -- print("R: "..sInnerColor.R.." G: "..sInnerColor.G.." B: "..sInnerColor.B.." A: "..sInnerColor.A)
-    cs.Color = color:GetInnerColor()
-    ic:ShapeFill(shapeNormal)
-    ic:PutToImage("CM_Merge", cs)
+
     -- highlight
     for i = 1, #highlight do
         if highlight[i].OutlineNum >= 2 then
             cs.Color = highlight[i].TextColor:GetOutlineColor2()
+            local ic = ImageChannel(img, quality)
+            ic:SetStyleFill(fs)
             ic:ShapeFill(shapeHighlight[i].Outline2)
             ic:PutToImage("CM_Merge", cs)
         end
         if highlight[i].OutlineNum >= 1 then
             cs.Color = highlight[i].TextColor:GetOutlineColor1()
+            local ic = ImageChannel(img, quality)
+            ic:SetStyleFill(fs)
             ic:ShapeFill(shapeHighlight[i].Outline1)
             ic:PutToImage("CM_Merge", cs)
         end
+        local ic = ImageChannel(img, quality)
         cs.Color = highlight[i].TextColor:GetInnerColor()
+        ic:SetStyleFill(fs)
         ic:ShapeFill(shapeHighlight[i].Base)
         ic:PutToImage("CM_Merge", cs)
     end
+
+    -- print("R: "..sInnerColor.R.." G: "..sInnerColor.G.." B: "..sInnerColor.B.." A: "..sInnerColor.A)
+    cs.Color = color:GetInnerColor()
+    local ic = ImageChannel(img, quality)
+    ic:SetStyleFill(fs)
+    ic:ShapeFill(shapeNormal)
+    ic:PutToImage("CM_Merge", cs)
 end
 
 function OnAddToFlow()
@@ -1809,11 +1822,11 @@ function NotifyChanged(inp, param, time)
             end
             for i = 1, #InHighlight do
                 InHighlight[i].Range.Low:SetAttrs({
-                    INP_MaxAllowed = length,
+                    --     INP_MaxAllowed = length,
                     INP_MaxScale = length
                 })
                 InHighlight[i].Range.High:SetAttrs({
-                    INP_MaxAllowed = length,
+                    --     INP_MaxAllowed = length,
                     INP_MaxScale = length
                 })
             end
