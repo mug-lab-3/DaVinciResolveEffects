@@ -1207,22 +1207,15 @@ local function getLineDrawWidth(characterIndex, unicodeArray, tfm, emojiTfm, ori
         -- Tracking
         if i < #unicodeArray then
             local offset = 0
-            if isEmoji(unicodeArray[i]) or isEmoji(unicodeArray[i + 1]) then
-                offset = offset + (tracking - 1) * origSize
-                offset = offset + (emojiTracking - 1) * origSize
-                if (0 <= isHighlight(characterIndex + i, highlightPosition)) then
-                    local index = isHighlight(characterIndex + i, highlightPosition)
-                    offset = offset + (highlightPosition[index].Tracking - 1) * origSize
+            for n = 0, 1 do
+                if isEmoji(unicodeArray[i + n]) then
+                    offset = offset + (((emojiTracking - 1) * origSize) / 2)
+                elseif 0 <= isHighlight(characterIndex + (i - 1) + n, highlightPosition) then
+                    local index = isHighlight(characterIndex + (i - 1) + n, highlightPosition)
+                    offset = offset + (((highlightPosition[index].Tracking - 1) * origSize) / 2)
+                else
+                    offset = offset + (((tracking - 1) * origSize) / 2)
                 end
-            elseif (0 <= isHighlight(characterIndex + (i - 1), highlightPosition)) or (0 <= isHighlight(characterIndex + i, highlightPosition)) then
-                local index = isHighlight(characterIndex + i, highlightPosition)
-                if index < 0 then
-                    index = isHighlight(characterIndex + i - 1, highlightPosition)
-                end
-                offset = offset + (tracking - 1) * origSize
-                offset = offset + (highlightPosition[index].Tracking - 1) * origSize
-            else
-                offset = offset + (tracking - 1) * origSize
             end
             lineWidth = lineWidth + offset
         end
@@ -1249,16 +1242,13 @@ local function debugRectangle(img, baseMat, offsetX, offsetY, width, height, col
             8
         )
 
-        local shapeOutline =
-            shape:OutlineOfShape(thickness, "OLT_Solid", "OJT_Round", 8, "SWM_Normal", 8)
-
         local cs = ChannelStyle()
         cs.Color = color
 
         local ic = ImageChannel(img, 1)
         local fs = FillStyle()
         ic:SetStyleFill(fs)
-        ic:ShapeFill(shapeOutline)
+        ic:ShapeFill(shape)
         ic:PutToImage("CM_Merge", cs)
     end
 end
@@ -1502,7 +1492,7 @@ local function drawstring(img,
                     end
                 end
                 debugRectangle(img, currentMat, -width / 2, -lineHeight / 2, width, lineHeight,
-                    Pixel { R = 1, G = 1, B = 0, A = 1 }, debug)
+                    Pixel { R = 1, G = 1, B = 0, A = 0.3 }, debug)
             end
 
             mat:Move(halfWidth, 0, 0)
@@ -1513,30 +1503,39 @@ local function drawstring(img,
 
             -- Tracking
             if i < #unicodeArray then
-                local baseTracking = (position.Tracking - 1) * origSize
-                local emojiTracking = 0
-                local highlightTracking = 0
-                if isEmoji(unicodeArray[i]) or isEmoji(unicodeArray[i + 1]) then
-                    emojiTracking = (position.EmojiTracking - 1) * origSize
-                    debugRectangle(img, mat, baseTracking, -lineHeight / 2, emojiTracking, lineHeight,
-                        Pixel { R = 0, G = 1, B = 1, A = 1 }, debug)
-                end
-                if (0 <= isHighlight(characterIndex, highlightPos)) or (0 <= isHighlight(characterIndex + 1, highlightPos)) then
-                    local index = isHighlight(characterIndex + 1, highlightPos)
-                    if index < 0 then
-                        index = isHighlight(characterIndex, highlightPos)
+                local trackingWidth = 0
+                local debugMat = Matrix4() * mat
+                for n = 0, 1 do
+                    if isEmoji(unicodeArray[i + n]) then
+                        local tracking = (((position.EmojiTracking - 1) * origSize) / 2)
+                        trackingWidth = trackingWidth + tracking
+
+                        debugRectangle(img, debugMat, 0, -lineHeight / 2, tracking, lineHeight,
+                            Pixel { R = 1, G = 0, B = 0, A = 0.3 }, debug)
+                        debugMat:Move(tracking, 0, 0)
+                    elseif 0 <= isHighlight(characterIndex + n, highlightPos) then
+                        local index = isHighlight(characterIndex + n, highlightPos)
+                        local tracking = (((highlightPos[index].Tracking - 1) * origSize) / 2)
+                        trackingWidth = trackingWidth + tracking
+
+                        debugRectangle(img, debugMat, 0, -lineHeight / 2, tracking, lineHeight,
+                            Pixel { R = 0, G = 1, B = 0, A = 0.3 }, debug)
+                        debugMat:Move(tracking, 0, 0)
+                    else
+                        local tracking = (((position.Tracking - 1) * origSize) / 2)
+                        trackingWidth = trackingWidth + tracking
+
+                        debugRectangle(img, debugMat, 0, -lineHeight / 2, tracking, lineHeight,
+                            Pixel { R = 0, G = 0, B = 1, A = 0.3 }, debug)
+                        debugMat:Move(tracking, 0, 0)
                     end
-                    highlightTracking = (highlightPos[index].Tracking - 1) * origSize
-                    debugRectangle(img, mat, baseTracking, -lineHeight / 2, highlightTracking, lineHeight,
-                        Pixel { R = 1, G = 0, B = 0, A = 1 }, debug)
                 end
-                local tracking = baseTracking + emojiTracking + highlightTracking
-                debugRectangle(img, mat, 0, -lineHeight / 2, baseTracking, lineHeight,
-                    Pixel { R = 1, G = 0, B = 1, A = 1 }, debug)
-                mat:Move(tracking, 0, 0)
-                emojiMat:Move(tracking, 0, 0)
+                debugRectangle(img, debugMat, 0, -lineHeight / 2, trackingWidth, lineHeight,
+                    Pixel { R = 1, G = 0, B = 1, A = 0.3 }, debug)
+                mat:Move(trackingWidth, 0, 0)
+                emojiMat:Move(trackingWidth, 0, 0)
                 for j = 1, #highlightPos do
-                    highlightPos[j].Mat:Move(tracking, 0, 0)
+                    highlightPos[j].Mat:Move(trackingWidth, 0, 0)
                 end
             end
 
@@ -1580,25 +1579,27 @@ local function drawstring(img,
 
     -- highlight
     for i = 1, #highlight do
-        if highlight[i].OutlineNum >= 2 then
-            cs.Color = highlight[i].TextColor:GetOutlineColor2()
+        if highlight[i].Range.Low ~= 0 or highlight[i].Range.High ~= 0 then
+            if highlight[i].OutlineNum >= 2 then
+                cs.Color = highlight[i].TextColor:GetOutlineColor2()
+                local ic = ImageChannel(img, quality)
+                ic:SetStyleFill(fs)
+                ic:ShapeFill(shapeHighlight[i].Outline2)
+                ic:PutToImage("CM_Merge", cs)
+            end
+            if highlight[i].OutlineNum >= 1 then
+                cs.Color = highlight[i].TextColor:GetOutlineColor1()
+                local ic = ImageChannel(img, quality)
+                ic:SetStyleFill(fs)
+                ic:ShapeFill(shapeHighlight[i].Outline1)
+                ic:PutToImage("CM_Merge", cs)
+            end
             local ic = ImageChannel(img, quality)
+            cs.Color = highlight[i].TextColor:GetInnerColor()
             ic:SetStyleFill(fs)
-            ic:ShapeFill(shapeHighlight[i].Outline2)
+            ic:ShapeFill(shapeHighlight[i].Base)
             ic:PutToImage("CM_Merge", cs)
         end
-        if highlight[i].OutlineNum >= 1 then
-            cs.Color = highlight[i].TextColor:GetOutlineColor1()
-            local ic = ImageChannel(img, quality)
-            ic:SetStyleFill(fs)
-            ic:ShapeFill(shapeHighlight[i].Outline1)
-            ic:PutToImage("CM_Merge", cs)
-        end
-        local ic = ImageChannel(img, quality)
-        cs.Color = highlight[i].TextColor:GetInnerColor()
-        ic:SetStyleFill(fs)
-        ic:ShapeFill(shapeHighlight[i].Base)
-        ic:PutToImage("CM_Merge", cs)
     end
 
     -- print("R: "..sInnerColor.R.." G: "..sInnerColor.G.." B: "..sInnerColor.B.." A: "..sInnerColor.A)
