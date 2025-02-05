@@ -1291,7 +1291,7 @@ local function drawstring(img,
                           thickness,
                           outlineNum,
                           emojiOutlineNum,
-                          hightLight,
+                          highlight,
                           debug)
     local origSize = size
 
@@ -1316,22 +1316,22 @@ local function drawstring(img,
     emojiMat:Move(0, adjustEmojiY, 0)
 
     -- Highlight
-    local hightLightPos = {}
-    for i = 1, #hightLight do
-        local highlightTfm = TextStyleFontMetrics(TextStyleFont(hightLight[i].Font.Name, hightLight[i].Font.Style))
+    local highlightPos = {}
+    for i = 1, #highlight do
+        local highlightTfm = TextStyleFontMetrics(TextStyleFont(highlight[i].Font.Name, highlight[i].Font.Style))
         local highlightHeight =
             (highlightTfm.TextAscent + highlightTfm.TextDescent + highlightTfm.TextExternalLeading) * 10 * size
         local highlighAdjustY = (tfm.TextAscent - highlightTfm.TextAscent) * 10 * size
         local highlightBoxHeight = (emojiLineHeight + ((position.LineSpacing - 1) * origSize)) * unicodeText:GetLineNum()
         local highlightMat = Matrix4()
         highlightMat:Scale(1.0 / highlightTfm.Scale, 1.0 / highlightTfm.Scale, 1.0)
-        highlightMat:Scale(hightLight[i].Font.Size, hightLight[i].Font.Size, 1)
+        highlightMat:Scale(highlight[i].Font.Size, highlight[i].Font.Size, 1)
         highlightMat:Move(position.X, position.Y - (highlightHeight / 2), 0)
 
-        table.insert(hightLightPos, DrawPositionInfo.New(
-            hightLight[i].Range,
-            hightLight[i].Font.Size,
-            hightLight[i].Font.Tracking,
+        table.insert(highlightPos, DrawPositionInfo.New(
+            highlight[i].Range,
+            highlight[i].Font.Size,
+            highlight[i].Font.Tracking,
             highlightTfm,
             highlightHeight,
             highlighAdjustY,
@@ -1343,26 +1343,26 @@ local function drawstring(img,
     if position.Align == 0 then
         mat:Move(0, 0, 0)
         emojiMat:Move(0, 0, 0)
-        for i = 1, #hightLightPos do
-            hightLightPos[i].Mat:Move(0, 0, 0)
+        for i = 1, #highlightPos do
+            highlightPos[i].Mat:Move(0, 0, 0)
         end
     elseif position.Align == 1 then
         mat:Move(0, (boxHeight / 2) - (tfm.TextDescent * 10 * size), 0)
         emojiMat:Move(0, (emojiBoxHeight / 2) - (emojiTfm.TextDescent * 10 * size), 0)
-        for i = 1, #hightLightPos do
-            hightLightPos[i].Mat:Move(
+        for i = 1, #highlightPos do
+            highlightPos[i].Mat:Move(
                 0,
-                (hightLightPos[i].BoxHeight / 2) - (hightLightPos[i].Tfm.TextDescent * 10 * size),
+                (highlightPos[i].BoxHeight / 2) - (highlightPos[i].Tfm.TextDescent * 10 * size),
                 0
             )
         end
     elseif position.Align == 2 then
         mat:Move(0, boxHeight - (lineHeight / 2), 0)
         emojiMat:Move(0, emojiBoxHeight - (emojiLineHeight / 2), 0)
-        for i = 1, #hightLightPos do
-            hightLightPos[i].Mat:Move(
+        for i = 1, #highlightPos do
+            highlightPos[i].Mat:Move(
                 0,
-                hightLightPos[i].BoxHeight - (hightLightPos[i].Height / 2),
+                highlightPos[i].BoxHeight - (highlightPos[i].Height / 2),
                 0
             )
         end
@@ -1372,7 +1372,7 @@ local function drawstring(img,
     local shapeOutline1 = Shape()
     local shapeOutline2 = Shape()
     local shapeHighlight = {}
-    for i = 1, #hightLight do
+    for i = 1, #highlight do
         table.insert(shapeHighlight, {
             Base = Shape(),
             Outline1 = Shape(),
@@ -1392,29 +1392,29 @@ local function drawstring(img,
             emojiSize,
             position.Tracking,
             position.EmojiTracking,
-            hightLightPos
+            highlightPos
         )
 
         if position.Justify == 0 then
             mat:Move(-prevLineDrawWidth, 0, 0)
             emojiMat:Move(-prevLineDrawWidth, 0, 0)
-            for i = 1, #hightLightPos do
-                hightLightPos[i].Mat:Move(-prevLineDrawWidth, 0, 0)
+            for i = 1, #highlightPos do
+                highlightPos[i].Mat:Move(-prevLineDrawWidth, 0, 0)
             end
         elseif position.Justify == 1 then
             mat:Move(-prevLineDrawWidth / 2, 0, 0)
             mat:Move(-(lineWidth / 2), 0, 0)
             emojiMat:Move(-prevLineDrawWidth / 2, 0, 0)
             emojiMat:Move(-(lineWidth / 2), 0, 0)
-            for i = 1, #hightLightPos do
-                hightLightPos[i].Mat:Move(-(prevLineDrawWidth / 2), 0, 0)
-                hightLightPos[i].Mat:Move(-(lineWidth / 2), 0, 0)
+            for i = 1, #highlightPos do
+                highlightPos[i].Mat:Move(-(prevLineDrawWidth / 2), 0, 0)
+                highlightPos[i].Mat:Move(-(lineWidth / 2), 0, 0)
             end
         elseif position.Justify == 2 then
             mat:Move(-lineWidth, 0, 0)
             emojiMat:Move(-lineWidth, 0, 0)
-            for i = 1, #hightLightPos do
-                hightLightPos[i].Mat:Move(-lineWidth, 0, 0)
+            for i = 1, #highlightPos do
+                highlightPos[i].Mat:Move(-lineWidth, 0, 0)
             end
         end
 
@@ -1429,12 +1429,12 @@ local function drawstring(img,
                 currentTmf = emojiTfm
                 currentMat = emojiMat
                 currentOutlineNum = emojiOutlineNum
-            elseif 0 <= isHighlight(characterIndex, hightLightPos) then
-                local index = isHighlight(characterIndex, hightLightPos)
-                size = hightLight[index].Font.Size
-                currentTmf = hightLightPos[index].Tfm
-                currentMat = hightLightPos[index].Mat
-                currentOutlineNum = hightLight[index].OutlineNum
+            elseif 0 <= isHighlight(characterIndex, highlightPos) then
+                local index = isHighlight(characterIndex, highlightPos)
+                size = highlight[index].Font.Size
+                currentTmf = highlightPos[index].Tfm
+                currentMat = highlightPos[index].Mat
+                currentOutlineNum = highlight[index].OutlineNum
             else
                 size = origSize
                 currentTmf = tfm
@@ -1450,16 +1450,16 @@ local function drawstring(img,
                 local xOffset = currentTmf:CharacterKerning(prevChar, characterCode) * 10 * size
                 mat:Move(xOffset, 0, 0)
                 emojiMat:Move(xOffset, 0, 0)
-                for j = 1, #hightLightPos do
-                    hightLightPos[j].Mat:Move(xOffset, 0, 0)
+                for j = 1, #highlightPos do
+                    highlightPos[j].Mat:Move(xOffset, 0, 0)
                 end
             end
 
             -- move the cursor to the center of the character
             mat:Move(halfWidth, 0, 0)
             emojiMat:Move(halfWidth, 0, 0)
-            for j = 1, #hightLightPos do
-                hightLightPos[j].Mat:Move(halfWidth, 0, 0)
+            for j = 1, #highlightPos do
+                highlightPos[j].Mat:Move(halfWidth, 0, 0)
             end
 
             -- get the shape of the character
@@ -1467,8 +1467,8 @@ local function drawstring(img,
             if characterShape then
                 local base = characterShape:TransformOfShape(currentMat)
                 local isHighlight = false
-                for j = 1, #hightLight do
-                    local highlight = hightLight[j]
+                for j = 1, #highlight do
+                    local highlight = highlight[j]
                     if highlight.Range.Low <= characterIndex and characterIndex <= highlight.Range.High then
                         shapeHighlight[j].Base:AddShape(base)
                         if 1 <= highlight.OutlineNum then
@@ -1507,8 +1507,8 @@ local function drawstring(img,
 
             mat:Move(halfWidth, 0, 0)
             emojiMat:Move(halfWidth, 0, 0)
-            for j = 1, #hightLightPos do
-                hightLightPos[j].Mat:Move(halfWidth, 0, 0)
+            for j = 1, #highlightPos do
+                highlightPos[j].Mat:Move(halfWidth, 0, 0)
             end
 
             -- Tracking
@@ -1521,12 +1521,12 @@ local function drawstring(img,
                     debugRectangle(img, mat, baseTracking, -lineHeight / 2, emojiTracking, lineHeight,
                         Pixel { R = 0, G = 1, B = 1, A = 1 }, debug)
                 end
-                if (0 <= isHighlight(characterIndex, hightLightPos)) or (0 <= isHighlight(characterIndex + 1, hightLightPos)) then
-                    local index = isHighlight(characterIndex + 1, hightLightPos)
+                if (0 <= isHighlight(characterIndex, highlightPos)) or (0 <= isHighlight(characterIndex + 1, highlightPos)) then
+                    local index = isHighlight(characterIndex + 1, highlightPos)
                     if index < 0 then
-                        index = isHighlight(characterIndex, hightLightPos)
+                        index = isHighlight(characterIndex, highlightPos)
                     end
-                    highlightTracking = (hightLightPos[index].Tracking - 1) * origSize
+                    highlightTracking = (highlightPos[index].Tracking - 1) * origSize
                     debugRectangle(img, mat, baseTracking, -lineHeight / 2, highlightTracking, lineHeight,
                         Pixel { R = 1, G = 0, B = 0, A = 1 }, debug)
                 end
@@ -1535,8 +1535,8 @@ local function drawstring(img,
                     Pixel { R = 1, G = 0, B = 1, A = 1 }, debug)
                 mat:Move(tracking, 0, 0)
                 emojiMat:Move(tracking, 0, 0)
-                for j = 1, #hightLightPos do
-                    hightLightPos[j].Mat:Move(tracking, 0, 0)
+                for j = 1, #highlightPos do
+                    highlightPos[j].Mat:Move(tracking, 0, 0)
                 end
             end
 
@@ -1549,10 +1549,10 @@ local function drawstring(img,
         local scaledLineSpacing = (position.LineSpacing - 1) * origSize
         mat:Move(0, -(lineHeight + scaledLineSpacing), 0)
         emojiMat:Move(0, -(emojiLineHeight + scaledLineSpacing), 0)
-        for i = 1, #hightLightPos do
-            hightLightPos[i].Mat:Move(
+        for i = 1, #highlightPos do
+            highlightPos[i].Mat:Move(
                 0,
-                -(hightLightPos[i].Height + scaledLineSpacing),
+                -(highlightPos[i].Height + scaledLineSpacing),
                 0)
         end
         prevLineDrawWidth = lineWidth
@@ -1579,18 +1579,18 @@ local function drawstring(img,
     ic:ShapeFill(shapeNormal)
     ic:PutToImage("CM_Merge", cs)
     -- highlight
-    for i = 1, #hightLight do
-        if hightLight[i].OutlineNum >= 2 then
-            cs.Color = hightLight[i].TextColor:GetOutlineColor2()
+    for i = 1, #highlight do
+        if highlight[i].OutlineNum >= 2 then
+            cs.Color = highlight[i].TextColor:GetOutlineColor2()
             ic:ShapeFill(shapeHighlight[i].Outline2)
             ic:PutToImage("CM_Merge", cs)
         end
-        if hightLight[i].OutlineNum >= 1 then
-            cs.Color = hightLight[i].TextColor:GetOutlineColor1()
+        if highlight[i].OutlineNum >= 1 then
+            cs.Color = highlight[i].TextColor:GetOutlineColor1()
             ic:ShapeFill(shapeHighlight[i].Outline1)
             ic:PutToImage("CM_Merge", cs)
         end
-        cs.Color = hightLight[i].TextColor:GetInnerColor()
+        cs.Color = highlight[i].TextColor:GetInnerColor()
         ic:ShapeFill(shapeHighlight[i].Base)
         ic:PutToImage("CM_Merge", cs)
     end
@@ -1674,7 +1674,7 @@ function Process(req)
     end
 
     -- Highlight
-    local hightLight = {}
+    local highlight = {}
     for i = 1, #InHighlight do
         local highLightFont = TextFont.New(InHighlight[i].Font.Name:GetValue(req).Value,
             InHighlight[i].Font.Style:GetValue(req).Value)
@@ -1720,7 +1720,7 @@ function Process(req)
                 textColor.Type)
         end
         table.insert(
-            hightLight,
+            highlight,
             Highlight.New(
                 {
                     Low = InHighlight[i].Range.Low:GetValue(req).Value,
@@ -1773,7 +1773,7 @@ function Process(req)
         thickness,
         outlineNum,
         emojiOutlineNum,
-        hightLight,
+        highlight,
         debug
     )
 
