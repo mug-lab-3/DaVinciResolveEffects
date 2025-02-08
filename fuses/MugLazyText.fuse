@@ -19,7 +19,7 @@ FuRegisterClass("MugLazyText", CT_Tool, {
     REG_Fuse_NoReload     = false,
     REG_SupportsDoD       = true,
     REG_NoPreCalcProcess  = false,
-    REG_Version           = 1,
+    REG_Version           = 1.1,
 })
 
 local TypeInHighlight = {
@@ -34,6 +34,7 @@ local TypeInHighlight = {
                 Name = font.Name,
                 Style = font.Style,
                 Size = font.Size,
+                SpaceSize = font.SpaceSize,
                 Tracking = font.Tracking,
             },
             ColorTarget = mainColor.ColorTarget,
@@ -132,6 +133,15 @@ local function createHighlightControl(num)
             INP_MinScale       = 0.0,
             INP_MaxScale       = 0.5,
             INP_Default        = 0.08,
+        })
+
+        local spaceSize = self:AddInput("Space Size", "SpaceSize" .. id, {
+            LINKID_DataType    = "Number",
+            INPID_InputControl = "SliderControl",
+            INP_MinScale       = 0.0,
+            INP_MaxScale       = 10.0,
+            INP_Default        = 1.0,
+            IC_Visible         = true,
         })
 
         local tracking = self:AddInput("Tracking", "Tracking" .. id, {
@@ -328,6 +338,7 @@ local function createHighlightControl(num)
                 Name = font,
                 Style = fontStyle,
                 Size = size,
+                SpaceSize = spaceSize,
                 Tracking = tracking,
             },
             {
@@ -400,6 +411,15 @@ function Create()
         INP_MinScale       = 0.0,
         INP_MaxScale       = 0.5,
         INP_Default        = 0.08,
+    })
+
+    InSpaceSize = self:AddInput("Space Size", "SpaceSize", {
+        LINKID_DataType    = "Number",
+        INPID_InputControl = "SliderControl",
+        INP_MinScale       = 0.0,
+        INP_MaxScale       = 10.0,
+        INP_Default        = 1.0,
+        IC_Visible         = true,
     })
 
     InTracking = self:AddInput("Tracking", "Tracking", {
@@ -965,6 +985,7 @@ local Highlight = {
                 Name = font.Name,
                 Style = font.Style,
                 Size = font.Size,
+                SpaceSize = font.SpaceSize,
                 Tracking = font.Tracking,
             },
             TextColor = textColor,
@@ -1181,7 +1202,24 @@ local function isHighlight(characterIndex, position)
     return -1
 end
 
-local function getLineDrawWidth(characterIndex, unicodeArray, tfm, emojiTfm, origSize, emojiSize, tracking, emojiTracking,
+local function isSpace(unicode)
+    if unicode == 0x20 then
+        return true
+    end
+
+    return false
+end
+
+local function isJapaneseSpace(unicode)
+    if unicode == 0x3000 then
+        return true
+    end
+
+    return false
+end
+
+local function getLineDrawWidth(characterIndex, unicodeArray, tfm, emojiTfm, origSize, origSpaceSize, emojiSize, tracking,
+                                emojiTracking,
                                 highlightPosition)
     local lineWidth = 0
 
@@ -1189,19 +1227,29 @@ local function getLineDrawWidth(characterIndex, unicodeArray, tfm, emojiTfm, ori
         -- add the kerning between this character and the previous one
         local currentTfm
         local size
+        local spaceSize = origSpaceSize
         local highlightIndex = isHighlight(characterIndex + (i - 1), highlightPosition)
         if isEmoji(unicodeArray[i]) then
             currentTfm = emojiTfm
             size = emojiSize
+            spaceSize = origSpaceSize
         elseif 0 <= highlightIndex then
             currentTfm = highlightPosition[highlightIndex].Tfm
             size = highlightPosition[highlightIndex].Size
+            spaceSize = highlightPosition[highlightIndex].SpaceSize
         else
             currentTfm = tfm
             size = origSize
+            spaceSize = origSpaceSize
         end
 
         -- add the width of the character
+        if isSpace(unicodeArray[i]) then
+            size = size * spaceSize
+        end
+        if isJapaneseSpace(unicodeArray[i]) then
+            size = size * (spaceSize * 2)
+        end
         lineWidth = lineWidth + (currentTfm:CharacterWidth(unicodeArray[i]) * 10 * size)
 
         -- Tracking
@@ -1255,10 +1303,11 @@ end
 
 
 local DrawPositionInfo = {
-    New = function(characterRange, size, tracking, tfm, height, addjustY, boxHeight, mat)
+    New = function(characterRange, size, spaceSize, tracking, tfm, height, addjustY, boxHeight, mat)
         return {
             CharacterRange = characterRange,
             Size = size,
+            SpaceSize = spaceSize,
             Tracking = tracking,
             Tfm = tfm,
             Height = height,
@@ -1275,6 +1324,7 @@ local function drawstring(img,
                           font,
                           emojiFont,
                           size,
+                          spaceSize,
                           emojiSize,
                           color,
                           quality,
@@ -1321,6 +1371,7 @@ local function drawstring(img,
         table.insert(highlightPos, DrawPositionInfo.New(
             highlight[i].Range,
             highlight[i].Font.Size,
+            highlight[i].Font.SpaceSize,
             highlight[i].Font.Tracking,
             highlightTfm,
             highlightHeight,
@@ -1379,6 +1430,7 @@ local function drawstring(img,
             tfm,
             emojiTfm,
             origSize,
+            spaceSize,
             emojiSize,
             position.Tracking,
             position.EmojiTracking,
@@ -1414,24 +1466,36 @@ local function drawstring(img,
             local currentTmf
             local currentMat
             local currentOutlineNum
+            local currentSpaceSize = spaceSize
             if isEmoji(characterCode) then
                 size = emojiSize
+                currentSpaceSize = spaceSize
                 currentTmf = emojiTfm
                 currentMat = emojiMat
                 currentOutlineNum = emojiOutlineNum
             elseif 0 <= isHighlight(characterIndex, highlightPos) then
                 local index = isHighlight(characterIndex, highlightPos)
                 size = highlight[index].Font.Size
+                currentSpaceSize = highlight[index].Font.SpaceSize
                 currentTmf = highlightPos[index].Tfm
                 currentMat = highlightPos[index].Mat
                 currentOutlineNum = highlight[index].OutlineNum
             else
                 size = origSize
+                currentSpaceSize = spaceSize
                 currentTmf = tfm
                 currentMat = mat
                 currentOutlineNum = outlineNum
             end
+
             local width = currentTmf:CharacterWidth(characterCode) * 10 * size
+            if isSpace(characterCode) then
+                width = width * currentSpaceSize
+            end
+            if isJapaneseSpace(characterCode) then
+                width = width * (currentSpaceSize * 2)
+            end
+
             local halfWidth = width / 2
 
             -- if this is not the first character, apply kerning
@@ -1493,6 +1557,9 @@ local function drawstring(img,
                 end
                 debugRectangle(img, currentMat, -width / 2, -lineHeight / 2, width, lineHeight,
                     Pixel { R = 1, G = 1, B = 0, A = 0.3 }, debug)
+            else
+                debugRectangle(img, currentMat, -width / 2, -lineHeight / 2, width, lineHeight,
+                    Pixel { R = 0.8, G = 0.8, B = 0.8, A = 0.3 }, debug)
             end
 
             mat:Move(halfWidth, 0, 0)
@@ -1635,6 +1702,7 @@ function Process(req)
     end
 
     local size       = InSize:GetValue(req).Value
+    local spaceSize  = InSpaceSize:GetValue(req).Value
     local emojiSize  = InEmojiSize:GetValue(req).Value
 
     -- Outline
@@ -1693,6 +1761,7 @@ function Process(req)
         local highLightFont = TextFont.New(InHighlight[i].Font.Name:GetValue(req).Value,
             InHighlight[i].Font.Style:GetValue(req).Value)
         local highlightSize = InHighlight[i].Font.Size:GetValue(req).Value
+        local highlightSpaceSize = InHighlight[i].Font.SpaceSize:GetValue(req).Value
         local highlightTracking = InHighlight[i].Font.Tracking:GetValue(req).Value
         local highLightOutlineNum = InHighlight[i].Outline.Num:GetValue(req).Value
         local highLightOutlineThickness = InHighlight[i].Outline.Thickness:GetValue(req).Value
@@ -1721,6 +1790,7 @@ function Process(req)
         if InHighlight[i].Font.UseMainFont:GetValue(req).Value == 1 then
             highLightFont = mainFont
             highlightSize = size
+            highlightSpaceSize = spaceSize
             highlightTracking = tracking
         end
         if InHighlight[i].Outline.UseMainOutline:GetValue(req).Value == 1 then
@@ -1744,6 +1814,7 @@ function Process(req)
                     Name = highLightFont.Name,
                     Style = highLightFont.Style,
                     Size = highlightSize,
+                    SpaceSize = highlightSpaceSize,
                     Tracking = highlightTracking
                 },
                 highLightTextColor,
@@ -1781,6 +1852,7 @@ function Process(req)
         mainFont,
         emojiFont,
         size,
+        spaceSize,
         emojiSize,
         textColor,
         quality,
@@ -1938,11 +2010,13 @@ function NotifyChanged(inp, param, time)
                     InHighlight[i].Font.Name:SetAttrs({ IC_Visible = false })
                     InHighlight[i].Font.Style:SetAttrs({ IC_Visible = false })
                     InHighlight[i].Font.Size:SetAttrs({ IC_Visible = false })
+                    InHighlight[i].Font.SpaceSize:SetAttrs({ IC_Visible = false })
                     InHighlight[i].Font.Tracking:SetAttrs({ IC_Visible = false })
                 else
                     InHighlight[i].Font.Name:SetAttrs({ IC_Visible = true })
                     InHighlight[i].Font.Style:SetAttrs({ IC_Visible = true })
                     InHighlight[i].Font.Size:SetAttrs({ IC_Visible = true })
+                    InHighlight[i].Font.SpaceSize:SetAttrs({ IC_Visible = true })
                     InHighlight[i].Font.Tracking:SetAttrs({ IC_Visible = true })
                 end
             elseif inp == InHighlight[i].Font.Name then
