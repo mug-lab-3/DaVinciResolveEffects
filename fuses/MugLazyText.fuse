@@ -25,10 +25,12 @@ FuRegisterClass("MugLazyText", CT_Tool, {
 local TypeInHighlight = {
     New = function(range, font, mainColor, outline)
         return {
+            RangeType = range.RangeType,
             Range = {
                 Low = range.Low,
                 High = range.High,
             },
+            SpecificStrings = range.SpecificStrings,
             Font = {
                 UseMainFont = font.useMainFont,
                 Name = font.Name,
@@ -66,8 +68,8 @@ local TypeInHighlight = {
     end
 }
 
-local function createHighlightControl(num)
-    local highlightControlID = 500
+local function createHighlightControl(num, groupId)
+    local highlightControlID = groupId
     InHighlight = {}
 
     self:AddControlPage("Highlight")
@@ -75,6 +77,16 @@ local function createHighlightControl(num)
         local id = "Highlight" .. i
         local name = "Highlight " .. i
         self:BeginControlNest(name, id, true);
+
+        local rangeType = self:AddInput("Range Type", "RangeType" .. id, {
+            LINKID_DataType    = "Number",
+            INPID_InputControl = "MultiButtonControl",
+            INP_Default        = 0,
+            { MBTNC_AddButton = "Manual",           MBTNCD_ButtonWidth = 1 / 2, },
+            { MBTNC_AddButton = "Specific Strings", MBTNCD_ButtonWidth = 1 / 2, },
+            INP_Integer = true,
+            INP_DoNotifyChanged = true,
+        })
 
         highlightControlID = highlightControlID + 1
         local rangeLow = self:AddInput("Low", "RangeLow" .. id, {
@@ -96,6 +108,13 @@ local function createHighlightControl(num)
             IC_ControlGroup = highlightControlID,
             IC_ControlID = 1,
             INP_Integer = true,
+        })
+
+        local specificStrings = self:AddInput("Specific Strings", "SpecificStrings" .. id, {
+            LINKID_DataType     = "Text",
+            INPID_InputControl  = "TextEditControl",
+            TEC_Lines           = 8,
+            INP_DoNotifyChanged = true,
         })
 
         local useMainFont = self:AddInput("Use main font settings", "UseMainFont" .. id, {
@@ -154,16 +173,6 @@ local function createHighlightControl(num)
             INP_Default        = 1.0,
         })
 
-        local colorTarget = self:AddInput("Target", "ColorTarget" .. id, {
-            LINKID_DataType    = "Number",
-            INPID_InputControl = "MultiButtonControl",
-            INP_Default        = 0,
-            { MBTNC_AddButton = "Inner", MBTNCD_ButtonWidth = 1 / 2, },
-            { MBTNC_AddButton = "Outer", MBTNCD_ButtonWidth = 1 / 2, },
-            INP_Integer = true,
-            INP_DoNotifyChanged = true,
-        })
-
         highlightControlID = highlightControlID + 1
         local mainColorR = self:AddInput("Red", "MainColorRed" .. id, {
             LINKID_DataType    = "Number",
@@ -212,6 +221,16 @@ local function createHighlightControl(num)
             ICD_Width           = 1,
             INP_MinAllowed      = 0,
             INP_MaxAllowed      = 1,
+            INP_DoNotifyChanged = true,
+        })
+
+        local colorTarget = self:AddInput("Target", "ColorTarget" .. id, {
+            LINKID_DataType    = "Number",
+            INPID_InputControl = "MultiButtonControl",
+            INP_Default        = 0,
+            { MBTNC_AddButton = "Inner", MBTNCD_ButtonWidth = 1 / 2, },
+            { MBTNC_AddButton = "Outer", MBTNCD_ButtonWidth = 1 / 2, },
+            INP_Integer = true,
             INP_DoNotifyChanged = true,
         })
 
@@ -332,7 +351,12 @@ local function createHighlightControl(num)
         self:EndControlNest()
 
         local highlightControl = TypeInHighlight.New(
-            { Low = rangeLow, High = rangeHigh },
+            {
+                RangeType = rangeType,
+                Low = rangeLow,
+                High = rangeHigh,
+                SpecificStrings = specificStrings,
+            },
             {
                 useMainFont = useMainFont,
                 Name = font,
@@ -369,6 +393,8 @@ local function createHighlightControl(num)
         )
         table.insert(InHighlight, highlightControl)
     end
+
+    return highlightControlID
 end
 
 function Create()
@@ -723,7 +749,7 @@ function Create()
 
     ------------- Highlight -------------
     InHighlightNum = 3
-    createHighlightControl(InHighlightNum)
+    groupId = createHighlightControl(InHighlightNum, groupId)
 
     ------------- Emoji -------------
     self:AddControlPage("Emoji")
@@ -1273,6 +1299,38 @@ local function getLineDrawWidth(characterIndex, unicodeArray, tfm, emojiTfm, ori
     return lineWidth
 end
 
+local function getSpecRangeArray(specifigStrings, unicodeText)
+    local specRangeArray = {}
+    local charcterIndex = 1
+    for specN = 1, specifigStrings:GetLineNum() do
+        local specLine = specifigStrings:GetLine(specN)
+        if (#specLine ~= 0) then
+            for j = 1, unicodeText:GetLineNum() do
+                local line = unicodeText:GetLine(j)
+                for k = 1, #line do
+                    if #specLine <= (#line - (k - 1)) then
+                        local matchCount = 0
+                        for specOffset = 1, #specLine do
+                            if specLine[specOffset] ~= line[k + specOffset - 1] then
+                                break
+                            end
+                            matchCount = matchCount + 1
+                        end
+                        if matchCount == #specLine then
+                            table.insert(specRangeArray,
+                                { Low = charcterIndex + (k - 1), High = charcterIndex + (k - 1) + #specLine - 1 })
+                        end
+                    end
+                end
+                charcterIndex = charcterIndex + #line
+            end
+            charcterIndex = 1
+        end
+    end
+
+    return specRangeArray
+end
+
 local function debugRectangle(img, baseMat, offsetX, offsetY, width, height, color, debug)
     if debug == 1 then
         local baseMatTable = baseMat:GetTable()
@@ -1755,6 +1813,10 @@ function Process(req)
         position = TextPosition.New(x, y, justify, align, tracking, lineSpacing, tracking)
     end
 
+    local text = InText:GetValue(req).Value
+    local sourceText = UnicodeText.New()
+    sourceText:SetText(text)
+
     -- Highlight
     local highlight = {}
     for i = 1, #InHighlight do
@@ -1803,25 +1865,39 @@ function Process(req)
                 textColor.Target,
                 textColor.Type)
         end
-        table.insert(
-            highlight,
-            Highlight.New(
-                {
-                    Low = InHighlight[i].Range.Low:GetValue(req).Value,
-                    High = InHighlight[i].Range.High:GetValue(req).Value
-                },
-                {
-                    Name = highLightFont.Name,
-                    Style = highLightFont.Style,
-                    Size = highlightSize,
-                    SpaceSize = highlightSpaceSize,
-                    Tracking = highlightTracking
-                },
-                highLightTextColor,
-                highLightOutlineNum,
-                highLightOutlineThickness
+
+        local rangeArray = {}
+        if InHighlight[i].RangeType:GetValue(req).Value == 1 then -- specificStrings
+            local specText = UnicodeText.New()
+            specText:SetText(InHighlight[i].SpecificStrings:GetValue(req).Value)
+            rangeArray = getSpecRangeArray(specText, sourceText)
+        else
+            table.insert(rangeArray, {
+                Low = InHighlight[i].Range.Low:GetValue(req).Value,
+                High = InHighlight[i].Range.High:GetValue(req).Value
+            })
+        end
+        for j = 1, #rangeArray do
+            table.insert(
+                highlight,
+                Highlight.New(
+                    {
+                        Low = rangeArray[j].Low,
+                        High = rangeArray[j].High,
+                    },
+                    {
+                        Name = highLightFont.Name,
+                        Style = highLightFont.Style,
+                        Size = highlightSize,
+                        SpaceSize = highlightSpaceSize,
+                        Tracking = highlightTracking
+                    },
+                    highLightTextColor,
+                    highLightOutlineNum,
+                    highLightOutlineThickness
+                )
             )
-        )
+        end
     end
 
     -- Debug
@@ -1832,9 +1908,7 @@ function Process(req)
         quality = 1
     end
 
-    local text = InText:GetValue(req).Value
-    local sourceText = UnicodeText.New()
-    sourceText:SetText(text)
+
 
     -- if the FontManager list is empty, scan the font list
     -- If the UI has never been shown, as would always be the case on a render node,
@@ -2005,7 +2079,17 @@ function NotifyChanged(inp, param, time)
         end
     else
         for i = 1, #InHighlight do
-            if inp == InHighlight[i].Font.UseMainFont then
+            if inp == InHighlight[i].RangeType then
+                if param.Value == 0 then -- Manual
+                    InHighlight[i].Range.Low:SetAttrs({ IC_Visible = true })
+                    InHighlight[i].Range.High:SetAttrs({ IC_Visible = true })
+                    InHighlight[i].SpecificStrings:SetAttrs({ IC_Visible = false })
+                else -- SpecificStrings
+                    InHighlight[i].Range.Low:SetAttrs({ IC_Visible = false })
+                    InHighlight[i].Range.High:SetAttrs({ IC_Visible = false })
+                    InHighlight[i].SpecificStrings:SetAttrs({ IC_Visible = true })
+                end
+            elseif inp == InHighlight[i].Font.UseMainFont then
                 if param.Value == 1 then
                     InHighlight[i].Font.Name:SetAttrs({ IC_Visible = false })
                     InHighlight[i].Font.Style:SetAttrs({ IC_Visible = false })
@@ -2031,6 +2115,7 @@ function NotifyChanged(inp, param, time)
                 end
             elseif inp == InHighlight[i].Outline.UseMainOutline then
                 if param.Value == 0 then
+                    InHighlight[i].ColorTarget:SetAttrs({ IC_Visible = true })
                     InHighlight[i].Outline.Type:SetAttrs({ IC_Visible = true })
                     InHighlight[i].Outline.Num:SetAttrs({ IC_Visible = true })
                     InHighlight[i].Outline.Thickness:SetAttrs({ IC_Visible = true })
@@ -2045,6 +2130,7 @@ function NotifyChanged(inp, param, time)
                         InHighlight[i].Outline.Color2.A:SetAttrs({ IC_Visible = true })
                     end
                 else
+                    InHighlight[i].ColorTarget:SetAttrs({ IC_Visible = false })
                     InHighlight[i].Outline.Type:SetAttrs({ IC_Visible = false })
                     InHighlight[i].Outline.Num:SetAttrs({ IC_Visible = false })
                     InHighlight[i].Outline.Thickness:SetAttrs({ IC_Visible = false })
