@@ -1524,6 +1524,7 @@ local function drawstring(img,
             local currentTmf
             local currentMat
             local currentOutlineNum
+            local currentThikness
             local currentSpaceSize = spaceSize
             if isEmoji(characterCode) then
                 size = emojiSize
@@ -1531,6 +1532,7 @@ local function drawstring(img,
                 currentTmf = emojiTfm
                 currentMat = emojiMat
                 currentOutlineNum = emojiOutlineNum
+                currentThikness = thickness
             elseif 0 <= isHighlight(characterIndex, highlightPos) then
                 local index = isHighlight(characterIndex, highlightPos)
                 size = highlight[index].Font.Size
@@ -1538,15 +1540,18 @@ local function drawstring(img,
                 currentTmf = highlightPos[index].Tfm
                 currentMat = highlightPos[index].Mat
                 currentOutlineNum = highlight[index].OutlineNum
+                currentThikness = highlight[index].OutlineThickness
             else
                 size = origSize
                 currentSpaceSize = spaceSize
                 currentTmf = tfm
                 currentMat = mat
                 currentOutlineNum = outlineNum
+                currentThikness = thickness
             end
 
             local width = currentTmf:CharacterWidth(characterCode) * 10 * size
+            width = width + (((currentThikness * outlineNum)) * size)
             if isSpace(characterCode) then
                 width = width * currentSpaceSize
             end
