@@ -1258,8 +1258,8 @@ local DrawTextInfo = {
         local mat = Matrix4()
         mat:Scale(1.0 / tfm.Scale, 1.0 / tfm.Scale, 1.0)
         mat:Scale(scale, scale, 1)
-        -- mat:Move(pos.X, pos.Y - (tfm.TextAscent + tfm.TextDescent + tfm.TextExternalLeading), 0)
-        mat:Move(pos.X, pos.Y - (baseHeight / 2), 0)
+        mat:Move(pos.X, pos.Y, 0)
+        mat:Move(0, -tfm.TextAscent * baseScale * 10, 0)
         mat:Move(offset.X, offset.Y, 0)
 
         return {
@@ -1452,6 +1452,8 @@ local function drawstring(img,
         position,
         { X = 0, Y = 0 }
     )
+    local emojiAscentGap = (mainDrawInfo.Ascent - emojiDrawInfo.Ascent) * 10 * size
+    emojiDrawInfo.Mat:Move(0, -emojiAscentGap, 0)
     table.insert(drawInfo, emojiDrawInfo)
 
     -- Highlight
@@ -1471,6 +1473,8 @@ local function drawstring(img,
             position,
             { X = 0, Y = 0 }
         )
+        local highlightAscentGap = (mainDrawInfo.Ascent - info.Ascent) * 10 * size
+        info.Mat:Move(0, -highlightAscentGap, 0)
         table.insert(highlightDrawInfo, info)
         table.insert(drawInfo, info)
     end
@@ -1485,11 +1489,11 @@ local function drawstring(img,
         end
     elseif position.Align == 1 then -- Middle
         for i = 1, #drawInfo do
-            drawInfo[i].Mat:Move(0, (boxHeight / 2) - (mainDrawInfo.Tfm.TextDescent * 10 * size), 0)
+            drawInfo[i].Mat:Move(0, (boxHeight / 2), 0)
         end
     elseif position.Align == 2 then -- Bottom
         for i = 1, #drawInfo do
-            drawInfo[i].Mat:Move(0, (boxHeight) - (mainDrawInfo.Height / 2), 0)
+            drawInfo[i].Mat:Move(0, boxHeight, 0)
         end
     end
 
@@ -1616,9 +1620,15 @@ local function drawstring(img,
                         shapeOutline2:AddShape(outline2)
                     end
                 end
-                debugRectangle(img, currentDrawInfo.Mat, -width / 2, -mainDrawInfo.BaseHeight / 2, width,
-                    mainDrawInfo.BaseHeight,
+
+                local ascent = currentDrawInfo.Tfm.TextAscent * currentDrawInfo.Scale * 10
+                debugRectangle(img, currentDrawInfo.Mat, -width / 2, 0, width,
+                    ascent,
                     Pixel { R = 1, G = 1, B = 0, A = 0.3 }, debug)
+                local descent = currentDrawInfo.Tfm.TextDescent * currentDrawInfo.Scale * 10
+                debugRectangle(img, currentDrawInfo.Mat, -width / 2, -descent, width,
+                    descent,
+                    Pixel { R = 1, G = 1, B = 0, A = 0.5 }, debug)
             else
                 debugRectangle(img, currentDrawInfo.Mat, -width / 2, -mainDrawInfo.BaseHeight / 2, width,
                     mainDrawInfo.BaseHeight,
