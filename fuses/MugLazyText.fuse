@@ -1551,7 +1551,7 @@ local function drawstring(img,
             end
 
             local width = currentTmf:CharacterWidth(characterCode) * 10 * size
-            width = width + (((currentThikness * outlineNum)) * size)
+            width = width + (((currentThikness * currentOutlineNum)) * size)
             if isSpace(characterCode) then
                 width = width * currentSpaceSize
             end
