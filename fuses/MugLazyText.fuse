@@ -1308,16 +1308,17 @@ local function getLineDrawWidth(characterIndex,
         end
 
         -- add the width of the character
-        local scale = 1
+        local spaceScale = 1
         if isSpace(unicodeArray[i]) then
-            scale = currentDrawInfo.Scale * currentDrawInfo.SpaceScale
+            spaceScale = currentDrawInfo.SpaceScale
         end
         if isJapaneseSpace(unicodeArray[i]) then
-            scale = currentDrawInfo.Scale * currentDrawInfo.SpaceScale * 2
+            spaceScale = currentDrawInfo.SpaceScale * 2
         end
         local characterWidth = (currentDrawInfo.Tfm:CharacterWidth(unicodeArray[i]) * 10 * currentDrawInfo.Scale)
         characterWidth = characterWidth +
             (((currentDrawInfo.Thickness * currentDrawInfo.OutlineNum)) * currentDrawInfo.Scale)
+        characterWidth = characterWidth * spaceScale
         lineWidth = lineWidth + characterWidth
 
         -- Tracking
@@ -1481,6 +1482,8 @@ local function drawstring(img,
 
     -- Alignment
     local scaledLineSpacing = (position.LineSpacing - 1) * mainDrawInfo.Scale
+    scaledLineSpacing = scaledLineSpacing +
+        (((mainDrawInfo.Thickness * mainDrawInfo.OutlineNum)) * mainDrawInfo.Scale)
     local boxHeight = (mainDrawInfo.Height * unicodeText:GetLineNum()) +
         (scaledLineSpacing * (unicodeText:GetLineNum() - 1))
     if position.Align == 0 then -- Top
@@ -1647,13 +1650,13 @@ local function drawstring(img,
                     local tracking = 0
                     local debugColor = {}
                     if isEmoji(unicodeArray[i + n]) then
-                        tracking = (((position.EmojiTracking - 1) * origSize) / 2)
+                        tracking = (((position.EmojiTracking - 1) * currentDrawInfo.BaseScale) / 2)
                         trackingWidth = trackingWidth + tracking
 
                         debugColor = Pixel { R = 1, G = 0, B = 0, A = 0.3 }
                     elseif 0 <= isHighlight(characterIndex + n, highlightDrawInfo) then
                         local index = isHighlight(characterIndex + n, highlightDrawInfo)
-                        tracking = (((highlightDrawInfo[index].Tracking - 1) * origSize) / 2)
+                        tracking = (((highlightDrawInfo[index].Tracking - 1) * currentDrawInfo.BaseScale) / 2)
                         trackingWidth = trackingWidth + tracking
 
                         debugColor = Pixel { R = 0, G = 1, B = 0, A = 0.3 }
@@ -1668,9 +1671,9 @@ local function drawstring(img,
                         img,
                         debugMat,
                         0,
-                        -mainDrawInfo.BaseHeight / 2,
+                        -(currentDrawInfo.Descent + currentDrawInfo.ExternalLeading),
                         tracking,
-                        mainDrawInfo.BaseHeight,
+                        currentDrawInfo.Height,
                         debugColor,
                         debug)
                     debugMat:Move(tracking, 0, 0)
