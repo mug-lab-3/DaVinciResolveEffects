@@ -1,0 +1,93 @@
+--[[--
+Absolute point
+--]] --
+
+FuRegisterClass("AbsPoint", CT_Modifier, {
+    REGS_OpDescription    = "Absolute point",
+    REGS_HelpTopic        = "https://x.com/MugLab3",
+    REGS_URL              = "https://www.youtube.com/@MugLabVideoEditing",
+    REG_OpNoMask          = true,
+    REG_NoBlendCtrls      = true,
+    REG_NoObjMatCtrls     = true,
+    REG_NoMotionBlurCtrls = true,
+    REG_TimeVariant       = true,
+    REGID_DataType        = "Point",
+})
+
+function Create()
+    self:BeginControlNest("Position", "PositionLabel", true)
+
+    InPosition = self:AddInput("Position", "Position", {
+        LINKID_DataType    = "Point",
+        INPID_InputControl = "OffsetControl",
+        INP_Integer        = true,
+        INP_DefaultX       = 0,
+        INP_DefaultY       = 0,
+    })
+
+    -- Hide
+    InRelativePosition = self:AddInput("Relative Position", "RelativePosition", {
+        LINKID_DataType      = "Point",
+        INPID_InputControl   = "OffsetControl",
+        INP_Integer          = true,
+        INP_DefaultX         = 0,
+        INP_DefaultY         = 0,
+        IC_Visible           = false,
+        INPID_PreviewControl = "CrosshairControl",
+        INP_DoNotifyChanged  = true,
+    })
+
+    self:EndControlNest() -- PositionLabel
+
+    self:BeginControlNest("Image Size", "ImageSizeLabel", true)
+
+    InImageSize = self:AddInput("Size", "ImageSize", {
+        LINKID_DataType    = "Point",
+        INPID_InputControl = "OffsetControl",
+        INP_Integer        = true,
+        INP_DefaultX       = 1920,
+        INP_DefaultY       = 1080,
+    })
+
+    InImageSizeSelector = self:AddInput("Size Selector", "ImageSizeSelector", {
+        LINKID_DataType    = "Number",
+        INPID_InputControl = "MultiButtonControl",
+        INP_Default        = 0,
+        { MBTNC_AddButton = "2K", MBTNCD_ButtonWidth = 1 / 2, },
+        { MBTNC_AddButton = "4K", MBTNCD_ButtonWidth = 1 / 2, },
+        INP_Integer = true,
+        INP_DoNotifyChanged = true,
+    })
+
+    self:EndControlNest() -- ImageSizeLabel
+
+    OutValue = self:AddOutput("Output", "Output", {
+        LINKID_DataType = "Point",
+        LINK_Main = 1,
+    })
+end
+
+function Process(req)
+    local imageSize = InImageSize:GetValue(req)
+    local position = InPosition:GetValue(req)
+    local relativePosition = Point(position.X / imageSize.X, position.Y / imageSize.Y)
+
+    OutValue:Set(req, relativePosition)
+end
+
+function NotifyChanged(inp, param, time)
+    if (inp == InRelativePosition) then
+        local x = param.X * InImageSize:GetSource(time).X
+        local y = param.Y * InImageSize:GetSource(time).Y
+        InPosition:SetSource(Point(x, y), time)
+    elseif (inp == InImageSizeSelector) then
+        if param.Value == 0 then     -- 2K
+            InImageSize:SetSource(Point(1920, 1080), time)
+        elseif param.Value == 1 then --4K
+            InImageSize:SetSource(Point(3840, 2160), time)
+        else
+            -- Invalid value
+            print("Invalid value " .. param.Value)
+        end
+    end
+end
