@@ -1,0 +1,60 @@
+local ffi = require("ffi")
+ffi.cdef [[
+void free(void *p);
+typedef struct i64{unsigned int l; unsigned int h;} i64_t;
+typedef union wrapper{ i64_t i; unsigned char* p; } wrapper_t;
+]]
+
+FuRegisterClass("TestModifier", CT_Modifier, {
+   REGS_Name          = "TestModifier",
+   REGS_Category      = "Modifiers",
+   REGS_OpDescription = "Test Modifier",
+   REGID_DataType     = "Number",
+})
+
+
+function Create()
+   InOffset = self:AddInput("Offset", "Offset", {
+      LINKID_DataType    = "Number",
+      INPID_InputControl = "SliderControl",
+      INP_Integer        = true,
+   })
+
+   OutValue = self:AddOutput("Output", "Output", {
+      LINKID_DataType = "Number",
+      LINK_Main = 1,
+   })
+
+   self:SetData("pointer", nil)
+end
+
+local n = 10 - 1
+function Process(req)
+   if self:GetData("pointer") ~= nil then
+      local wrapper = ffi.new("wrapper_t")
+      wrapper.i.l = self:GetData("pointer")[1]
+      wrapper.i.h = self:GetData("pointer")[2]
+      print("get data: " .. wrapper.i.l .. " " .. wrapper.i.h)
+      for i = 0, n do
+         print(wrapper.p[i])
+      end
+      ffi.C.free(wrapper.p)
+      self:SetData("pointer", nil)
+   end
+
+   local offset = InOffset:GetValue(req)
+   print("offset: " .. offset.Value)
+   local mallocAddress = ffi.C.malloc(10)
+   local wrapper = ffi.new("wrapper_t")
+   wrapper.p = mallocAddress
+
+   for i = 0, n do
+      wrapper.p[i] = offset.Value + i
+   end
+
+   print("set data: " .. wrapper.i.l .. " " .. wrapper.i.h)
+
+   self:SetData("pointer", { wrapper.i.l, wrapper.i.h })
+
+   OutValue:Set(req, 1)
+end
