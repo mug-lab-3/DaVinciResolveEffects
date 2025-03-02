@@ -12,7 +12,6 @@ FuRegisterClass("TestModifier", CT_Modifier, {
    REGID_DataType     = "Number",
 })
 
-
 function Create()
    InOffset = self:AddInput("Offset", "Offset", {
       LINKID_DataType    = "Number",
@@ -28,31 +27,33 @@ function Create()
    self:SetData("pointer", nil)
 end
 
-local n = 10 - 1
+local n = 10
 function Process(req)
    if self:GetData("pointer") ~= nil then
       local wrapper = ffi.new("wrapper_t")
       wrapper.i.l = self:GetData("pointer")[1]
       wrapper.i.h = self:GetData("pointer")[2]
-      print("get data: " .. wrapper.i.l .. " " .. wrapper.i.h)
-      for i = 0, n do
-         print(wrapper.p[i])
+      print("get data: " .. "l=" .. wrapper.i.l .. " h=" .. wrapper.i.h)
+
+      for i = 0, (n - 1) do
+         print("  [" .. i .. "]: " .. wrapper.p[i])
       end
+
       ffi.C.free(wrapper.p)
       self:SetData("pointer", nil)
    end
 
    local offset = InOffset:GetValue(req)
    print("offset: " .. offset.Value)
-   local mallocAddress = ffi.C.malloc(10)
+   local mallocAddress = ffi.C.malloc(n)
    local wrapper = ffi.new("wrapper_t")
    wrapper.p = mallocAddress
 
-   for i = 0, n do
+   for i = 0, (n - 1) do
       wrapper.p[i] = offset.Value + i
    end
 
-   print("set data: " .. wrapper.i.l .. " " .. wrapper.i.h)
+   print("set data: " .. "l=" .. wrapper.i.l .. " h=" .. wrapper.i.h)
 
    self:SetData("pointer", { wrapper.i.l, wrapper.i.h })
 
