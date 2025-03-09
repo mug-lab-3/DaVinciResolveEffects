@@ -1,6 +1,6 @@
 FuRegisterClass("MugLazyKeyFrames", CT_Modifier, {
    REGS_Name           = "MugLazyKeyFrames",
-   REGS_Category       = "Modifiers",
+   REGS_Category       = "Mug",
    REGS_OpDescription  = "MugLazyKeyFrames",
    REGID_DataType      = "Number",
    REGID_InputDataType = "Number",
@@ -61,6 +61,25 @@ function Create()
       INP_InteractivePassive = true,
       INP_External           = false,
    })
+
+   self:BeginControlNest("Debug", "Debug", false);
+   InDebugText = self:AddInput("Key Information", "KeyInformationText", {
+      LINKID_DataType    = "Text",
+      INPID_InputControl = "TextEditControl",
+      TEC_Lines          = 10,
+      TEC_ReadOnly       = true,
+      INP_Passive        = true,
+      INP_External       = false,
+   })
+
+   InDebugButton = self:AddInput("Load Key Information", "KeyInformationButton", {
+      LINKID_DataType = "Number",
+      INPID_InputControl = "ButtonControl",
+      INP_DoNotifyChanged = true,
+      INP_Passive = true,
+      INP_External = false,
+   })
+   self:EndControlNest()
 
    InKeyFrameInfos = {}
    for i = 1, KEY_FRAMES_NUM do
@@ -138,11 +157,11 @@ function Create()
       local inLabelTime = self:BeginControlNest("Time", "Time" .. i, true);
       local inOffset = self:AddInput("Offset", "Offset" .. i, {
          LINKID_DataType    = "Number",
-         INPID_InputControl = "SliderControl",
+         INPID_InputControl = "ScrewControl",
          --INP_Required       = true,
          INP_MinAllowed     = 0,
          INP_MinScale       = 0,
-         INP_MaxScale       = 0,
+         INP_MaxScale       = 100,
          INP_Default        = 0,
          INP_Integer        = true,
          IC_Steps           = 1,
@@ -151,12 +170,12 @@ function Create()
 
       local inDuration = self:AddInput("Duration", "Duration" .. i, {
          LINKID_DataType    = "Number",
-         INPID_InputControl = "SliderControl",
+         INPID_InputControl = "ScrewControl",
          --INP_Required       = true,
-         INP_MinAllowed     = 0,
-         INP_MinScale       = 0,
-         INP_MaxScale       = 0,
-         INP_Default        = 0,
+         INP_MinAllowed     = 1,
+         INP_MinScale       = 1,
+         INP_MaxScale       = 100,
+         INP_Default        = 1,
          INP_Integer        = true,
          IC_Steps           = 1,
          INP_External       = false,
@@ -237,8 +256,18 @@ function Process(req)
    -- Preview Mode (debug)
    for i = 1, keyFramesNum do
       local previewMode = InKeyFrameInfos[i].PreviewMode:GetValue(req).Value
+      local previousEndValue = 0
+      if i == 1 then
+         previousEndValue = InKeyFrameInfos[keyFramesNum].EndValue:GetValue(req).Value
+      else
+         previousEndValue = InKeyFrameInfos[i - 1].EndValue:GetValue(req).Value
+      end
       if previewMode == 1 then -- Start value
-         OutValue:Set(req, InKeyFrameInfos[i].StartValue:GetValue(req))
+         if InKeyFrameInfos[i].AutoLinkValues:GetValue(req).Value == 1 then
+            OutValue:Set(req, previousEndValue)
+         else
+            OutValue:Set(req, InKeyFrameInfos[i].StartValue:GetValue(req))
+         end
          return
       elseif previewMode == 2 then -- End value
          OutValue:Set(req, InKeyFrameInfos[i].EndValue:GetValue(req))
@@ -249,8 +278,24 @@ function Process(req)
    local nextStartFrame = self.Comp.RenderStart
    local keyFrameInfos = {}
    for i = 1, keyFramesNum do
+      local linked = InKeyFrameInfos[i].AutoLinkValues:GetValue(req).Value
+
       local startValue = InKeyFrameInfos[i].StartValue:GetValue(req).Value
+      if linked == 1 then
+         if i == 1 then
+            startValue = InKeyFrameInfos[keyFramesNum].EndValue:GetValue(req).Value
+         else
+            startValue = InKeyFrameInfos[i - 1].EndValue:GetValue(req).Value
+         end
+      end
+
       local endValue = InKeyFrameInfos[i].EndValue:GetValue(req).Value
+      if linked == 1 then
+         if i == keyFramesNum then
+            endValue = InKeyFrameInfos[1].StartValue:GetValue(req).Value
+         end
+      end
+
       local startFrame = (nextStartFrame + InKeyFrameInfos[i].OffsetFrame:GetValue(req).Value) - self.Comp.RenderStart
       local endFrame = startFrame + InKeyFrameInfos[i].DurationFrame:GetValue(req).Value - 1
 
@@ -279,6 +324,7 @@ function Process(req)
       )
       nextStartFrame = endFrame + 1
    end
+   self:SetData("KeyFrameInfos", keyFrameInfos)
 
    local repeatMode = InRepeatMode:GetValue(req).Value
 
@@ -339,13 +385,46 @@ function NotifyChanged(inp, param, time)
             input:SetAttrs({ IC_Visible = false })
          end
       end
+   elseif inp == InDebugButton and param.Value == 1 then
+      local nextStartFrame = self.Comp.RenderStart
+      local keyNum = InKeyFramesNum:GetSource(time).Value
+      local keyFrameInfoText = ""
+      for i = 1, keyNum do
+         local linked = InKeyFrameInfos[i].AutoLinkValues:GetSource(time).Value
+         local startValue = InKeyFrameInfos[i].StartValue:GetSource(time).Value
+         if linked == 1 then
+            if i == 1 then
+               startValue = InKeyFrameInfos[keyNum].EndValue:GetSource(time).Value
+            else
+               startValue = InKeyFrameInfos[i - 1].EndValue:GetSource(time).Value
+            end
+         end
+
+         local endValue = InKeyFrameInfos[i].EndValue:GetSource(time).Value
+         if linked == 1 then
+            if i == keyNum then
+               endValue = InKeyFrameInfos[1].StartValue:GetSource(time).Value
+            end
+         end
+
+         local startFrame = (nextStartFrame + InKeyFrameInfos[i].OffsetFrame:GetSource(time).Value) -
+             self.Comp.RenderStart
+         local endFrame = startFrame + InKeyFrameInfos[i].DurationFrame:GetSource(time).Value - 1
+
+         nextStartFrame = endFrame + 1
+
+         keyFrameInfoText = keyFrameInfoText ..
+             string.format("key%d (%03d:%03d):  %0.3f -> %0.3f\n", i, startFrame, endFrame,
+                startValue, endValue)
+      end
+      InDebugText:SetSource(Text(keyFrameInfoText), time)
    else
       local clipLength = self.Comp.RenderEnd - self.Comp.RenderStart + 1
 
       for i = 1, #InKeyFrameInfos do
          if inp == InKeyFrameInfos[i].OffsetFrame or inp == InKeyFrameInfos[i].DurationFrame then
             if inp:GetAttr("INP_MaxScale", time) == 0 then
-               inp:SetAttrs({ INP_MaxScale = clipLength })
+               --inp:SetAttrs({ INP_MaxScale = clipLength })
             end
             break
          elseif inp == InKeyFrameInfos[i].AutoLinkValues then
