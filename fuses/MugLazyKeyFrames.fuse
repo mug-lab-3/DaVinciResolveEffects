@@ -1,0 +1,377 @@
+FuRegisterClass("MugLazyKeyFrames", CT_Modifier, {
+   REGS_Name           = "MugLazyKeyFrames",
+   REGS_Category       = "Modifiers",
+   REGS_OpDescription  = "MugLazyKeyFrames",
+   REGID_DataType      = "Number",
+   REGID_InputDataType = "Number",
+   REG_TimeVariant     = true,
+})
+
+local InKeyFrameInfo = {
+   New = function(autoLinkValues,
+                  startValue,
+                  endValue,
+                  offsetFrame,
+                  durationFrame,
+                  easing,
+                  previewMode,
+                  labelKey,
+                  labelValue,
+                  labelTime)
+      return {
+         AutoLinkValues = autoLinkValues,
+         StartValue = startValue,
+         EndValue = endValue,
+         OffsetFrame = offsetFrame,
+         DurationFrame = durationFrame,
+         Easing = easing,
+         PreviewMode = previewMode,
+         LabelKey = labelKey,
+         LabelValue = labelValue,
+         LabelTime = labelTime,
+      }
+   end
+}
+
+local KEY_FRAMES_NUM = 10
+function Create()
+   InKeyFramesNum = self:AddInput("Key Frames Num", "KeyFramesNum", {
+      LINKID_DataType        = "Number",
+      INPID_InputControl     = "SliderControl",
+      INP_Integer            = true,
+      INP_Default            = 2,
+      INP_MinScale           = 1,
+      INP_MaxScale           = KEY_FRAMES_NUM,
+      INP_MinAllowed         = 1,
+      INP_MaxAllowed         = KEY_FRAMES_NUM,
+      INP_InitialNotify      = true,
+      INP_DoNotifyChanged    = true,
+      INP_InteractivePassive = true,
+      INP_External           = false,
+   })
+
+   InRepeatMode = self:AddInput("Repeat Mode", "RepeatMode", {
+      LINKID_DataType    = "Number",
+      INPID_InputControl = "MultiButtonControl",
+      INP_Default        = 0,
+      { MBTNC_AddButton = "None",          MBTNCD_ButtonWidth = 1 / 3, },
+      { MBTNC_AddButton = "Normal Repeat", MBTNCD_ButtonWidth = 1 / 3, },
+      -- { MBTNC_AddButton = "Mirror Repeat", MBTNCD_ButtonWidth = 1 / 3, },
+      INP_Integer            = true,
+      INP_InteractivePassive = true,
+      INP_External           = false,
+   })
+
+   InKeyFrameInfos = {}
+   for i = 1, KEY_FRAMES_NUM do
+      local inLabelKey = self:BeginControlNest("Key " .. i, "Key" .. i, true);
+
+      local inLabelValue = self:BeginControlNest("Value", "Value" .. i, true);
+
+      local inPreviewMode = self:AddInput("Preview Mode", "PreviewMode" .. i, {
+         LINKID_DataType    = "Number",
+         INPID_InputControl = "MultiButtonControl",
+         INP_Default        = 0,
+         { MBTNC_AddButton = "None",  MBTNCD_ButtonWidth = 1 / 3, },
+         { MBTNC_AddButton = "Start", MBTNCD_ButtonWidth = 1 / 3, },
+         { MBTNC_AddButton = "End",   MBTNCD_ButtonWidth = 1 / 3, },
+         INP_DoNotifyChanged = true,
+         INP_Integer         = true,
+         INP_External        = false,
+      })
+
+      local autoLinkedValuesVisible = true
+      if i == 1 then
+         autoLinkedValuesVisible = false
+      end
+      local inAutoLinkValues = self:AddInput("Auto-Link Values", "AutoLinkValues" .. i, {
+         LINKID_DataType        = "Number",
+         INPID_InputControl     = "CheckboxControl",
+         INP_Required           = true,
+         INP_Integer            = true,
+         INP_Default            = 0,
+         INP_MinAllowed         = 0,
+         INP_MaxAllowed         = 1,
+         -- INP_InitialNotify      = true,
+         INP_DoNotifyChanged    = true,
+         INP_InteractivePassive = true,
+         INP_External           = false,
+         IC_Visible             = autoLinkedValuesVisible,
+      })
+
+      local inStart = self:AddInput("Start", "Start" .. i, {
+         LINKID_DataType    = "Number",
+         INPID_InputControl = "ScrewControl",
+         INP_Required       = true,
+         INP_Default        = 0,
+         INP_Disabled       = false,
+         INP_External       = false,
+         IC_Visible         = false,
+      })
+
+      local inEnd = self:AddInput("End", "End" .. i, {
+         LINKID_DataType    = "Number",
+         INPID_InputControl = "ScrewControl",
+         INP_Required       = true,
+         INP_Default        = 0,
+         INP_External       = false,
+      })
+
+      local inEasing = self:AddInput("Ease", "Ease" .. i, {
+         LINKID_DataType    = "Number",
+         INPID_InputControl = "ComboControl",
+         --INP_Required       = true,
+         INP_Integer        = true,
+         INP_MinAllowed     = 0,
+         INP_MinScale       = 0,
+         INP_Default        = 0,
+         { CCS_AddString = "Linear", },
+         { CCS_AddString = "InSine", },
+         { CCS_AddString = "OutSine", },
+         { CCS_AddString = "InOutSine", },
+         { CCS_AddString = "OutBounce", },
+         CC_LabelPosition = "Horizontal",
+         INP_External     = false,
+      })
+      self:EndControlNest()
+
+      local inLabelTime = self:BeginControlNest("Time", "Time" .. i, true);
+      local inOffset = self:AddInput("Offset", "Offset" .. i, {
+         LINKID_DataType    = "Number",
+         INPID_InputControl = "SliderControl",
+         --INP_Required       = true,
+         INP_MinAllowed     = 0,
+         INP_MinScale       = 0,
+         INP_MaxScale       = 0,
+         INP_Default        = 0,
+         INP_Integer        = true,
+         IC_Steps           = 1,
+         INP_External       = false,
+      })
+
+      local inDuration = self:AddInput("Duration", "Duration" .. i, {
+         LINKID_DataType    = "Number",
+         INPID_InputControl = "SliderControl",
+         --INP_Required       = true,
+         INP_MinAllowed     = 0,
+         INP_MinScale       = 0,
+         INP_MaxScale       = 0,
+         INP_Default        = 0,
+         INP_Integer        = true,
+         IC_Steps           = 1,
+         INP_External       = false,
+      })
+      self:EndControlNest()
+      self:EndControlNest()
+
+      table.insert(InKeyFrameInfos,
+         InKeyFrameInfo.New(
+            inAutoLinkValues,
+            inStart,
+            inEnd,
+            inOffset,
+            inDuration,
+            inEasing,
+            inPreviewMode,
+            inLabelKey,
+            inLabelValue,
+            inLabelTime
+         )
+      )
+   end
+
+   OutValue = self:AddOutput("Output", "Output", {
+      LINKID_DataType = "Number",
+      LINK_Main = 1,
+   })
+end
+
+local function easeLinear(t)
+   return t
+end
+
+local function easeInSine(t)
+   return 1 - math.cos((t * math.pi) / 2);
+end
+
+local function easeOutSine(t)
+   return math.sin((t * math.pi) / 2);
+end
+
+local function easeInOutSine(t)
+   return -(math.cos(math.pi * t) - 1) / 2;
+end
+
+local function easeOutBounce(t)
+   local n1 = 7.5625
+   local d1 = 2.75
+   if t < 1 / d1 then
+      return n1 * t * t
+   elseif (t < 2 / d1) then
+      local new_t = t - (1.5 / d1)
+      return n1 * new_t * new_t + 0.75
+   elseif (t < 2.5 / d1) then
+      local new_t = t - (2.25 / d1)
+      return n1 * new_t * new_t + 0.9375
+   else
+      local new_t = t - (2.625 / d1)
+      return n1 * new_t * new_t + 0.984375
+   end
+end
+
+local KeyFrameInfo = {
+   New = function(startValue, endValue, startFrame, endFrame, easingFunction)
+      return {
+         StartValue = startValue,
+         EndValue = endValue,
+         StartFrame = startFrame,
+         EndFrame = endFrame,
+         EasingFunction = easingFunction,
+      }
+   end
+}
+
+function Process(req)
+   local keyFramesNum = InKeyFramesNum:GetValue(req).Value
+
+   -- Preview Mode (debug)
+   for i = 1, keyFramesNum do
+      local previewMode = InKeyFrameInfos[i].PreviewMode:GetValue(req).Value
+      if previewMode == 1 then -- Start value
+         OutValue:Set(req, InKeyFrameInfos[i].StartValue:GetValue(req))
+         return
+      elseif previewMode == 2 then -- End value
+         OutValue:Set(req, InKeyFrameInfos[i].EndValue:GetValue(req))
+         return
+      end
+   end
+
+   local nextStartFrame = self.Comp.RenderStart
+   local keyFrameInfos = {}
+   for i = 1, keyFramesNum do
+      local startValue = InKeyFrameInfos[i].StartValue:GetValue(req).Value
+      local endValue = InKeyFrameInfos[i].EndValue:GetValue(req).Value
+      local startFrame = (nextStartFrame + InKeyFrameInfos[i].OffsetFrame:GetValue(req).Value) - self.Comp.RenderStart
+      local endFrame = startFrame + InKeyFrameInfos[i].DurationFrame:GetValue(req).Value - 1
+
+      local easingValue = InKeyFrameInfos[i].Easing:GetValue(req).Value
+      local easing = EaseLinear
+      if easingValue == 0 then
+         easing = easeLinear
+      elseif easingValue == 1 then
+         easing = easeInSine
+      elseif easingValue == 2 then
+         easing = easeOutSine
+      elseif easingValue == 3 then
+         easing = easeInOutSine
+      elseif easingValue == 4 then
+         easing = easeOutBounce
+      end
+
+      table.insert(keyFrameInfos,
+         KeyFrameInfo.New(
+            startValue,
+            endValue,
+            startFrame,
+            endFrame,
+            easing
+         )
+      )
+      nextStartFrame = endFrame + 1
+   end
+
+   local repeatMode = InRepeatMode:GetValue(req).Value
+
+   local result = 0
+   local firstStartFrame = keyFrameInfos[1].StartFrame
+   local lastEndFrame = keyFrameInfos[#keyFrameInfos].EndFrame
+
+   local time = req.Time
+   if repeatMode == 0 then
+      time = req.Time
+   elseif repeatMode == 1 or repeatMode == 2 then
+      local animLength = (lastEndFrame - self.Comp.RenderStart + 1)
+      time = time % animLength
+   end
+
+   if time < firstStartFrame then
+      result = keyFrameInfos[1].StartValue
+   elseif time > lastEndFrame then
+      result = keyFrameInfos[#keyFrameInfos].EndValue
+   else
+      local found = false
+      for i = 1, #keyFrameInfos do
+         if time >= keyFrameInfos[i].StartFrame and time <= keyFrameInfos[i].EndFrame then
+            local t = (time - keyFrameInfos[i].StartFrame) /
+                (keyFrameInfos[i].EndFrame - keyFrameInfos[i].StartFrame)
+            result = keyFrameInfos[i].EasingFunction(t) * (keyFrameInfos[i].EndValue - keyFrameInfos[i].StartValue) +
+                keyFrameInfos[i].StartValue
+            found = true
+            break
+         end
+      end
+      if not found then
+         for i = 1, #keyFrameInfos do
+            if time >= keyFrameInfos[i].EndFrame then
+               result = keyFrameInfos[i].EndValue
+            end
+         end
+      end
+   end
+
+   OutValue:Set(req, Number(result))
+end
+
+function NotifyChanged(inp, param, time)
+   if inp == InKeyFramesNum then
+      for i = 1, param.Value do
+         for key, input in pairs(InKeyFrameInfos[i]) do
+            input:SetAttrs({ IC_Visible = true })
+         end
+         if i == 1 then
+            InKeyFrameInfos[i].AutoLinkValues:SetAttrs({ IC_Visible = false })
+         end
+         local currentAutoLink = InKeyFrameInfos[i].AutoLinkValues:GetSource(time)
+         InKeyFrameInfos[i].AutoLinkValues:SetSource(currentAutoLink, time)
+      end
+      for i = param.Value + 1, KEY_FRAMES_NUM do
+         for key, input in pairs(InKeyFrameInfos[i]) do
+            input:SetAttrs({ IC_Visible = false })
+         end
+      end
+   else
+      local clipLength = self.Comp.RenderEnd - self.Comp.RenderStart + 1
+
+      for i = 1, #InKeyFrameInfos do
+         if inp == InKeyFrameInfos[i].OffsetFrame or inp == InKeyFrameInfos[i].DurationFrame then
+            if inp:GetAttr("INP_MaxScale", time) == 0 then
+               inp:SetAttrs({ INP_MaxScale = clipLength })
+            end
+            break
+         elseif inp == InKeyFrameInfos[i].AutoLinkValues then
+            local keyNum = InKeyFramesNum:GetSource(time).Value
+            if i <= keyNum then
+               if param.Value == 0 then
+                  InKeyFrameInfos[i].StartValue:SetAttrs({ IC_Visible = true })
+                  if i == keyNum then
+                     InKeyFrameInfos[i].EndValue:SetAttrs({ IC_Visible = true })
+                  end
+               elseif param.Value == 1 then
+                  InKeyFrameInfos[i].StartValue:SetAttrs({ IC_Visible = false })
+                  if i == keyNum then
+                     InKeyFrameInfos[i].EndValue:SetAttrs({ IC_Visible = false })
+                  end
+               end
+            end
+            break
+         elseif inp == InKeyFrameInfos[i].PreviewMode and param.Value ~= 0 then
+            for j = 1, #InKeyFrameInfos do
+               if j ~= i then
+                  InKeyFrameInfos[j].PreviewMode:SetSource(Number(0), time)
+               end
+            end
+            break
+         end
+      end
+   end
+end
