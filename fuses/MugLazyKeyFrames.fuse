@@ -1,6 +1,6 @@
 FuRegisterClass("MugLazyKeyFrames", CT_Modifier, {
    REGS_Name           = "MugLazyKeyFrames",
-   REGS_Category       = "Modifiers",
+   REGS_Category       = "Mug",
    REGS_OpDescription  = "MugLazyKeyFrames",
    REGID_DataType      = "Number",
    REGID_InputDataType = "Number",
