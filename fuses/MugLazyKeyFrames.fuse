@@ -198,7 +198,7 @@ function Create()
          INP_MinAllowed     = 1,
          INP_MinScale       = 1,
          INP_MaxScale       = 100,
-         INP_Default        = 1,
+         INP_Default        = 10,
          INP_Integer        = true,
          IC_Steps           = 1,
          INP_External       = false,
