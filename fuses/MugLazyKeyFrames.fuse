@@ -35,6 +35,7 @@ local InKeyFrameInfo = {
 
 local KEY_FRAMES_NUM = 10
 function Create()
+   self:BeginControlNest("Common", "Common", true);
    InKeyFramesNum = self:AddInput("Key Frames Num", "KeyFramesNum", {
       LINKID_DataType        = "Number",
       INPID_InputControl     = "SliderControl",
@@ -50,19 +51,17 @@ function Create()
       INP_External           = false,
    })
 
-
-   InPreRollTime = self:AddInput("Pre-Roll Time", "PreRollTime", {
-      LINKID_DataType        = "Number",
-      INPID_InputControl     = "ScrewControl",
-      INP_Required           = true,
+   InTimeUnit = self:AddInput("Time Unit", "TimeUnit", {
+      LINKID_DataType    = "Number",
+      INPID_InputControl = "MultiButtonControl",
+      INP_Default        = 0,
+      { MBTNC_AddButton = "Frames",  MBTNCD_ButtonWidth = 1 / 2, },
+      { MBTNC_AddButton = "Seconds", MBTNCD_ButtonWidth = 1 / 2, },
       INP_Integer            = true,
-      INP_Default            = 0,
-      INP_MinScale           = -100,
-      INP_MaxScale           = 100,
       INP_InteractivePassive = true,
       INP_External           = false,
+      INP_Disabled           = true,
    })
-
 
    InRepeatMode = self:AddInput("Repeat Mode", "RepeatMode", {
       LINKID_DataType    = "Number",
@@ -75,6 +74,19 @@ function Create()
       INP_InteractivePassive = true,
       INP_External           = false,
    })
+
+   InPreRollTime = self:AddInput("Pre-Roll Time", "PreRollTime", {
+      LINKID_DataType        = "Number",
+      INPID_InputControl     = "ScrewControl",
+      INP_Required           = true,
+      INP_Integer            = true,
+      INP_Default            = 0,
+      INP_MinScale           = -100,
+      INP_MaxScale           = 100,
+      INP_InteractivePassive = true,
+      INP_External           = false,
+   })
+   self:EndControlNest()
 
    self:BeginControlNest("Debug", "Debug", false);
    InDebugText = self:AddInput("Key Information", "KeyInformationText", {
@@ -466,6 +478,27 @@ local easingFunctions = {
    easeInOutBounce
 }
 
+local KeyFrameSettings = {
+   New = function(autoLinkValues,
+                  startValue,
+                  endValue,
+                  offsetFrame,
+                  durationFrame,
+                  easing,
+                  previewMode,
+                  timeUnit)
+      return {
+         AutoLinkValues = autoLinkValues,
+         StartValue = startValue,
+         EndValue = endValue,
+         OffsetFrame = offsetFrame,
+         DurationFrame = durationFrame,
+         Easing = easing,
+         PreviewMode = previewMode,
+         TimeUnit = timeUnit,
+      }
+   end
+}
 
 local KeyFrameInfo = {
    New = function(startValue, endValue, startFrame, endFrame, easingFunction)
