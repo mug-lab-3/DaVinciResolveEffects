@@ -148,7 +148,30 @@ function Create()
          { CCS_AddString = "InSine", },
          { CCS_AddString = "OutSine", },
          { CCS_AddString = "InOutSine", },
+         { CCS_AddString = "InQuad", },
+         { CCS_AddString = "OutQuad", },
+         { CCS_AddString = "InOutQuad", },
+         { CCS_AddString = "InCubic", },
+         { CCS_AddString = "OutCubic", },
+         { CCS_AddString = "InOutCubic", },
+         { CCS_AddString = "InQuart", },
+         { CCS_AddString = "OutQuart", },
+         { CCS_AddString = "InOutQuart", },
+         { CCS_AddString = "InQuint", },
+         { CCS_AddString = "OutQuint", },
+         { CCS_AddString = "InOutQuint", },
+         { CCS_AddString = "InExpo", },
+         { CCS_AddString = "OutExpo", },
+         { CCS_AddString = "InOutExpo", },
+         { CCS_AddString = "InCirc", },
+         { CCS_AddString = "OutCirc", },
+         { CCS_AddString = "InOutCirc", },
+         { CCS_AddString = "InElastic", },
+         { CCS_AddString = "OutElastic", },
+         { CCS_AddString = "InOutElastic", },
          { CCS_AddString = "OutBounce", },
+         { CCS_AddString = "InBounce", },
+         { CCS_AddString = "InOutBounce", },
          CC_LabelPosition = "Horizontal",
          INP_External     = false,
       })
@@ -221,6 +244,154 @@ local function easeInOutSine(t)
    return -(math.cos(math.pi * t) - 1) / 2;
 end
 
+local function easeInQuad(t)
+   return t ^ 2
+end
+
+local function easeOutQuad(t)
+   return 1 - (1 - t) * (1 - t);
+end
+
+local function easeInOutQuad(t)
+   if t < 0.5 then
+      return 2 * t * t;
+   else
+      return 1 - ((-2 * t + 2) ^ 2) / 2;
+   end
+end
+
+local function easeInCubic(t)
+   return t ^ 3;
+end
+
+local function easeOutCubic(t)
+   return 1 - (1 - t) ^ 3
+end
+
+local function easeInOutCubic(t)
+   if t < 0.5 then
+      return 4 * t ^ 3
+   else
+      return 1 - ((-2 * t + 2) ^ 3) / 2
+   end
+end
+
+local function easeInQuart(t)
+   return t ^ 4
+end
+
+local function easeOutQuart(t)
+   return 1 - (1 - t) ^ 4
+end
+
+local function easeInOutQuart(t)
+   if t < 0.5 then
+      return 8 * t ^ 4
+   else
+      return 1 - ((-2 * t + 2) ^ 4) / 2
+   end
+end
+
+local function easeInQuint(t)
+   return t ^ 5
+end
+
+local function easeOutQuint(t)
+   return 1 - (1 - t) ^ 5
+end
+
+local function easeInOutQuint(t)
+   if t < 0.5 then
+      return 16 * t ^ 5
+   else
+      return 1 - ((-2 * t + 2) ^ 5) / 2
+   end
+end
+
+local function easeInExpo(t)
+   if t == 0 then
+      return 0
+   else
+      return 2 ^ (10 * t - 10)
+   end
+end
+
+local function easeOutExpo(t)
+   if t == 1 then
+      return 1
+   else
+      return 1 - 2 ^ (-10 * t)
+   end
+end
+
+local function easeInOutExpo(t)
+   if t == 0 then
+      return 0
+   elseif t == 1 then
+      return 1
+   elseif t < 0.5 then
+      return (2 ^ (20 * t - 10)) / 2
+   else
+      return (2 - 2 ^ (-20 * t + 10)) / 2
+   end
+end
+
+local function easeInCirc(t)
+   return 1 - math.sqrt(1 - t ^ 2)
+end
+
+local function easeOutCirc(t)
+   return math.sqrt(1 - (t - 1) ^ 2)
+end
+
+local function easeInOutCirc(t)
+   if t < 0.5 then
+      return (1 - math.sqrt(1 - (2 * t) ^ 2)) / 2
+   else
+      return (math.sqrt(1 - (-2 * t + 2) ^ 2) + 1) / 2
+   end
+end
+
+local function easeInElastic(t)
+   local p = 0.3
+   local s = p / 4
+
+   if t == 0 then
+      return 0
+   elseif t == 1 then
+      return 1
+   else
+      return -2 ^ (10 * (t - 1)) * math.sin((t - 1 - s) * (2 * math.pi) / p)
+   end
+end
+
+local function easeOutElastic(t)
+   local p = 0.3
+   local s = p / 4
+
+   if t == 0 then
+      return 0
+   elseif t == 1 then
+      return 1
+   else
+      return 2 ^ (-10 * t) * math.sin((t - s) * (2 * math.pi) / p) + 1
+   end
+end
+
+local function easeInOutElastic(t)
+   local c5 = (2 * math.pi) / 4.5
+
+   if t == 0 then
+      return 0
+   elseif t == 1 then
+      return 1
+   elseif t < 0.5 then
+      return -((2 ^ (20 * t - 10)) * math.sin((20 * t - 11.125) * c5)) / 2
+   else
+      return ((2 ^ (-20 * t + 10)) * math.sin((20 * t - 11.125) * c5)) / 2 + 1
+   end
+end
+
 local function easeOutBounce(t)
    local n1 = 7.5625
    local d1 = 2.75
@@ -237,6 +408,50 @@ local function easeOutBounce(t)
       return n1 * new_t * new_t + 0.984375
    end
 end
+
+local function easeInBounce(t)
+   return 1 - easeOutBounce(1 - t)
+end
+
+local function easeInOutBounce(t)
+   if t < 0.5 then
+      return (1 - easeOutBounce(1 - 2 * t)) / 2
+   else
+      return (1 + easeOutBounce(2 * t - 1)) / 2
+   end
+end
+
+local easingFunctions = {
+   easeLinear,
+   easeInSine,
+   easeOutSine,
+   easeInOutSine,
+   easeInQuad,
+   easeOutQuad,
+   easeInOutQuad,
+   easeInCubic,
+   easeOutCubic,
+   easeInOutCubic,
+   easeInQuart,
+   easeOutQuart,
+   easeInOutQuart,
+   easeInQuint,
+   easeOutQuint,
+   easeInOutQuint,
+   easeInExpo,
+   easeOutExpo,
+   easeInOutExpo,
+   easeInCirc,
+   easeOutCirc,
+   easeInOutCirc,
+   easeInElastic,
+   easeOutElastic,
+   easeInOutElastic,
+   easeOutBounce,
+   easeInBounce,
+   easeInOutBounce
+}
+
 
 local KeyFrameInfo = {
    New = function(startValue, endValue, startFrame, endFrame, easingFunction)
@@ -300,18 +515,7 @@ function Process(req)
       local endFrame = startFrame + InKeyFrameInfos[i].DurationFrame:GetValue(req).Value - 1
 
       local easingValue = InKeyFrameInfos[i].Easing:GetValue(req).Value
-      local easing = EaseLinear
-      if easingValue == 0 then
-         easing = easeLinear
-      elseif easingValue == 1 then
-         easing = easeInSine
-      elseif easingValue == 2 then
-         easing = easeOutSine
-      elseif easingValue == 3 then
-         easing = easeInOutSine
-      elseif easingValue == 4 then
-         easing = easeOutBounce
-      end
+      local easing = easingFunctions[easingValue + 1] or easeLinear
 
       table.insert(keyFrameInfos,
          KeyFrameInfo.New(
@@ -322,9 +526,9 @@ function Process(req)
             easing
          )
       )
+
       nextStartFrame = endFrame + 1
    end
-   self:SetData("KeyFrameInfos", keyFrameInfos)
 
    local repeatMode = InRepeatMode:GetValue(req).Value
 
