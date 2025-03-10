@@ -169,8 +169,8 @@ function Create()
          { CCS_AddString = "InElastic", },
          { CCS_AddString = "OutElastic", },
          { CCS_AddString = "InOutElastic", },
-         { CCS_AddString = "OutBounce", },
          { CCS_AddString = "InBounce", },
+         { CCS_AddString = "OutBounce", },
          { CCS_AddString = "InOutBounce", },
          CC_LabelPosition = "Horizontal",
          INP_External     = false,
@@ -447,8 +447,8 @@ local easingFunctions = {
    easeInElastic,
    easeOutElastic,
    easeInOutElastic,
-   easeOutBounce,
    easeInBounce,
+   easeOutBounce,
    easeInOutBounce
 }
 
