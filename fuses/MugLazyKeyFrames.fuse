@@ -196,7 +196,7 @@ function Create()
       self:EndControlNest()
 
       local inLabelTime = self:BeginControlNest("Time", "Time" .. i, true);
-      local inOffset = self:AddInput("Offset", "Offset" .. i, {
+      local inOffset = self:AddInput("Delay", "Delay" .. i, {
          LINKID_DataType    = "Number",
          INPID_InputControl = "ScrewControl",
          INP_MinAllowed     = 0,
