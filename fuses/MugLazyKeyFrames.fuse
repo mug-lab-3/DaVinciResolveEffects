@@ -75,7 +75,6 @@ function Create()
    InPreRollTime = self:AddInput("Pre-Roll Time", "PreRollTime", {
       LINKID_DataType    = "Number",
       INPID_InputControl = "ScrewControl",
-      INP_Required       = true,
       INP_Integer        = true,
       INP_Default        = 0,
       INP_MinScale       = -100,
@@ -128,7 +127,6 @@ function Create()
       local inAutoLinkValues = self:AddInput("Auto-Link Values", "AutoLinkValues" .. i, {
          LINKID_DataType     = "Number",
          INPID_InputControl  = "CheckboxControl",
-         INP_Required        = true,
          INP_Integer         = true,
          INP_Default         = 0,
          INP_MinAllowed      = 0,
@@ -142,7 +140,6 @@ function Create()
       local inStart = self:AddInput("Start", "Start" .. i, {
          LINKID_DataType    = "Number",
          INPID_InputControl = "ScrewControl",
-         INP_Required       = true,
          INP_Default        = 0,
          INP_Disabled       = false,
          INP_External       = false,
@@ -152,7 +149,6 @@ function Create()
       local inEnd = self:AddInput("End", "End" .. i, {
          LINKID_DataType    = "Number",
          INPID_InputControl = "ScrewControl",
-         INP_Required       = true,
          INP_Default        = 0,
          INP_External       = false,
       })
@@ -160,12 +156,13 @@ function Create()
       local inEasing = self:AddInput("Ease", "Ease" .. i, {
          LINKID_DataType    = "Number",
          INPID_InputControl = "ComboControl",
-         --INP_Required       = true,
          INP_Integer        = true,
          INP_MinAllowed     = 0,
          INP_MinScale       = 0,
          INP_Default        = 0,
          { CCS_AddString = "Linear", },
+         { CCS_AddString = "InStep", },
+         { CCS_AddString = "OutStep", },
          { CCS_AddString = "InSine", },
          { CCS_AddString = "OutSine", },
          { CCS_AddString = "InOutSine", },
@@ -202,7 +199,6 @@ function Create()
       local inOffset = self:AddInput("Offset", "Offset" .. i, {
          LINKID_DataType    = "Number",
          INPID_InputControl = "ScrewControl",
-         --INP_Required       = true,
          INP_MinAllowed     = 0,
          INP_MinScale       = 0,
          INP_MaxScale       = 100,
@@ -215,7 +211,6 @@ function Create()
       local inDuration = self:AddInput("Duration", "Duration" .. i, {
          LINKID_DataType    = "Number",
          INPID_InputControl = "ScrewControl",
-         --INP_Required       = true,
          INP_MinAllowed     = 1,
          INP_MinScale       = 1,
          INP_MaxScale       = 100,
@@ -251,6 +246,18 @@ end
 
 local function easeLinear(t)
    return t
+end
+
+local function easeInStep(t)
+   return 1
+end
+
+local function easeOutStep(t)
+   if t == 1 then
+      return 1
+   else
+      return 0
+   end
 end
 
 local function easeInSine(t)
@@ -444,6 +451,8 @@ end
 
 local easingFunctions = {
    easeLinear,
+   easeInStep,
+   easeOutStep,
    easeInSine,
    easeOutSine,
    easeInOutSine,
