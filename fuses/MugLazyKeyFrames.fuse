@@ -67,7 +67,7 @@ function Create()
       INP_Default        = 0,
       { MBTNC_AddButton = "None",          MBTNCD_ButtonWidth = 1 / 3, },
       { MBTNC_AddButton = "Normal Repeat", MBTNCD_ButtonWidth = 1 / 3, },
-      -- { MBTNC_AddButton = "Mirror Repeat", MBTNCD_ButtonWidth = 1 / 3, },
+      { MBTNC_AddButton = "Mirror Repeat", MBTNCD_ButtonWidth = 1 / 3, },
       INP_Integer  = true,
       INP_External = false,
    })
@@ -505,18 +505,19 @@ local KeyFrameSettings = {
 }
 
 local KeyFrameInfo = {
-   New = function(startValue, endValue, startFrame, endFrame, easingFunction)
+   New = function(startValue, endValue, startFrame, endFrame, easingFunction, delayParam)
       return {
          StartValue = startValue,
          EndValue = endValue,
          StartFrame = startFrame,
          EndFrame = endFrame,
          EasingFunction = easingFunction,
+         DelayParam = delayParam,
       }
    end
 }
 
-local createKeyFrameInfos = function(keyFrameSettings)
+local createKeyFrameInfos = function(keyFrameSettings, mirror)
    local keyFrameInfos = {}
 
    local frameRate = self.Comp:GetPrefs("Comp.FrameFormat.Rate")
@@ -539,17 +540,17 @@ local createKeyFrameInfos = function(keyFrameSettings)
          end
       end
 
-      local offsetFrames = 0
+      local delayFrames = 0
       local durationFrames = 0
       if keyFrameSettings[i].TimeUnit == 0 then -- Frames
-         offsetFrames = keyFrameSettings[i].OffsetTime
+         delayFrames = keyFrameSettings[i].OffsetTime
          durationFrames = keyFrameSettings[i].DurationTime
       else -- Seconds
-         offsetFrames = math.ceil(keyFrameSettings[i].OffsetTime * frameRate)
+         delayFrames = math.ceil(keyFrameSettings[i].OffsetTime * frameRate)
          durationFrames = math.ceil(keyFrameSettings[i].DurationTime * frameRate)
       end
 
-      local startFrame = (nextStartFrame + offsetFrames)
+      local startFrame = (nextStartFrame + delayFrames)
       local endFrame = startFrame + durationFrames - 1
 
       local easingValue = keyFrameSettings[i].Easing
@@ -561,11 +562,41 @@ local createKeyFrameInfos = function(keyFrameSettings)
             endValue,
             startFrame,
             endFrame,
-            easing
+            easing,
+            delayFrames
          )
       )
 
       nextStartFrame = endFrame + 1
+   end
+
+   if mirror then
+      local refSize = #keyFrameInfos
+      for i = 1, refSize do
+         local refIndex = refSize - i + 1
+         local refDelayIndex = refIndex
+
+         local startValue = keyFrameInfos[refIndex].EndValue
+         local endValue = keyFrameInfos[refIndex].StartValue
+
+         local delayFrames = keyFrameInfos[refDelayIndex].DelayParam
+         local durationFrames = keyFrameInfos[refIndex].EndFrame - keyFrameInfos[refIndex].StartFrame + 1
+         local startFrame = (nextStartFrame + delayFrames)
+         local endFrame = startFrame + durationFrames - 1
+
+         table.insert(keyFrameInfos,
+            KeyFrameInfo.New(
+               startValue,
+               endValue,
+               startFrame,
+               endFrame,
+               keyFrameInfos[refIndex].EasingFunction,
+               delayFrames
+            )
+         )
+
+         nextStartFrame = endFrame + 1
+      end
    end
 
    return keyFrameInfos
@@ -622,7 +653,9 @@ function Process(req)
       )
    end
 
-   local keyFrameInfos = createKeyFrameInfos(keyFrameSettings)
+   local repeatMode = InRepeatMode:GetValue(req).Value
+   local isMirror = repeatMode == 2
+   local keyFrameInfos = createKeyFrameInfos(keyFrameSettings, isMirror)
    local firstStartFrame = keyFrameInfos[1].StartFrame
    local lastEndFrame = keyFrameInfos[#keyFrameInfos].EndFrame
    local preRollTime = InPreRollTime:GetValue(req).Value
@@ -637,7 +670,6 @@ function Process(req)
    end
 
    -- Loop the time if the repeat mode is "Normal Repeat" or "Mirror Repeat"
-   local repeatMode = InRepeatMode:GetValue(req).Value
    if repeatMode == 1 or repeatMode == 2 then
       time = time % animLength
    end
@@ -716,7 +748,8 @@ function NotifyChanged(inp, param, time)
          )
       end
 
-      local keyFrameInfos = createKeyFrameInfos(keyFrameSettings)
+      local isMirror = InRepeatMode:GetSource(time).Value == 2
+      local keyFrameInfos = createKeyFrameInfos(keyFrameSettings, isMirror)
 
       local preRollTime = InPreRollTime:GetSource(time).Value
       local keyFrameInfoText = ""
