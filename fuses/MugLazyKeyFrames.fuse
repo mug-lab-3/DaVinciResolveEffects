@@ -14,7 +14,7 @@ local InKeyFrameInfo = {
                   offsetFrame,
                   durationFrame,
                   easing,
-                  previewMode,
+                  jumpTo,
                   labelKey,
                   labelValue,
                   labelTime)
@@ -25,7 +25,7 @@ local InKeyFrameInfo = {
          OffsetFrame = offsetFrame,
          DurationFrame = durationFrame,
          Easing = easing,
-         PreviewMode = previewMode,
+         JumpTo = jumpTo,
          LabelKey = labelKey,
          LabelValue = labelValue,
          LabelTime = labelTime,
@@ -109,20 +109,20 @@ function Create()
    for i = 1, KEY_FRAMES_NUM do
       local inLabelKey = self:BeginControlNest("Key " .. i, "Key" .. i, true);
 
-      local inLabelValue = self:BeginControlNest("Value", "Value" .. i, true);
-
-      local inPreviewMode = self:AddInput("Preview Mode", "PreviewMode" .. i, {
+      local inJumpTo = self:AddInput("Seek To Keyframe", "JumpTo" .. i, {
          LINKID_DataType    = "Number",
          INPID_InputControl = "MultiButtonControl",
+         MBTNC_Type         = "Normal",
          INP_Default        = 0,
-         { MBTNC_AddButton = "None",  MBTNCD_ButtonWidth = 1 / 3, },
-         { MBTNC_AddButton = "Start", MBTNCD_ButtonWidth = 1 / 3, },
-         { MBTNC_AddButton = "End",   MBTNCD_ButtonWidth = 1 / 3, },
+         { MBTNC_AddButton = "Start", MBTNCD_ButtonWidth = 1 / 2, },
+         { MBTNC_AddButton = "End",   MBTNCD_ButtonWidth = 1 / 2, },
          INP_InitialNotify   = false,
          INP_DoNotifyChanged = true,
          INP_Integer         = true,
          INP_External        = false,
       })
+
+      local inLabelValue = self:BeginControlNest("Value", "Value" .. i, true);
 
       local autoLinkedValuesVisible = true
       if i == 1 then
@@ -235,7 +235,7 @@ function Create()
             inOffset,
             inDuration,
             inEasing,
-            inPreviewMode,
+            inJumpTo,
             inLabelKey,
             inLabelValue,
             inLabelTime
@@ -494,7 +494,6 @@ local KeyFrameSettings = {
                   offsetTime,
                   durationTime,
                   easing,
-                  previewMode,
                   timeUnit)
       return {
          AutoLinkValues = autoLinkValues,
@@ -503,7 +502,6 @@ local KeyFrameSettings = {
          OffsetTime = offsetTime,
          DurationTime = durationTime,
          Easing = easing,
-         PreviewMode = previewMode,
          TimeUnit = timeUnit, -- 0: Frames, 1: Seconds
       }
    end
@@ -615,28 +613,6 @@ end
 function Process(req)
    local keyFramesNum = InKeyFramesNum:GetValue(req).Value
 
-   -- Preview Mode (debug)
-   for i = 1, keyFramesNum do
-      local previewMode = InKeyFrameInfos[i].PreviewMode:GetValue(req).Value
-      local previousEndValue = 0
-      if i == 1 then
-         previousEndValue = InKeyFrameInfos[keyFramesNum].EndValue:GetValue(req).Value
-      else
-         previousEndValue = InKeyFrameInfos[i - 1].EndValue:GetValue(req).Value
-      end
-      if previewMode == 1 then -- Start value
-         if InKeyFrameInfos[i].AutoLinkValues:GetValue(req).Value == 1 then
-            OutValue:Set(req, previousEndValue)
-         else
-            OutValue:Set(req, InKeyFrameInfos[i].StartValue:GetValue(req))
-         end
-         return
-      elseif previewMode == 2 then -- End value
-         OutValue:Set(req, InKeyFrameInfos[i].EndValue:GetValue(req))
-         return
-      end
-   end
-
    local keyFrameSettings = {}
    for i = 1, keyFramesNum do
       local autoLinkValues = InKeyFrameInfos[i].AutoLinkValues:GetValue(req).Value
@@ -645,7 +621,6 @@ function Process(req)
       local offsetTime = InKeyFrameInfos[i].OffsetFrame:GetValue(req).Value
       local durationTime = InKeyFrameInfos[i].DurationFrame:GetValue(req).Value
       local easing = InKeyFrameInfos[i].Easing:GetValue(req).Value
-      local previewMode = InKeyFrameInfos[i].PreviewMode:GetValue(req).Value
       local timeUnit = InTimeUnit:GetValue(req).Value
 
       table.insert(keyFrameSettings,
@@ -656,7 +631,6 @@ function Process(req)
             offsetTime,
             durationTime,
             easing,
-            previewMode,
             timeUnit
          )
       )
@@ -771,6 +745,35 @@ local changeTimeUnitUi = function(timeUnit, time)
    end
 end
 
+local createKeyFrameInfosFromNotifyChange = function(time)
+   local keyNum = InKeyFramesNum:GetSource(time).Value
+
+   local keyFrameSettings = {}
+   for i = 1, keyNum do
+      local autoLinkValues = InKeyFrameInfos[i].AutoLinkValues:GetSource(time).Value
+      local startValue = InKeyFrameInfos[i].StartValue:GetSource(time).Value
+      local endValue = InKeyFrameInfos[i].EndValue:GetSource(time).Value
+      local offsetTime = InKeyFrameInfos[i].OffsetFrame:GetSource(time).Value
+      local durationTime = InKeyFrameInfos[i].DurationFrame:GetSource(time).Value
+      local easing = InKeyFrameInfos[i].Easing:GetSource(time).Value
+      local timeUnit = InTimeUnit:GetSource(time).Value
+
+      table.insert(keyFrameSettings,
+         KeyFrameSettings.New(
+            autoLinkValues,
+            startValue,
+            endValue,
+            offsetTime,
+            durationTime,
+            easing,
+            timeUnit
+         )
+      )
+   end
+
+   return createKeyFrameInfos(keyFrameSettings, InRepeatMode:GetSource(time).Value)
+end
+
 function NotifyChanged(inp, param, time)
    if inp == InKeyFramesNum then
       for i = 1, param.Value do
@@ -799,7 +802,6 @@ function NotifyChanged(inp, param, time)
          local offsetTime = InKeyFrameInfos[i].OffsetFrame:GetSource(time).Value
          local durationTime = InKeyFrameInfos[i].DurationFrame:GetSource(time).Value
          local easing = InKeyFrameInfos[i].Easing:GetSource(time).Value
-         local previewMode = InKeyFrameInfos[i].PreviewMode:GetSource(time).Value
          local timeUnit = InTimeUnit:GetSource(time).Value
 
          table.insert(keyFrameSettings,
@@ -810,7 +812,6 @@ function NotifyChanged(inp, param, time)
                offsetTime,
                durationTime,
                easing,
-               previewMode,
                timeUnit
             )
          )
@@ -884,12 +885,24 @@ function NotifyChanged(inp, param, time)
                end
             end
             break
-         elseif inp == InKeyFrameInfos[i].PreviewMode and param.Value ~= 0 then
-            for j = 1, #InKeyFrameInfos do
-               if j ~= i then
-                  InKeyFrameInfos[j].PreviewMode:SetSource(Number(0), time)
-               end
+         elseif inp == InKeyFrameInfos[i].JumpTo and param.Value ~= 0 then
+            local timeUnit = InTimeUnit:GetSource(time).Value
+            local preRollTime = InPreRollTime:GetSource(time).Value
+            if timeUnit == 1 then -- Seconds
+               preRollTime = math.ceil(preRollTime * self.Comp:GetPrefs("Comp.FrameFormat.Rate"))
             end
+            local keyFrameInfos = createKeyFrameInfosFromNotifyChange(time)
+            local offset = preRollTime + self.Comp.RenderStart
+            local jumpFrame = 0
+            if param.Value == 1 then
+               jumpFrame = keyFrameInfos[i].StartFrame + offset
+               print("Start Frame: " .. keyFrameInfos[i].StartFrame)
+            elseif param.Value == 2 then
+               jumpFrame = keyFrameInfos[i].EndFrame + offset
+               print("End Frame: " .. keyFrameInfos[i].EndFrame)
+            end
+            local exe_str = string.format("comp:_SetCurrentTime(%d)", jumpFrame)
+            self.Comp:Execute(exe_str)
             break
          end
       end
