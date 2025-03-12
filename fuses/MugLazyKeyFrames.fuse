@@ -40,7 +40,7 @@ function Create()
       LINKID_DataType     = "Number",
       INPID_InputControl  = "SliderControl",
       INP_Integer         = true,
-      INP_Default         = 2,
+      INP_Default         = 1,
       INP_MinScale        = 1,
       INP_MaxScale        = KEY_FRAMES_NUM,
       INP_MinAllowed      = 1,
@@ -53,33 +53,36 @@ function Create()
    InTimeUnit = self:AddInput("Time Unit", "TimeUnit", {
       LINKID_DataType    = "Number",
       INPID_InputControl = "MultiButtonControl",
-      INP_Default        = 0,
       { MBTNC_AddButton = "Frames",  MBTNCD_ButtonWidth = 1 / 2, },
       { MBTNC_AddButton = "Seconds", MBTNCD_ButtonWidth = 1 / 2, },
-      INP_Integer  = true,
-      INP_External = false,
-      INP_Disabled = true,
+      INP_Default         = 0,
+      INP_Integer         = true,
+      --INP_InitialNotify   = false,
+      INP_DoNotifyChanged = true,
+      INP_External        = false,
+      -- INP_Disabled = true,
    })
 
    InRepeatMode = self:AddInput("Repeat Mode", "RepeatMode", {
       LINKID_DataType    = "Number",
       INPID_InputControl = "MultiButtonControl",
-      INP_Default        = 0,
+      INP_Default        = 2,
       { MBTNC_AddButton = "None",          MBTNCD_ButtonWidth = 1 / 3, },
       { MBTNC_AddButton = "Normal Repeat", MBTNCD_ButtonWidth = 1 / 3, },
       { MBTNC_AddButton = "Mirror Repeat", MBTNCD_ButtonWidth = 1 / 3, },
-      INP_Integer  = true,
-      INP_External = false,
+      INP_DoNotifyChanged = true,
+      INP_Integer         = true,
+      INP_External        = false,
    })
 
    InPreRollTime = self:AddInput("Pre-Roll Time", "PreRollTime", {
       LINKID_DataType    = "Number",
       INPID_InputControl = "ScrewControl",
-      INP_Integer        = true,
+      --INP_Integer        = true,
       INP_Default        = 0,
       INP_MinScale       = -100,
       INP_MaxScale       = 100,
-      INP_External       = false,
+      -- INP_External       = false,
    })
    self:EndControlNest()
 
@@ -115,6 +118,7 @@ function Create()
          { MBTNC_AddButton = "None",  MBTNCD_ButtonWidth = 1 / 3, },
          { MBTNC_AddButton = "Start", MBTNCD_ButtonWidth = 1 / 3, },
          { MBTNC_AddButton = "End",   MBTNCD_ButtonWidth = 1 / 3, },
+         INP_InitialNotify   = false,
          INP_DoNotifyChanged = true,
          INP_Integer         = true,
          INP_External        = false,
@@ -127,10 +131,11 @@ function Create()
       local inAutoLinkValues = self:AddInput("Auto-Link Values", "AutoLinkValues" .. i, {
          LINKID_DataType     = "Number",
          INPID_InputControl  = "CheckboxControl",
+         CBC_TriState        = true,
          INP_Integer         = true,
          INP_Default         = 0,
-         INP_MinAllowed      = 0,
-         INP_MaxAllowed      = 1,
+         --INP_MinAllowed      = 0,
+         --INP_MaxAllowed      = 2,
          -- INP_InitialNotify      = true,
          INP_DoNotifyChanged = true,
          INP_External        = false,
@@ -142,7 +147,7 @@ function Create()
          INPID_InputControl = "ScrewControl",
          INP_Default        = 0,
          INP_Disabled       = false,
-         INP_External       = false,
+         -- INP_External       = false,
          IC_Visible         = false,
       })
 
@@ -150,7 +155,7 @@ function Create()
          LINKID_DataType    = "Number",
          INPID_InputControl = "ScrewControl",
          INP_Default        = 0,
-         INP_External       = false,
+         -- INP_External       = false,
       })
 
       local inEasing = self:AddInput("Ease", "Ease" .. i, {
@@ -191,7 +196,7 @@ function Create()
          { CCS_AddString = "OutBounce", },
          { CCS_AddString = "InOutBounce", },
          CC_LabelPosition = "Horizontal",
-         INP_External     = false,
+         -- INP_External     = false,
       })
       self:EndControlNest()
 
@@ -203,21 +208,21 @@ function Create()
          INP_MinScale       = 0,
          INP_MaxScale       = 100,
          INP_Default        = 0,
-         INP_Integer        = true,
+         -- INP_Integer        = true,
          IC_Steps           = 1,
-         INP_External       = false,
+         -- INP_External       = false,
       })
 
       local inDuration = self:AddInput("Duration", "Duration" .. i, {
          LINKID_DataType    = "Number",
          INPID_InputControl = "ScrewControl",
-         INP_MinAllowed     = 1,
+         INP_MinAllowed     = 0,
          INP_MinScale       = 1,
          INP_MaxScale       = 100,
          INP_Default        = 10,
-         INP_Integer        = true,
+         -- INP_Integer        = true,
          IC_Steps           = 1,
-         INP_External       = false,
+         -- INP_External       = false,
       })
       self:EndControlNest()
       self:EndControlNest()
@@ -517,7 +522,7 @@ local KeyFrameInfo = {
    end
 }
 
-local createKeyFrameInfos = function(keyFrameSettings, mirror)
+local createKeyFrameInfos = function(keyFrameSettings, repeatMode)
    local keyFrameInfos = {}
 
    local frameRate = self.Comp:GetPrefs("Comp.FrameFormat.Rate")
@@ -525,18 +530,22 @@ local createKeyFrameInfos = function(keyFrameSettings, mirror)
    for i = 1, #keyFrameSettings do
       local linked = keyFrameSettings[i].AutoLinkValues
       local startValue = keyFrameSettings[i].StartValue
-      if linked == 1 then
+      if linked ~= 0 then
          if i == 1 then
-            startValue = keyFrameSettings[#keyFrameSettings].EndValue
+            if (repeatMode == 1) and (linked == 1) then
+               startValue = keyFrameSettings[#keyFrameSettings].EndValue
+            end
          else
             startValue = keyFrameSettings[i - 1].EndValue
          end
       end
 
       local endValue = keyFrameSettings[i].EndValue
-      if linked == 1 then
+      if linked ~= 0 then
          if i == #keyFrameSettings then
-            endValue = keyFrameSettings[1].StartValue
+            if (repeatMode == 1) and (linked == 1) then
+               endValue = keyFrameSettings[1].StartValue
+            end
          end
       end
 
@@ -570,7 +579,7 @@ local createKeyFrameInfos = function(keyFrameSettings, mirror)
       nextStartFrame = endFrame + 1
    end
 
-   if mirror then
+   if repeatMode == 2 then
       local refSize = #keyFrameInfos
       for i = 1, refSize do
          local refIndex = refSize - i + 1
@@ -654,11 +663,13 @@ function Process(req)
    end
 
    local repeatMode = InRepeatMode:GetValue(req).Value
-   local isMirror = repeatMode == 2
-   local keyFrameInfos = createKeyFrameInfos(keyFrameSettings, isMirror)
+   local keyFrameInfos = createKeyFrameInfos(keyFrameSettings, repeatMode)
    local firstStartFrame = keyFrameInfos[1].StartFrame
    local lastEndFrame = keyFrameInfos[#keyFrameInfos].EndFrame
    local preRollTime = InPreRollTime:GetValue(req).Value
+   if InTimeUnit:GetValue(req).Value == 1 then -- Seconds
+      preRollTime = math.ceil(preRollTime * self.Comp:GetPrefs("Comp.FrameFormat.Rate"))
+   end
    local animStartTime = self.Comp.RenderStart + preRollTime
    local animLength = (lastEndFrame + 1)
    local time = req.Time - animStartTime
@@ -701,6 +712,63 @@ function Process(req)
    end
 
    OutValue:Set(req, Number(result))
+end
+
+local changeTimeUnitUi = function(timeUnit, time)
+   local keyNum = InKeyFramesNum:GetSource(time).Value
+   local frameRate = self.Comp:GetPrefs("Comp.FrameFormat.Rate")
+
+   local initialize = false
+   local prevTimeUnit = self:GetData("TimeUnit: pervious value")
+   if prevTimeUnit == nil then
+      initialize = true
+      prevTimeUnit = timeUnit
+   end
+   self:SetData("TimeUnit: pervious value", timeUnit)
+
+   if timeUnit == 0 then -- Frames
+      if not initialize then
+         InPreRollTime:SetAttrs({ INP_Integer = true, INP_Steps = 1 })
+      end
+   else -- Seconds
+      InPreRollTime:SetAttrs({ INP_Integer = false, INP_Steps = 0.01 })
+   end
+   for i = 1, keyNum do
+      if prevTimeUnit == timeUnit then
+         if timeUnit == 0 then -- To frames
+            if not initialize then
+               InKeyFrameInfos[i].OffsetFrame:SetAttrs({ INP_Integer = true, INP_Steps = 1 })
+               InKeyFrameInfos[i].DurationFrame:SetAttrs({ INP_Integer = true, INP_Steps = 1 })
+            end
+         elseif timeUnit == 1 then -- To seconds
+            InKeyFrameInfos[i].OffsetFrame:SetAttrs({ INP_Integer = false, INP_Steps = 0.001 })
+            InKeyFrameInfos[i].DurationFrame:SetAttrs({ INP_Integer = false, INP_Steps = 0.001 })
+         end
+      end
+   end
+
+   if not initialize then
+      if prevTimeUnit == 1 and timeUnit == 0 then     -- To frames
+         InPreRollTime:SetSource(Number(InPreRollTime:GetSource(time).Value * frameRate), time)
+      elseif prevTimeUnit == 0 and timeUnit == 1 then -- To seconds
+         InPreRollTime:SetSource(Number(InPreRollTime:GetSource(time).Value / frameRate), time)
+      end
+      for i = 1, keyNum do
+         local currentDelayTime = InKeyFrameInfos[i].OffsetFrame:GetSource(time).Value
+         local currentDurationTime = InKeyFrameInfos[i].DurationFrame:GetSource(time).Value
+         if prevTimeUnit == 1 and timeUnit == 0 then -- To frames
+            InKeyFrameInfos[i].OffsetFrame:SetSource(Number(currentDelayTime * frameRate), time)
+            InKeyFrameInfos[i].DurationFrame:SetSource(Number(currentDurationTime * frameRate), time)
+            InKeyFrameInfos[i].OffsetFrame:SetAttrs({ INP_Integer = true, INP_Steps = 1 })
+            InKeyFrameInfos[i].DurationFrame:SetAttrs({ INP_Integer = true, INP_Steps = 1 })
+         elseif prevTimeUnit == 0 and timeUnit == 1 then -- To seconds
+            InKeyFrameInfos[i].OffsetFrame:SetAttrs({ INP_Integer = false, INP_Steps = 0.001 })
+            InKeyFrameInfos[i].DurationFrame:SetAttrs({ INP_Integer = false, INP_Steps = 0.001 })
+            InKeyFrameInfos[i].OffsetFrame:SetSource(Number(currentDelayTime / frameRate), time)
+            InKeyFrameInfos[i].DurationFrame:SetSource(Number(currentDurationTime / frameRate), time)
+         end
+      end
+   end
 end
 
 function NotifyChanged(inp, param, time)
@@ -748,8 +816,7 @@ function NotifyChanged(inp, param, time)
          )
       end
 
-      local isMirror = InRepeatMode:GetSource(time).Value == 2
-      local keyFrameInfos = createKeyFrameInfos(keyFrameSettings, isMirror)
+      local keyFrameInfos = createKeyFrameInfos(keyFrameSettings, InRepeatMode:GetSource(time).Value)
 
       local preRollTime = InPreRollTime:GetSource(time).Value
       local keyFrameInfoText = ""
@@ -767,6 +834,28 @@ function NotifyChanged(inp, param, time)
       local animLength = (keyFrameInfos[#keyFrameInfos].EndFrame + 1)
       keyFrameInfoText = string.format("Total: %d frames\n", animLength) .. keyFrameInfoText
       InDebugText:SetSource(Text(keyFrameInfoText), time)
+   elseif inp == InTimeUnit then
+      changeTimeUnitUi(param.Value, time)
+   elseif inp == InRepeatMode then
+      local keyNum = InKeyFramesNum:GetSource(time).Value
+      local repeatMode = param.Value
+      for i = 1, keyNum do
+         local autoLinkValues = InKeyFrameInfos[i].AutoLinkValues:GetSource(time).Value
+         if autoLinkValues == 0 then -- No checked
+            InKeyFrameInfos[i].StartValue:SetAttrs({ IC_Visible = true })
+            InKeyFrameInfos[i].EndValue:SetAttrs({ IC_Visible = true })
+         elseif autoLinkValues == -1 then -- Half checked
+            InKeyFrameInfos[i].StartValue:SetAttrs({ IC_Visible = false })
+            InKeyFrameInfos[i].EndValue:SetAttrs({ IC_Visible = true })
+         elseif autoLinkValues == 1 then -- Full checked
+            InKeyFrameInfos[i].StartValue:SetAttrs({ IC_Visible = false })
+            if i == keyNum and (repeatMode == 1) then
+               InKeyFrameInfos[i].EndValue:SetAttrs({ IC_Visible = false })
+            else
+               InKeyFrameInfos[i].EndValue:SetAttrs({ IC_Visible = true })
+            end
+         end
+      end
    else
       for i = 1, #InKeyFrameInfos do
          if inp == InKeyFrameInfos[i].OffsetFrame or inp == InKeyFrameInfos[i].DurationFrame then
@@ -776,17 +865,21 @@ function NotifyChanged(inp, param, time)
             end
             break
          elseif inp == InKeyFrameInfos[i].AutoLinkValues then
+            local repeatMode = InRepeatMode:GetSource(time).Value
             local keyNum = InKeyFramesNum:GetSource(time).Value
             if i <= keyNum then
-               if param.Value == 0 then
+               if param.Value == 0 then -- No checked
                   InKeyFrameInfos[i].StartValue:SetAttrs({ IC_Visible = true })
-                  if i == keyNum then
-                     InKeyFrameInfos[i].EndValue:SetAttrs({ IC_Visible = true })
-                  end
-               elseif param.Value == 1 then
+                  InKeyFrameInfos[i].EndValue:SetAttrs({ IC_Visible = true })
+               elseif param.Value == -1 then -- Half checked
                   InKeyFrameInfos[i].StartValue:SetAttrs({ IC_Visible = false })
-                  if i == keyNum then
+                  InKeyFrameInfos[i].EndValue:SetAttrs({ IC_Visible = true })
+               elseif param.Value == 1 then -- Full checked
+                  InKeyFrameInfos[i].StartValue:SetAttrs({ IC_Visible = false })
+                  if i == keyNum and (repeatMode == 1) then
                      InKeyFrameInfos[i].EndValue:SetAttrs({ IC_Visible = false })
+                  else
+                     InKeyFrameInfos[i].EndValue:SetAttrs({ IC_Visible = true })
                   end
                end
             end
