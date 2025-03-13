@@ -8,7 +8,8 @@ FuRegisterClass("MugLazyKeyFrames", CT_Modifier, {
 })
 
 local InKeyFrameInfo = {
-   New = function(autoLinkValues,
+   New = function(memo,
+                  autoLinkValues,
                   startValue,
                   endValue,
                   offsetFrame,
@@ -19,6 +20,7 @@ local InKeyFrameInfo = {
                   labelValue,
                   labelTime)
       return {
+         Memo = memo,
          AutoLinkValues = autoLinkValues,
          StartValue = startValue,
          EndValue = endValue,
@@ -33,9 +35,17 @@ local InKeyFrameInfo = {
    end
 }
 
-local KEY_FRAMES_NUM = 10
+local KEY_FRAMES_NUM = 15
 function Create()
    self:BeginControlNest("Common", "Common", true);
+
+   self:AddInput("Memo", "MemoGlobal", {
+      LINKID_DataType    = "Text",
+      INPID_InputControl = "TextEditControl",
+      TEC_Lines          = 1,
+      INP_External       = false,
+   })
+
    InKeyFramesNum = self:AddInput("Key Frames Num", "KeyFramesNum", {
       LINKID_DataType     = "Number",
       INPID_InputControl  = "SliderControl",
@@ -66,7 +76,7 @@ function Create()
    InRepeatMode = self:AddInput("Repeat Mode", "RepeatMode", {
       LINKID_DataType    = "Number",
       INPID_InputControl = "MultiButtonControl",
-      INP_Default        = 2,
+      INP_Default        = 0,
       { MBTNC_AddButton = "None",          MBTNCD_ButtonWidth = 1 / 3, },
       { MBTNC_AddButton = "Normal Repeat", MBTNCD_ButtonWidth = 1 / 3, },
       { MBTNC_AddButton = "Mirror Repeat", MBTNCD_ButtonWidth = 1 / 3, },
@@ -108,6 +118,13 @@ function Create()
    InKeyFrameInfos = {}
    for i = 1, KEY_FRAMES_NUM do
       local inLabelKey = self:BeginControlNest("Key " .. i, "Key" .. i, true);
+
+      local inMemo = self:AddInput("Memo", "Memo" .. i, {
+         LINKID_DataType    = "Text",
+         INPID_InputControl = "TextEditControl",
+         TEC_Lines          = 1,
+         INP_External       = false,
+      })
 
       local inJumpTo = self:AddInput("Seek To Keyframe", "JumpTo" .. i, {
          LINKID_DataType    = "Number",
@@ -229,6 +246,7 @@ function Create()
 
       table.insert(InKeyFrameInfos,
          InKeyFrameInfo.New(
+            inMemo,
             inAutoLinkValues,
             inStart,
             inEnd,
