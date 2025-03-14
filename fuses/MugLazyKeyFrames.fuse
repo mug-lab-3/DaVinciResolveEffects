@@ -15,6 +15,8 @@ local InKeyFrameInfo = {
                   offsetFrame,
                   durationFrame,
                   easing,
+                  easingParamsP1,
+                  easingParamsP2,
                   jumpTo,
                   labelKey,
                   labelValue,
@@ -27,6 +29,8 @@ local InKeyFrameInfo = {
          OffsetFrame = offsetFrame,
          DurationFrame = durationFrame,
          Easing = easing,
+         EasingParamsP1 = easingParamsP1,
+         EasingParamsP2 = easingParamsP2,
          JumpTo = jumpTo,
          LabelKey = labelKey,
          LabelValue = labelValue,
@@ -212,10 +216,35 @@ function Create()
          { CCS_AddString = "InBounce", },
          { CCS_AddString = "OutBounce", },
          { CCS_AddString = "InOutBounce", },
+         { CCS_AddString = "InSpiralDecay", },
+         { CCS_AddString = "OutSpiralDecay", },
+         { CCS_AddString = "InOutSpiralDecay", },
+         { CCS_AddString = "BounceGravity", },
          CC_LabelPosition = "Horizontal",
          -- INP_External     = false,
+         INP_DoNotifyChanged = true,
       })
       self:EndControlNest()
+
+      local inEasingParamsP1 = self:AddInput("Ease Params P1", "EaseParamsP1" .. i, {
+         LINKID_DataType    = "Number",
+         INPID_InputControl = "SliderControl",
+         --INP_Integer        = true,
+         INP_Default        = 1,
+         INP_MinScale       = -5,
+         INP_MaxScale       = 5,
+         -- INP_External       = false,
+      })
+
+      local inEasingParamsP2 = self:AddInput("Ease Params P2", "EaseParamsP2" .. i, {
+         LINKID_DataType    = "Number",
+         INPID_InputControl = "SliderControl",
+         --INP_Integer        = true,
+         INP_Default        = 1,
+         INP_MinScale       = -5,
+         INP_MaxScale       = 5,
+         -- INP_External       = false,
+      })
 
       local inLabelTime = self:BeginControlNest("Time", "Time" .. i, true);
       local inOffset = self:AddInput("Delay", "Delay" .. i, {
@@ -253,6 +282,8 @@ function Create()
             inOffset,
             inDuration,
             inEasing,
+            inEasingParamsP1,
+            inEasingParamsP2,
             inJumpTo,
             inLabelKey,
             inLabelValue,
@@ -267,15 +298,15 @@ function Create()
    })
 end
 
-local function easeLinear(t)
+local function easeLinear(t, params)
    return t
 end
 
-local function easeInStep(t)
+local function easeInStep(t, params)
    return 1
 end
 
-local function easeOutStep(t)
+local function easeOutStep(t, params)
    if t == 1 then
       return 1
    else
@@ -283,43 +314,43 @@ local function easeOutStep(t)
    end
 end
 
-local function easeInSine(t)
-   return 1 - math.cos((t * math.pi) / 2);
+local function easeInSine(t, params)
+   return 1 - math.cos((t * math.pi) / 2)
 end
 
-local function easeOutSine(t)
-   return math.sin((t * math.pi) / 2);
+local function easeOutSine(t, params)
+   return math.sin((t * math.pi) / 2)
 end
 
-local function easeInOutSine(t)
-   return -(math.cos(math.pi * t) - 1) / 2;
+local function easeInOutSine(t, params)
+   return -(math.cos(math.pi * t) - 1) / 2
 end
 
-local function easeInQuad(t)
+local function easeInQuad(t, params)
    return t ^ 2
 end
 
-local function easeOutQuad(t)
-   return 1 - (1 - t) * (1 - t);
+local function easeOutQuad(t, params)
+   return 1 - (1 - t) * (1 - t)
 end
 
-local function easeInOutQuad(t)
+local function easeInOutQuad(t, params)
    if t < 0.5 then
-      return 2 * t * t;
+      return 2 * t * t
    else
-      return 1 - ((-2 * t + 2) ^ 2) / 2;
+      return 1 - ((-2 * t + 2) ^ 2) / 2
    end
 end
 
-local function easeInCubic(t)
-   return t ^ 3;
+local function easeInCubic(t, params)
+   return t ^ 3
 end
 
-local function easeOutCubic(t)
+local function easeOutCubic(t, params)
    return 1 - (1 - t) ^ 3
 end
 
-local function easeInOutCubic(t)
+local function easeInOutCubic(t, params)
    if t < 0.5 then
       return 4 * t ^ 3
    else
@@ -327,15 +358,15 @@ local function easeInOutCubic(t)
    end
 end
 
-local function easeInQuart(t)
+local function easeInQuart(t, params)
    return t ^ 4
 end
 
-local function easeOutQuart(t)
+local function easeOutQuart(t, params)
    return 1 - (1 - t) ^ 4
 end
 
-local function easeInOutQuart(t)
+local function easeInOutQuart(t, params)
    if t < 0.5 then
       return 8 * t ^ 4
    else
@@ -343,15 +374,15 @@ local function easeInOutQuart(t)
    end
 end
 
-local function easeInQuint(t)
+local function easeInQuint(t, params)
    return t ^ 5
 end
 
-local function easeOutQuint(t)
+local function easeOutQuint(t, params)
    return 1 - (1 - t) ^ 5
 end
 
-local function easeInOutQuint(t)
+local function easeInOutQuint(t, params)
    if t < 0.5 then
       return 16 * t ^ 5
    else
@@ -359,7 +390,7 @@ local function easeInOutQuint(t)
    end
 end
 
-local function easeInExpo(t)
+local function easeInExpo(t, params)
    if t == 0 then
       return 0
    else
@@ -367,7 +398,7 @@ local function easeInExpo(t)
    end
 end
 
-local function easeOutExpo(t)
+local function easeOutExpo(t, params)
    if t == 1 then
       return 1
    else
@@ -375,7 +406,7 @@ local function easeOutExpo(t)
    end
 end
 
-local function easeInOutExpo(t)
+local function easeInOutExpo(t, params)
    if t == 0 then
       return 0
    elseif t == 1 then
@@ -387,15 +418,15 @@ local function easeInOutExpo(t)
    end
 end
 
-local function easeInCirc(t)
+local function easeInCirc(t, params)
    return 1 - math.sqrt(1 - t ^ 2)
 end
 
-local function easeOutCirc(t)
+local function easeOutCirc(t, params)
    return math.sqrt(1 - (t - 1) ^ 2)
 end
 
-local function easeInOutCirc(t)
+local function easeInOutCirc(t, params)
    if t < 0.5 then
       return (1 - math.sqrt(1 - (2 * t) ^ 2)) / 2
    else
@@ -403,7 +434,7 @@ local function easeInOutCirc(t)
    end
 end
 
-local function easeInElastic(t)
+local function easeInElastic(t, params)
    local p = 0.3
    local s = p / 4
 
@@ -416,7 +447,7 @@ local function easeInElastic(t)
    end
 end
 
-local function easeOutElastic(t)
+local function easeOutElastic(t, params)
    local p = 0.3
    local s = p / 4
 
@@ -429,7 +460,7 @@ local function easeOutElastic(t)
    end
 end
 
-local function easeInOutElastic(t)
+local function easeInOutElastic(t, params)
    local c5 = (2 * math.pi) / 4.5
 
    if t == 0 then
@@ -443,7 +474,7 @@ local function easeInOutElastic(t)
    end
 end
 
-local function easeOutBounce(t)
+local function easeOutBounce(t, params)
    local n1 = 7.5625
    local d1 = 2.75
    if t < 1 / d1 then
@@ -460,16 +491,90 @@ local function easeOutBounce(t)
    end
 end
 
-local function easeInBounce(t)
-   return 1 - easeOutBounce(1 - t)
+local function easeInBounce(t, params)
+   return 1 - easeOutBounce(1 - t, params)
 end
 
-local function easeInOutBounce(t)
+local function easeInOutBounce(t, params)
    if t < 0.5 then
-      return (1 - easeOutBounce(1 - 2 * t)) / 2
+      return (1 - easeOutBounce(1 - 2 * t, params)) / 2
    else
-      return (1 + easeOutBounce(2 * t - 1)) / 2
+      return (1 + easeOutBounce(2 * t - 1, params)) / 2
    end
+end
+
+local function easeInSpiralDecay(t, params)
+   return t * (1 + 0.8 * math.exp(-5 * t) * math.sin(12 * t))
+end
+
+local function easeOutSpiralDecay(t, params)
+   return t * (1 + 0.8 * math.exp(5 * (t - 1)) * math.sin(12 * t))
+end
+
+local function easeInOutSpiralDecay(t, params)
+   return t * (1 + 0.8 * math.exp(-10 * (t - 0.5) ^ 2) * math.sin(12 * t))
+end
+
+local function easeBounceGravity(t, params)
+   local decay = params.P1
+   if (decay <= 1.1) then
+      decay = 1.1
+   end
+   local gravity = params.P2
+   if gravity <= 0 then
+      gravity = 0
+   end
+   local initialHeight = 1
+
+   print("easeBounceGravity: t = " .. t .. ", decay = " .. decay .. ", gravity = " .. gravity)
+
+   t = math.min(1, math.max(0, t))
+
+   if t >= 1 then
+      return 1
+   end
+
+   local bounces = 0
+   local height = initialHeight
+   local energyThreshold = 0.01
+   while height > energyThreshold do
+      height = height / decay
+      bounces = bounces + 1
+   end
+
+   local totalTime = 0
+   local durations = {}
+   local heights = {}
+   height = initialHeight
+
+   for i = 1, bounces do
+      local decayFactor = decay ^ -(i - 1)
+      height = initialHeight * decayFactor
+      local duration = math.sqrt(height / gravity) * 0.5
+      table.insert(durations, duration)
+      table.insert(heights, height)
+      totalTime = totalTime + duration
+   end
+
+   local normalizedTime = t * totalTime
+   local currentTime = 0
+
+   if t == 0 then
+      return 0
+   end
+
+   for i = 1, bounces do
+      local duration = durations[i]
+      if normalizedTime <= currentTime + duration then
+         local tInBounce = (normalizedTime - currentTime) / duration
+         local height = heights[i]
+         local bounceValue = height * (-4 * tInBounce * tInBounce + 4 * tInBounce)
+         return 1 - bounceValue
+      end
+      currentTime = currentTime + duration
+   end
+
+   return 1
 end
 
 local easingFunctions = {
@@ -502,7 +607,11 @@ local easingFunctions = {
    easeInOutElastic,
    easeInBounce,
    easeOutBounce,
-   easeInOutBounce
+   easeInOutBounce,
+   easeInSpiralDecay,
+   easeOutSpiralDecay,
+   easeInOutSpiralDecay,
+   easeBounceGravity,
 }
 
 local KeyFrameSettings = {
@@ -592,7 +701,7 @@ local createKeyFrameInfos = function(keyFrameSettings, repeatMode)
          )
       )
 
-      nextStartFrame = endFrame + 1
+      nextStartFrame = endFrame
    end
 
    if repeatMode == 2 then
@@ -620,7 +729,7 @@ local createKeyFrameInfos = function(keyFrameSettings, repeatMode)
             )
          )
 
-         nextStartFrame = endFrame + 1
+         nextStartFrame = endFrame
       end
    end
 
@@ -639,6 +748,7 @@ function Process(req)
       local offsetTime = InKeyFrameInfos[i].OffsetFrame:GetValue(req).Value
       local durationTime = InKeyFrameInfos[i].DurationFrame:GetValue(req).Value
       local easing = InKeyFrameInfos[i].Easing:GetValue(req).Value
+
       local timeUnit = InTimeUnit:GetValue(req).Value
 
       table.insert(keyFrameSettings,
@@ -663,7 +773,7 @@ function Process(req)
       preRollTime = math.ceil(preRollTime * self.Comp:GetPrefs("Comp.FrameFormat.Rate"))
    end
    local animStartTime = self.Comp.RenderStart + preRollTime
-   local animLength = (lastEndFrame + 1)
+   local animLength = lastEndFrame
    local time = req.Time - animStartTime
 
    -- Keep the first keyframe value if the time is before the animation start time
@@ -688,7 +798,12 @@ function Process(req)
          if time >= keyFrameInfos[i].StartFrame and time <= keyFrameInfos[i].EndFrame then
             local t = (time - keyFrameInfos[i].StartFrame) /
                 (keyFrameInfos[i].EndFrame - keyFrameInfos[i].StartFrame)
-            result = keyFrameInfos[i].EasingFunction(t) * (keyFrameInfos[i].EndValue - keyFrameInfos[i].StartValue) +
+            local params = {
+               P1 = InKeyFrameInfos[i].EasingParamsP1:GetValue(req).Value,
+               P2 = InKeyFrameInfos[i].EasingParamsP2:GetValue(req).Value
+            }
+            result = keyFrameInfos[i].EasingFunction(t, params) *
+                (keyFrameInfos[i].EndValue - keyFrameInfos[i].StartValue) +
                 keyFrameInfos[i].StartValue
             found = true
             break
@@ -921,6 +1036,17 @@ function NotifyChanged(inp, param, time)
             end
             local exe_str = string.format("comp:_SetCurrentTime(%d)", jumpFrame)
             self.Comp:Execute(exe_str)
+            break
+         elseif inp == InKeyFrameInfos[i].Easing then
+            if param.Value == 33 then -- BounceGravity
+               InKeyFrameInfos[i].EasingParamsP1:SetAttrs({ IC_Visible = true, LINKS_Name = "Decay" })
+               InKeyFrameInfos[i].EasingParamsP2:SetAttrs({ IC_Visible = true, LINKS_Name = "Gravity" })
+               InKeyFrameInfos[i].EasingParamsP1:SetSource(Number(2.0), time)
+               InKeyFrameInfos[i].EasingParamsP2:SetSource(Number(1.0), time)
+            else
+               InKeyFrameInfos[i].EasingParamsP1:SetAttrs({ IC_Visible = false })
+               InKeyFrameInfos[i].EasingParamsP2:SetAttrs({ IC_Visible = false })
+            end
             break
          end
       end
