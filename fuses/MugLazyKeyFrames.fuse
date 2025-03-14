@@ -516,65 +516,27 @@ local function easeInOutSpiralDecay(t, params)
 end
 
 local function easeBounceGravity(t, params)
-   local decay = params.P1
-   if (decay <= 1.1) then
-      decay = 1.1
-   end
-   local gravity = params.P2
-   if gravity <= 0 then
-      gravity = 0
-   end
-   local initialHeight = 1
+   local restitution = math.max(0.001, math.min(0.999, params.P1))
+   local gravity = 9.8 * math.max(0.001, math.min(30.0, params.P2))
 
-   print("easeBounceGravity: t = " .. t .. ", decay = " .. decay .. ", gravity = " .. gravity)
+   local velocity = 0.0
+   local position = 1.0
+   local dt = 1.0 / 200.0
 
-   t = math.min(1, math.max(0, t))
-
-   if t >= 1 then
-      return 1
-   end
-
-   local bounces = 0
-   local height = initialHeight
-   local energyThreshold = 0.01
-   while height > energyThreshold do
-      height = height / decay
-      bounces = bounces + 1
-   end
-
-   local totalTime = 0
-   local durations = {}
-   local heights = {}
-   height = initialHeight
-
-   for i = 1, bounces do
-      local decayFactor = decay ^ -(i - 1)
-      height = initialHeight * decayFactor
-      local duration = math.sqrt(height / gravity) * 0.5
-      table.insert(durations, duration)
-      table.insert(heights, height)
-      totalTime = totalTime + duration
-   end
-
-   local normalizedTime = t * totalTime
    local currentTime = 0
+   while currentTime < t do
+      velocity = velocity + gravity * dt
+      position = position - velocity * dt
 
-   if t == 0 then
-      return 0
-   end
-
-   for i = 1, bounces do
-      local duration = durations[i]
-      if normalizedTime <= currentTime + duration then
-         local tInBounce = (normalizedTime - currentTime) / duration
-         local height = heights[i]
-         local bounceValue = height * (-4 * tInBounce * tInBounce + 4 * tInBounce)
-         return 1 - bounceValue
+      if position <= 0 then
+         position = 0
+         velocity = -velocity * restitution
       end
-      currentTime = currentTime + duration
+
+      currentTime = currentTime + dt
    end
 
-   return 1
+   return 1.0 - position
 end
 
 local easingFunctions = {
@@ -1039,10 +1001,8 @@ function NotifyChanged(inp, param, time)
             break
          elseif inp == InKeyFrameInfos[i].Easing then
             if param.Value == 33 then -- BounceGravity
-               InKeyFrameInfos[i].EasingParamsP1:SetAttrs({ IC_Visible = true, LINKS_Name = "Decay" })
-               InKeyFrameInfos[i].EasingParamsP2:SetAttrs({ IC_Visible = true, LINKS_Name = "Gravity" })
-               InKeyFrameInfos[i].EasingParamsP1:SetSource(Number(2.0), time)
-               InKeyFrameInfos[i].EasingParamsP2:SetSource(Number(1.0), time)
+               InKeyFrameInfos[i].EasingParamsP1:SetAttrs({ IC_Visible = true, LINKS_Name = "Restitution(0.001-0.999)" })
+               InKeyFrameInfos[i].EasingParamsP2:SetAttrs({ IC_Visible = true, LINKS_Name = "Gravity(0.001-30.0)" })
             else
                InKeyFrameInfos[i].EasingParamsP1:SetAttrs({ IC_Visible = false })
                InKeyFrameInfos[i].EasingParamsP2:SetAttrs({ IC_Visible = false })
