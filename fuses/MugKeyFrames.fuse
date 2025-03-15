@@ -908,6 +908,7 @@ local copySourceTable = function(source, time)
    end
    return dest
 end
+
 function NotifyChanged(inp, param, time)
    if inp == InKeyFramesNum then
       for i = 1, param.Value do
