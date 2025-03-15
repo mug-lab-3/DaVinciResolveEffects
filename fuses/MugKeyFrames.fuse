@@ -1,7 +1,12 @@
-FuRegisterClass("MugLazyKeyFrames", CT_Modifier, {
-   REGS_Name           = "MugLazyKeyFrames",
+local ffi = require("ffi")
+
+FuRegisterClass("MugKeyFrames", CT_Modifier, {
+   REGS_Name           = "MugKeyFrames",
    REGS_Category       = "Mug",
-   REGS_OpDescription  = "MugLazyKeyFrames",
+   REGS_OpIconString   = "MKF",
+   REGS_OpDescription  = "MugKeyFrames",
+   REGS_HelpTopic      = "https://x.com/MugLab3", --This can be a URL
+   REGS_URL            = "https://www.youtube.com/@MugLabVideoEditing",
    REGID_DataType      = "Number",
    REGID_InputDataType = "Number",
    REG_TimeVariant     = true,
@@ -9,6 +14,7 @@ FuRegisterClass("MugLazyKeyFrames", CT_Modifier, {
 
 local InKeyFrameInfo = {
    New = function(memo,
+                  keyOrder,
                   autoLinkValues,
                   startValue,
                   endValue,
@@ -23,6 +29,7 @@ local InKeyFrameInfo = {
                   labelTime)
       return {
          Memo = memo,
+         KeyOrder = keyOrder,
          AutoLinkValues = autoLinkValues,
          StartValue = startValue,
          EndValue = endValue,
@@ -123,6 +130,7 @@ function Create()
    for i = 1, KEY_FRAMES_NUM do
       local inLabelKey = self:BeginControlNest("Key " .. i, "Key" .. i, true);
 
+
       local inMemo = self:AddInput("Memo", "Memo" .. i, {
          LINKID_DataType    = "Text",
          INPID_InputControl = "TextEditControl",
@@ -130,13 +138,26 @@ function Create()
          INP_External       = false,
       })
 
+      local inKeyOrder = self:AddInput("Key Swap", "KeySwap" .. i, {
+         LINKID_DataType    = "Number",
+         INPID_InputControl = "MultiButtonControl",
+         MBTNC_Type         = "Normal",
+         INP_Default        = 0,
+         { MBTNC_AddButton = "▲", MBTNCD_ButtonWidth = 1 / 3, },
+         { MBTNC_AddButton = "▼", MBTNCD_ButtonWidth = 1 / 3, },
+         INP_InitialNotify   = false,
+         INP_DoNotifyChanged = true,
+         INP_Integer         = true,
+         INP_External        = false,
+      })
+
       local inJumpTo = self:AddInput("Seek To Keyframe", "JumpTo" .. i, {
          LINKID_DataType    = "Number",
          INPID_InputControl = "MultiButtonControl",
          MBTNC_Type         = "Normal",
          INP_Default        = 0,
-         { MBTNC_AddButton = "Start", MBTNCD_ButtonWidth = 1 / 2, },
-         { MBTNC_AddButton = "End",   MBTNCD_ButtonWidth = 1 / 2, },
+         { MBTNC_AddButton = "Start", MBTNCD_ButtonWidth = 1 / 3, },
+         { MBTNC_AddButton = "End",   MBTNCD_ButtonWidth = 1 / 3, },
          INP_InitialNotify   = false,
          INP_DoNotifyChanged = true,
          INP_Integer         = true,
@@ -276,6 +297,7 @@ function Create()
       table.insert(InKeyFrameInfos,
          InKeyFrameInfo.New(
             inMemo,
+            inKeyOrder,
             inAutoLinkValues,
             inStart,
             inEnd,
@@ -869,6 +891,23 @@ local createKeyFrameInfosFromNotifyChange = function(time)
    return createKeyFrameInfos(keyFrameSettings, InRepeatMode:GetSource(time).Value)
 end
 
+local newCdata = function(pointer)
+   if ffi.istype("struct Number*", pointer) then
+      return Number(pointer.Value)
+   elseif ffi.istype("struct Text*", pointer) then
+      return Text(pointer.Value)
+   else
+      return nil
+   end
+end
+
+local copySourceTable = function(source, time)
+   local dest = {}
+   for key, value in pairs(source) do
+      dest[key] = value:GetSource(time)
+   end
+   return dest
+end
 function NotifyChanged(inp, param, time)
    if inp == InKeyFramesNum then
       for i = 1, param.Value do
@@ -878,8 +917,11 @@ function NotifyChanged(inp, param, time)
          if i == 1 then
             InKeyFrameInfos[i].AutoLinkValues:SetAttrs({ IC_Visible = false })
          end
+         -- update
          local currentAutoLink = InKeyFrameInfos[i].AutoLinkValues:GetSource(time)
          InKeyFrameInfos[i].AutoLinkValues:SetSource(currentAutoLink, time)
+         local easing = InKeyFrameInfos[i].Easing:GetSource(time)
+         InKeyFrameInfos[i].Easing:SetSource(easing, time)
       end
       for i = param.Value + 1, KEY_FRAMES_NUM do
          for key, input in pairs(InKeyFrameInfos[i]) do
@@ -954,7 +996,36 @@ function NotifyChanged(inp, param, time)
       end
    else
       for i = 1, #InKeyFrameInfos do
-         if inp == InKeyFrameInfos[i].OffsetFrame or inp == InKeyFrameInfos[i].DurationFrame then
+         if inp == InKeyFrameInfos[i].KeyOrder then
+            local targetIndex = 0
+            local valid = false;
+            if param.Value == 1 then -- Up button
+               if 1 < i then
+                  targetIndex = i - 1
+                  valid = true
+               end
+            elseif param.Value == 2 then -- Down button
+               if i < #InKeyFrameInfos then
+                  targetIndex = i + 1
+                  valid = true
+               end
+            end
+            if valid then
+               local currentInputs = copySourceTable(InKeyFrameInfos[i], time)
+               local targetInputs = copySourceTable(InKeyFrameInfos[targetIndex], time)
+               for key, input in pairs(InKeyFrameInfos[i]) do
+                  if key ~= "KeyOrder" and key ~= "AutoLinkValues" then
+                     input:SetSource(newCdata(targetInputs[key]), time)
+                  end
+               end
+               for key, input in pairs(InKeyFrameInfos[targetIndex]) do
+                  if key ~= "KeyOrder" then
+                     input:SetSource(newCdata(currentInputs[key]), time)
+                  end
+               end
+            end
+            break
+         elseif inp == InKeyFrameInfos[i].OffsetFrame or inp == InKeyFrameInfos[i].DurationFrame then
             if inp:GetAttr("INP_MaxScale", time) == 0 then
                local clipLength = self.Comp.RenderEnd - self.Comp.RenderStart + 1
                --inp:SetAttrs({ INP_MaxScale = clipLength })
