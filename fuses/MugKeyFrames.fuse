@@ -314,6 +314,28 @@ function Create()
       )
    end
 
+   -- self:AddControlPage("Restore")
+
+   -- InMagicSpell = self:AddInput("Magic Spell", "MagicSpell", {
+   --    LINKID_DataType    = "Text",
+   --    INPID_InputControl = "TextEditControl",
+   --    TEC_Lines          = 30,
+   -- })
+
+   -- InSaveRestore = self:AddInput("SaveRestore", "SaveRestore", {
+   --    LINKID_DataType    = "Number",
+   --    INPID_InputControl = "MultiButtonControl",
+   --    MBTNC_Type         = "Normal",
+   --    MBTNC_ShowLabel    = false,
+   --    INP_Default        = 0,
+   --    { MBTNC_AddButton = "Show",    MBTNCD_ButtonWidth = 1 / 3, },
+   --    { MBTNC_AddButton = "Restore", MBTNCD_ButtonWidth = 1 / 3, },
+   --    INP_InitialNotify   = false,
+   --    INP_DoNotifyChanged = true,
+   --    INP_Integer         = true,
+   --    INP_External        = false,
+   -- })
+
    OutValue = self:AddOutput("Output", "Output", {
       LINKID_DataType = "Number",
       LINK_Main = 1,
@@ -909,6 +931,221 @@ local copySourceTable = function(source, time)
    return dest
 end
 
+local serialize = function(tbl)
+   local buffer = {}
+
+   local function serializeValue(v)
+      local t = type(v)
+      if t == "string" then
+         table.insert(buffer, string.format("s(%d):%s", #v, v))
+      elseif t == "number" then
+         table.insert(buffer, string.format("n:%s", tostring(v)))
+      elseif t == "boolean" then
+         table.insert(buffer, string.format("b:%s", v and "1" or "0"))
+      elseif t == "table" then
+         local tbuffer = {}
+         for k, val in pairs(v) do
+            if type(k) == "string" then
+               table.insert(tbuffer, string.format("s(%d):%s=%s", #k, k, serializeValue(val)))
+            elseif type(k) == "number" then
+               table.insert(tbuffer, string.format("n:%s=%s", tostring(k), serializeValue(val)))
+            end
+         end
+         return string.format("t(%d):{%s}", #tbuffer, table.concat(tbuffer, ";"))
+      end
+      return buffer[#buffer]
+   end
+
+   serializeValue(tbl)
+   local result = buffer[1]
+   local checksum = #result
+   return "c:" .. checksum .. ":" .. result
+end
+
+local deserialize = function(str)
+   if not str:match("^c:%d+:") then
+      return nil, "Invalid format: checksum not found"
+   end
+
+   local _, checksumEnd = str:find("^c:%d+:")
+   local checksum = tonumber(str:match("^c:(%d+):"))
+   local dataStr = str:sub(checksumEnd + 1)
+
+   if #dataStr ~= checksum then
+      return nil, "Checksum validation failed"
+   end
+
+   local pos = 1
+   local function getValue()
+      if pos > #dataStr then
+         return nil, "Unexpected end of data"
+      end
+
+      local typeChar = dataStr:sub(pos, pos)
+      pos = pos + 1
+
+      if typeChar == "s" then
+         pos = pos + 1
+         local endPos = dataStr:find(")", pos)
+         if not endPos then return nil, "Malformed string: missing closing parenthesis" end
+
+         local len = tonumber(dataStr:sub(pos, endPos - 1))
+         if not len then return nil, "Malformed string: invalid length" end
+
+         pos = endPos + 2
+         if pos + len - 1 > #dataStr then return nil, "String exceeds data length" end
+
+         local val = dataStr:sub(pos, pos + len - 1)
+         pos = pos + len
+         return val
+      elseif typeChar == "n" then
+         pos = pos + 1
+         local endPos = dataStr:find("[;=}]", pos) or (#dataStr + 1)
+         local numStr = dataStr:sub(pos, endPos - 1)
+         local val = tonumber(numStr)
+         if not val then return nil, "Invalid number: " .. numStr end
+
+         pos = endPos
+         return val
+      elseif typeChar == "b" then
+         pos = pos + 1
+         if pos > #dataStr then return nil, "Unexpected end of data" end
+
+         local valChar = dataStr:sub(pos, pos)
+         if valChar ~= "0" and valChar ~= "1" then
+            return nil, "Invalid boolean: " .. valChar
+         end
+
+         local val = (valChar == "1")
+         pos = pos + 1
+         return val
+      elseif typeChar == "t" then
+         pos = pos + 1
+         local endPos = dataStr:find(")", pos)
+         if not endPos then return nil, "Malformed table: missing closing parenthesis" end
+
+         local count = tonumber(dataStr:sub(pos, endPos - 1))
+         if not count then return nil, "Malformed table: invalid count" end
+
+         pos = endPos + 2
+         if pos > #dataStr then return nil, "Unexpected end of data" end
+
+         if dataStr:sub(pos, pos) == "{" then
+            pos = pos + 1
+            local tbl = {}
+
+            for i = 1, count do
+               if pos > #dataStr then return nil, "Unexpected end of data in table" end
+
+               local keyTypeChar = dataStr:sub(pos, pos)
+               pos = pos + 1
+
+               local key
+               if keyTypeChar == "s" then
+                  pos = pos + 1
+                  local keyEndPos = dataStr:find(")", pos)
+                  if not keyEndPos then return nil, "Malformed key: missing closing parenthesis" end
+
+                  local keyLen = tonumber(dataStr:sub(pos, keyEndPos - 1))
+                  if not keyLen then return nil, "Malformed key: invalid length" end
+
+                  pos = keyEndPos + 2
+                  if pos + keyLen - 1 > #dataStr then return nil, "Key exceeds data length" end
+
+                  key = dataStr:sub(pos, pos + keyLen - 1)
+                  pos = pos + keyLen
+               elseif keyTypeChar == "n" then
+                  pos = pos + 1
+                  local keyEndPos = dataStr:find("=", pos)
+                  if not keyEndPos then return nil, "Malformed key: missing '='" end
+
+                  local keyStr = dataStr:sub(pos, keyEndPos - 1)
+                  key = tonumber(keyStr)
+                  if not key then return nil, "Invalid numeric key: " .. keyStr end
+
+                  pos = keyEndPos
+               else
+                  return nil, "Invalid key type: " .. keyTypeChar
+               end
+
+               pos = pos + 1
+               local val, err = getValue()
+               if err then return nil, err end
+
+               tbl[key] = val
+
+               if i < count then
+                  if pos > #dataStr then return nil, "Unexpected end of data" end
+                  if dataStr:sub(pos, pos) ~= ";" then return nil, "Missing separator ';'" end
+                  pos = pos + 1
+               end
+            end
+
+            if pos > #dataStr then return nil, "Unexpected end of data" end
+            if dataStr:sub(pos, pos) ~= "}" then return nil, "Missing closing '}'" end
+            pos = pos + 1
+            return tbl
+         else
+            return nil, "Malformed table: missing opening '{'"
+         end
+      else
+         return nil, "Unknown type: " .. typeChar
+      end
+   end
+
+   local result, err = getValue()
+   if err then
+      return nil, err
+   end
+
+   if pos <= #dataStr then
+      return nil, "Extra data after parsed value"
+   end
+
+   return result
+end
+
+local serializeInputs = function(time)
+   local keyNum = InKeyFramesNum:GetSource(time).Value
+   local keyFrameSettings = {}
+   for i = 1, keyNum do
+      local autoLinkValues = InKeyFrameInfos[i].AutoLinkValues:GetSource(time).Value
+      local startValue = InKeyFrameInfos[i].StartValue:GetSource(time).Value
+      local endValue = InKeyFrameInfos[i].EndValue:GetSource(time).Value
+      local offsetTime = InKeyFrameInfos[i].OffsetFrame:GetSource(time).Value
+      local durationTime = InKeyFrameInfos[i].DurationFrame:GetSource(time).Value
+      local easing = InKeyFrameInfos[i].Easing:GetSource(time).Value
+      local timeUnit = InTimeUnit:GetSource(time).Value
+
+      table.insert(keyFrameSettings,
+         KeyFrameSettings.New(
+            autoLinkValues,
+            startValue,
+            endValue,
+            offsetTime,
+            durationTime,
+            easing,
+            timeUnit
+         )
+      )
+   end
+
+   local repeatMode = InRepeatMode:GetSource(time).Value
+   local keyFrameInfos = createKeyFrameInfos(keyFrameSettings, repeatMode)
+
+   local inputs = {
+      KeyFramesNum = keyNum,
+      KeyFrameInfos = keyFrameInfos,
+      RepeatMode = repeatMode,
+      TimeUnit = InTimeUnit:GetSource(time).Value,
+      PreRollTime = InPreRollTime:GetSource(time).Value,
+   }
+
+   dump(inputs)
+
+   return serialize(inputs)
+end
+
 function NotifyChanged(inp, param, time)
    if inp == InKeyFramesNum then
       for i = 1, param.Value do
@@ -995,6 +1232,11 @@ function NotifyChanged(inp, param, time)
             end
          end
       end
+      -- elseif inp == InSaveRestore then
+      --    if param.Value == 1 then -- Save
+      --       dump(serializeInputs(time))
+      --       --InSaveRestore:SetSource(, time)
+      --    end
    else
       for i = 1, #InKeyFrameInfos do
          if inp == InKeyFrameInfos[i].KeyOrder then
@@ -1024,12 +1266,6 @@ function NotifyChanged(inp, param, time)
                      input:SetSource(newCdata(currentInputs[key]), time)
                   end
                end
-            end
-            break
-         elseif inp == InKeyFrameInfos[i].OffsetFrame or inp == InKeyFrameInfos[i].DurationFrame then
-            if inp:GetAttr("INP_MaxScale", time) == 0 then
-               local clipLength = self.Comp.RenderEnd - self.Comp.RenderStart + 1
-               --inp:SetAttrs({ INP_MaxScale = clipLength })
             end
             break
          elseif inp == InKeyFrameInfos[i].AutoLinkValues then
