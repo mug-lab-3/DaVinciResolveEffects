@@ -839,12 +839,14 @@ local changeTimeUnitUi = function(timeUnit, time)
    end
    self:SetData("TimeUnit: pervious value", timeUnit)
 
-   if timeUnit == 0 then -- Frames
-      if not initialize then
-         InPreRollTime:SetAttrs({ INP_Integer = true, INP_Steps = 1 })
+   if prevTimeUnit == timeUnit then
+      if timeUnit == 0 then -- Frames
+         if not initialize then
+            InPreRollTime:SetAttrs({ INP_Integer = true, INP_Steps = 1 })
+         end
+      else -- Seconds
+         InPreRollTime:SetAttrs({ INP_Integer = false, INP_Steps = 0.01 })
       end
-   else -- Seconds
-      InPreRollTime:SetAttrs({ INP_Integer = false, INP_Steps = 0.01 })
    end
    for i = 1, keyNum do
       if prevTimeUnit == timeUnit then
@@ -861,9 +863,11 @@ local changeTimeUnitUi = function(timeUnit, time)
    end
 
    if not initialize then
-      if prevTimeUnit == 1 and timeUnit == 0 then     -- To frames
+      if prevTimeUnit == 1 and timeUnit == 0 then -- To frames
          InPreRollTime:SetSource(Number(InPreRollTime:GetSource(time).Value * frameRate), time)
+         InPreRollTime:SetAttrs({ INP_Integer = true, INP_Steps = 1 })
       elseif prevTimeUnit == 0 and timeUnit == 1 then -- To seconds
+         InPreRollTime:SetAttrs({ INP_Integer = false, INP_Steps = 0.01 })
          InPreRollTime:SetSource(Number(InPreRollTime:GetSource(time).Value / frameRate), time)
       end
       for i = 1, keyNum do
