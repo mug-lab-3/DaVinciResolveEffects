@@ -1,0 +1,382 @@
+--------------------------------
+-- Registry declaration
+
+FuRegisterClass("GPUSampleFuse", CT_SourceTool, {
+	REGS_Category = "Fuses\\Examples",
+	REGS_OpIconString = "GFu",
+	REGS_OpDescription = "GPU Sample Fuse",
+
+	REG_NoObjMatCtrls = true,
+	REG_NoMotionBlurCtrls = true,
+
+	REG_Source_GlobalCtrls = true,
+	REG_Source_SizeCtrls = true,
+	REG_Source_AspectCtrls = true,
+	REG_Source_DepthCtrls = true,
+})
+
+
+--------------------------------
+-- source of kernel
+
+HalftoneParams = [[
+  int srcSize[2];        // ソース画像のサイズ
+  float dotSize;         // ドットのサイズ調整（大きいほど細かいパターン）
+  float contrast;        // コントラスト調整（1.0がデフォルト）
+  int useOriginalColor;  // 元の色を使用するかどうか（0=白黒、1=カラー）
+  int useOriginalBackground; // 背景も元の色にするかどうか（0=白、1=元の色）
+  int useCMYKMode;       // CMYKモードを使用するかどうか（0=標準ハーフトーン、1=CMYKスタイル）
+  float dotAngle;        // ドットの角度（CMYK モードでのみ使用）
+]]
+
+HalftoneKernel = [[
+__KERNEL__ void HalftoneKernel(__CONSTANTREF__ HalftoneParams *params, __TEXTURE2D__ src, __TEXTURE2D_WRITE__ dst)
+{
+    DEFINE_KERNEL_ITERATORS_XY(x, y);
+
+    if (x < params->srcSize[0] && y < params->srcSize[1])
+    {
+        // 現在のピクセルの正規化座標
+        float2 pixelUV = to_float2(
+            (float)x / (float)params->srcSize[0],
+            (float)y / (float)params->srcSize[1]
+        );
+
+        // 現在のピクセルの色を取得
+        float4 pixelColor = _tex2DVecN(src, pixelUV.x, pixelUV.y, 15);
+        float4 result = pixelColor;
+
+        // 基本ドットサイズ - 単純なグリッドサイズとして使用
+        float cellSize = params->dotSize;
+
+        if (params->useCMYKMode == 1) {
+            // CMYK風のハーフトーン処理
+            float4 cmykResult = to_float4(1.0f, 1.0f, 1.0f, 1.0f); // 初期値は白
+
+            // 各チャンネル（CMY）ごとに処理
+            float angles[4] = {15.0f, 75.0f, 0.0f, 45.0f}; // C、M、Y、Kの角度（標準的な印刷角度）
+            float3 colors[3] = {
+                to_float3(0.0f, 1.0f, 1.0f), // シアン
+                to_float3(1.0f, 0.0f, 1.0f), // マゼンタ
+                to_float3(1.0f, 1.0f, 0.0f)  // イエロー
+            };
+            float cellSizeFactors[4] = {1.0f, 1.05f, 0.95f, 1.0f}; // 色ごとに少し異なるセルサイズ
+            float2 offsets[4] = {
+                to_float2(0.0f, 0.0f),     // C
+                to_float2(0.25f, 0.0f),    // M - 横方向に1/4セルずらす
+                to_float2(0.0f, 0.25f),    // Y - 縦方向に1/4セルずらす
+                to_float2(0.125f, 0.125f)  // K - 両方向に1/8セルずらす
+            };
+
+            for (int channel = 0; channel < 3; channel++) {
+                float angle = angles[channel] * 3.14159f / 180.0f; // ラジアンに変換
+                float adjustedCellSize = cellSize * cellSizeFactors[channel]; // 色ごとに調整したセルサイズ
+
+                // 回転した座標を計算
+                float cosAngle = _cosf(angle);
+                float sinAngle = _sinf(angle);
+
+                // オフセットを適用
+                float offsetX = offsets[channel].x * adjustedCellSize;
+                float offsetY = offsets[channel].y * adjustedCellSize;
+
+                float rotX = (float)x * cosAngle - (float)y * sinAngle + offsetX;
+                float rotY = (float)x * sinAngle + (float)y * cosAngle + offsetY;
+
+                // グリッド計算（回転した座標に基づく）
+                int cellIdX = floor(rotX / adjustedCellSize);
+                int cellIdY = floor(rotY / adjustedCellSize);
+
+                // セル内での相対位置（0.0〜1.0）
+                float cellPosX = rotX / adjustedCellSize - cellIdX;
+                float cellPosY = rotY / adjustedCellSize - cellIdY;
+
+                // セルの中心座標を計算
+                float centerX = ((float)cellIdX + 0.5f) * adjustedCellSize;
+                float centerY = ((float)cellIdY + 0.5f) * adjustedCellSize;
+
+                // 回転を元に戻す
+                float invX = centerX * cosAngle - offsetX + centerY * sinAngle;
+                float invY = -centerX * sinAngle + centerY * cosAngle - offsetY;
+
+                // セルの中心の正規化座標
+                float2 cellCenterUV = to_float2(
+                    invX / (float)params->srcSize[0],
+                    invY / (float)params->srcSize[1]
+                );
+
+                // 座標がテクスチャ範囲内にあるか確認
+                if (cellCenterUV.x >= 0.0f && cellCenterUV.x <= 1.0f &&
+                    cellCenterUV.y >= 0.0f && cellCenterUV.y <= 1.0f) {
+
+                    // セルの中心の色を取得
+                    float4 cellColor = _tex2DVecN(src, cellCenterUV.x, cellCenterUV.y, 15);
+
+                    // チャンネル輝度を計算（各チャンネルに対する反転した輝度）
+                    float channelValue = 0.0f;
+                    if (channel == 0) {      // シアン - 赤の逆
+                        channelValue = 1.0f - cellColor.x;
+                    } else if (channel == 1) { // マゼンタ - 緑の逆
+                        channelValue = 1.0f - cellColor.y;
+                    } else {                 // イエロー - 青の逆
+                        channelValue = 1.0f - cellColor.z;
+                    }
+
+                    // コントラスト調整
+                    channelValue = _clampf((channelValue - 0.5f) * params->contrast + 0.5f, 0.0f, 1.0f);
+
+                    // セルの中心からの距離
+                    float dist = _sqrtf((cellPosX - 0.5f) * (cellPosX - 0.5f) +
+                                       (cellPosY - 0.5f) * (cellPosY - 0.5f));
+
+                    // 輝度に基づいてドットの半径を決定
+                    float radius = 0.0f;
+                    if (channelValue < 0.05f) {
+                        radius = 0.0f; // ほぼ白い部分ではドットなし
+                    } else {
+                        radius = 0.45f * channelValue;
+
+                        if (channelValue > 0.8f) {
+                            radius = _clampf(radius + (channelValue - 0.8f) * 0.5f, 0.0f, 0.65f);
+                        }
+                    }
+
+                    // ドットを描画
+                    if (dist < radius) {
+                        // このチャンネルの色を混ぜる
+                        if (params->useOriginalColor == 1) {
+                            // 元の画像から色を取得
+                            float3 channelOrigColor = to_float3(
+                                channel == 0 ? 0.0f : cellColor.x,
+                                channel == 1 ? 0.0f : cellColor.y,
+                                channel == 2 ? 0.0f : cellColor.z
+                            );
+                            cmykResult.x = _fminf(cmykResult.x, channelOrigColor.x);
+                            cmykResult.y = _fminf(cmykResult.y, channelOrigColor.y);
+                            cmykResult.z = _fminf(cmykResult.z, channelOrigColor.z);
+                        } else {
+                            // CMYの色を使用
+                            cmykResult.x = _fminf(cmykResult.x, colors[channel].x);
+                            cmykResult.y = _fminf(cmykResult.y, colors[channel].y);
+                            cmykResult.z = _fminf(cmykResult.z, colors[channel].z);
+                        }
+                    }
+                }
+            }
+
+            // Kチャンネル（黒）の処理
+            {
+                int channel = 3; // Kチャンネル
+                float angle = angles[channel] * 3.14159f / 180.0f;
+                float adjustedCellSize = cellSize * cellSizeFactors[channel];
+
+                float offsetX = offsets[channel].x * adjustedCellSize;
+                float offsetY = offsets[channel].y * adjustedCellSize;
+
+                float cosAngle = _cosf(angle);
+                float sinAngle = _sinf(angle);
+
+                float rotX = (float)x * cosAngle - (float)y * sinAngle + offsetX;
+                float rotY = (float)x * sinAngle + (float)y * cosAngle + offsetY;
+
+                int cellIdX = floor(rotX / adjustedCellSize);
+                int cellIdY = floor(rotY / adjustedCellSize);
+
+                float cellPosX = rotX / adjustedCellSize - cellIdX;
+                float cellPosY = rotY / adjustedCellSize - cellIdY;
+
+                float centerX = ((float)cellIdX + 0.5f) * adjustedCellSize;
+                float centerY = ((float)cellIdY + 0.5f) * adjustedCellSize;
+
+                float invX = centerX * cosAngle - offsetX + centerY * sinAngle;
+                float invY = -centerX * sinAngle + centerY * cosAngle - offsetY;
+
+                float2 cellCenterUV = to_float2(
+                    invX / (float)params->srcSize[0],
+                    invY / (float)params->srcSize[1]
+                );
+
+                if (cellCenterUV.x >= 0.0f && cellCenterUV.x <= 1.0f &&
+                    cellCenterUV.y >= 0.0f && cellCenterUV.y <= 1.0f) {
+
+                    float4 cellColor = _tex2DVecN(src, cellCenterUV.x, cellCenterUV.y, 15);
+                    float kValue = 1.0f - _fmaxf(_fmaxf(cellColor.x, cellColor.y), cellColor.z);
+
+                    kValue = _clampf((kValue - 0.5f) * params->contrast + 0.5f, 0.0f, 1.0f);
+
+                    float dist = _sqrtf((cellPosX - 0.5f) * (cellPosX - 0.5f) +
+                                       (cellPosY - 0.5f) * (cellPosY - 0.5f));
+
+                    float radius = 0.0f;
+                    if (kValue < 0.05f) {
+                        radius = 0.0f;
+                    } else {
+                        radius = 0.45f * kValue;
+
+                        if (kValue > 0.8f) {
+                            radius = _clampf(radius + (kValue - 0.8f) * 0.5f, 0.0f, 0.65f);
+                        }
+                    }
+
+                    if (dist < radius) {
+                        cmykResult.x *= 0.2f;
+                        cmykResult.y *= 0.2f;
+                        cmykResult.z *= 0.2f;
+                    }
+                }
+            }
+
+            result = to_float4(cmykResult.x, cmykResult.y, cmykResult.z, 1.0f);
+
+        } else {
+            // 標準のハーフトーン処理（元のコード）
+
+            // 単純なグリッド計算 - アスペクト比の考慮なし
+            int cellIdX = floor((float)x / cellSize);
+            int cellIdY = floor((float)y / cellSize);
+
+            // セル内での相対位置（0.0〜1.0）
+            float cellPosX = (float)x / cellSize - cellIdX;
+            float cellPosY = (float)y / cellSize - cellIdY;
+
+            // セルの中心座標を計算
+            float centerX = ((float)cellIdX + 0.5f) * cellSize;
+            float centerY = ((float)cellIdY + 0.5f) * cellSize;
+
+            // セルの中心の正規化座標
+            float2 cellCenterUV = to_float2(
+                centerX / (float)params->srcSize[0],
+                centerY / (float)params->srcSize[1]
+            );
+
+            // セルの中心の色と輝度を取得
+            float4 cellColor = _tex2DVecN(src, cellCenterUV.x, cellCenterUV.y, 15);
+            float cellLuma = cellColor.x * 0.3f + cellColor.y * 0.59f + cellColor.z * 0.11f;
+
+            // コントラスト調整
+            cellLuma = _clampf((cellLuma - 0.5f) * params->contrast + 0.5f, 0.0f, 1.0f);
+
+            // セルの中心からの距離 - ここで真円を作る
+            float dist = _sqrtf((cellPosX - 0.5f) * (cellPosX - 0.5f) +
+                              (cellPosY - 0.5f) * (cellPosY - 0.5f));
+
+            // 輝度に基づいてドットの半径を決定（暗い部分ではドットを拡大）
+            float radius = 0.0f;
+            if (cellLuma < 0.05f) {
+                // 非常に暗い部分（輝度が5%未満）では完全に塗りつぶす
+                radius = 0.67f; // 対角線の半分の長さ（√2/2）より大きく
+            } else {
+                // 通常のドットサイズ計算
+                radius = 0.45f * (1.0f - cellLuma);
+
+                // 非常に暗い部分（輝度が20%未満）ではドットを拡大してオーバーラップさせる
+                if (cellLuma < 0.2f) {
+                    radius = _clampf(radius + (0.2f - cellLuma) * 0.5f, 0.0f, 0.65f);
+                }
+            }
+
+            // ドットパターンの決定
+            if (dist < radius) {
+                if (params->useOriginalColor == 1)
+                    result = cellColor; // 元の色を使用
+                else
+                    result = to_float4(0.0f, 0.0f, 0.0f, 1.0f); // 黒
+            } else {
+                if (params->useOriginalBackground == 1)
+                    result = pixelColor; // 元の色を背景として使用
+                else
+                    result = to_float4(1.0f, 1.0f, 1.0f, 1.0f); // 白
+            }
+        }
+
+        _tex2DVec4Write(dst, x, y, result);
+    }
+}
+]]
+
+function Create()
+	InDotSize = self:AddInput("Dot Size", "DotSize", {
+		LINKID_DataType = "Number",
+		INPID_InputControl = "SliderControl",
+		INP_Default = 15.0,
+		INP_MinAllowed = 1.0,
+		INP_MaxAllowed = 10000.0,
+	})
+
+	InContrast = self:AddInput("Contrast", "Contrast", {
+		LINKID_DataType = "Number",
+		INPID_InputControl = "SliderControl",
+		INP_Default = 1.0,
+		INP_MinAllowed = 0.1,
+		INP_MaxAllowed = 5.0,
+	})
+
+	InUseOriginalColor = self:AddInput("Use Original Color", "UseOriginalColor", {
+		LINKID_DataType = "Number",
+		INPID_InputControl = "CheckboxControl",
+		INP_Default = 0.0, -- デフォルトはオフ
+	})
+
+	InUseOriginalBackground = self:AddInput("Color Background", "UseOriginalBackground", {
+		LINKID_DataType = "Number",
+		INPID_InputControl = "CheckboxControl",
+		INP_Default = 0.0, -- デフォルトはオフ
+	})
+
+	InUseCMYKMode = self:AddInput("CMYK Mode", "UseCMYKMode", {
+		LINKID_DataType = "Number",
+		INPID_InputControl = "CheckboxControl",
+		INP_Default = 0.0, -- デフォルトはオフ
+	})
+
+	InImage = self:AddInput("Input Image", "Image", {
+		LINKID_DataType = "Image",
+		LINK_Main = 1, -- これはメインの入力として設定
+	})
+
+	-- OutImage is automatically created for us, as we're a CT_SourceTool
+end
+
+function Process(req)
+	local dotSize = InDotSize:GetValue(req).Value
+	local contrast = InContrast:GetValue(req).Value
+	local useOriginalColor = InUseOriginalColor:GetValue(req).Value
+	local useOriginalBackground = InUseOriginalBackground:GetValue(req).Value
+	local useCMYKMode = InUseCMYKMode:GetValue(req).Value
+
+	local img = InImage:GetValue(req)
+	local out
+
+	if img then
+		out = Image({ IMG_Like = img })
+
+		local node = DVIPComputeNode(req, "HalftoneKernel", HalftoneKernel, "HalftoneParams", HalftoneParams)
+
+		if node then
+			-- create image
+			local params = node:GetParamBlock(HalftoneParams)
+
+			params.contrast = contrast
+			params.dotSize = dotSize
+			params.srcSize[0] = out.DataWindow:Width()
+			params.srcSize[1] = out.DataWindow:Height()
+			params.useOriginalColor = useOriginalColor > 0.5 and 1 or 0 -- チェックボックスの値を整数に変換
+			params.useOriginalBackground = useOriginalBackground > 0.5 and 1 or 0
+			params.useCMYKMode = useCMYKMode > 0.5 and 1 or 0
+			params.dotAngle = 0.0 -- 現在は使用されていない
+
+			node:SetParamBlock(params)
+
+			node:AddSampler("RowSampler", TEX_FILTER_MODE_LINEAR, TEX_ADDRESS_MODE_CLAMP, TEX_NORMALIZED_COORDS_TRUE)
+			node:AddInput("src", img)
+			node:AddOutput("dst", out)
+
+			success = node:RunSession(req)
+		else
+			out = nil
+		end
+	end
+
+	OutImage:Set(req, out)
+	--OutImage:Set(req, img)
+end
