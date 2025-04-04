@@ -1,23 +1,18 @@
---------------------------------
--- Registry declaration
-
-FuRegisterClass("GPUSampleFuse", CT_SourceTool, {
-    REGS_Category = "Fuses\\Examples",
-    REGS_OpIconString = "GFu",
-    REGS_OpDescription = "GPU Sample Fuse",
-
-    REG_NoObjMatCtrls = true,
-    REG_NoMotionBlurCtrls = true,
-
+FuRegisterClass("MugHalftone", CT_SourceTool, {
+    REGS_Category          = "Fuses\\Mug",
+    REGS_OpIconString      = "MHT",
+    REGS_OpDescription     = "Mug Halftone",
+    REGS_HelpTopic         = "https://x.com/MugLab3",    --This can be a URL
+    REGS_URL               = "https://www.youtube.com/@MugLabVideoEditing",
+    REGS_IconID            = "Icons.Tools.Icons.Example", -- This can be Inline as an array of Values
+    REG_NoObjMatCtrls      = true,
+    REG_NoMotionBlurCtrls  = true,
     REG_Source_GlobalCtrls = true,
-    REG_Source_SizeCtrls = true,
+    REG_Source_SizeCtrls   = true,
     REG_Source_AspectCtrls = true,
-    REG_Source_DepthCtrls = true,
+    REG_Source_DepthCtrls  = true,
+    REG_Version            = 0.1,
 })
-
-
---------------------------------
--- source of kernel
 
 -- パラメーター構造体
 HalftoneParams = [[
@@ -210,6 +205,7 @@ __KERNEL__ void HalftoneKernel(__CONSTANTREF__ HalftoneParams *params, __TEXTURE
 
 
 -- CMYKモード処理用のカーネル
+-- 最適化されたCMYKモード処理用カーネル
 CmykKernel = [[
 __KERNEL__ void CmykKernel(__CONSTANTREF__ HalftoneParams *params, __TEXTURE2D__ src, __TEXTURE2D_WRITE__ dst)
 {
@@ -272,15 +268,15 @@ __KERNEL__ void CmykKernel(__CONSTANTREF__ HalftoneParams *params, __TEXTURE2D__
         offsets[3].x = cellSizes[3] * 0.125f;
         offsets[3].y = cellSizes[3] * 0.125f;
 
-        // レジストレーションエラーを計算（単純化）
-        float regError = params->regError * 0.1f;
-        if (regError > 0.0f) {
-            offsets[0].x += regError * cellSize * 0.53f;
-            offsets[0].y += regError * cellSize * 0.23f;
-            offsets[1].x += regError * cellSize * -0.33f;
-            offsets[1].y += regError * cellSize * 0.41f;
-            offsets[2].x += regError * cellSize * 0.17f;
-            offsets[2].y += regError * cellSize * -0.37f;
+        // レジストレーションエラーを計算（最適化）
+        if (params->regError > 0.01f) {
+            float regScale = params->regError * cellSize * 0.1f;
+            offsets[0].x += regScale * 0.53f;
+            offsets[0].y += regScale * 0.23f;
+            offsets[1].x -= regScale * 0.33f;
+            offsets[1].y += regScale * 0.41f;
+            offsets[2].x += regScale * 0.17f;
+            offsets[2].y -= regScale * 0.37f;
         }
 
         // 各チャンネルの影響度
@@ -302,9 +298,16 @@ __KERNEL__ void CmykKernel(__CONSTANTREF__ HalftoneParams *params, __TEXTURE2D__
             int cellIdX = (int)(rotX / cellSizes[channel]);
             int cellIdY = (int)(rotY / cellSizes[channel]);
 
-            // 周囲のセルをチェック - 検索範囲を対称に拡大
+            // 周囲のセルをチェック - 検索範囲を最適化
             for (int dy = -1; dy <= 1; dy++) {
                 for (int dx = -1; dx <= 1; dx++) {
+                    // 対角セルの場合は効率化（対角セルは距離が遠いので75%スキップ）
+                    if (abs(dx) + abs(dy) == 2) {
+                        if (_fabs(_sinf(xf * 12.34f + yf * 56.78f)) > 0.5f) {
+                            continue;
+                        }
+                    }
+
                     int checkX = cellIdX + dx;
                     int checkY = cellIdY + dy;
 
@@ -334,8 +337,8 @@ __KERNEL__ void CmykKernel(__CONSTANTREF__ HalftoneParams *params, __TEXTURE2D__
                     float distY = rotY - cellCenterY;
                     float dist = _sqrtf(distX*distX + distY*distY);
 
-                    // 早期脱出条件も調整（通常はセルサイズの70%程度が妥当）
-                    if (dist > cellSizes[channel] * 0.8f) continue;
+                    // 早期脱出条件を強化（性能改善）
+                    if (dist > cellSizes[channel] * 0.75f) continue;
 
                     // セル中心の画像上の座標に変換
                     float invX = cellCenterX * cosAngle + cellCenterY * sinAngle - offsets[channel].x;
@@ -378,15 +381,12 @@ __KERNEL__ void CmykKernel(__CONSTANTREF__ HalftoneParams *params, __TEXTURE2D__
                         // コントラスト調整
                         channelValue = _clampf((channelValue - 0.5f) * params->contrast + 0.5f, 0.0f, 1.0f);
 
-                        // ドット半径計算
-                        float radius = 0.5f * channelValue; // 基本半径を大きくして濃度を上げる
+                        // ドット半径計算（最適化）
+                        float radius = 0.5f * channelValue;
                         radius = _fmaxf(radius, 0.01f);
 
-                        // ドットゲイン効果
-                        if (params->dotGain > 0.0f) {
-                            // 修正前: radius *= (1.0f + params->dotGain * 0.2f);
-                            radius *= (1.0f + params->dotGain * 0.3f); // ゲイン効果も強化
-                        }
+                        // ドットゲイン効果（条件分岐削減）
+                        radius *= (1.0f + params->dotGain * 0.3f);
 
                         // セル半径と距離を比較
                         float normDist = dist / cellSizes[channel];
@@ -424,41 +424,44 @@ __KERNEL__ void CmykKernel(__CONSTANTREF__ HalftoneParams *params, __TEXTURE2D__
             }
         }
 
-        // CMY版の適用
+        // CMY版の適用（最適化）
         float4 cmyResult = result;
-        float totalMask = 0.0f; // 合計マスク強度を追跡
+        float totalMask = 0.0f;
 
+        // マスクの合計を先に計算
         for (int i = 0; i < 3; i++) {
             if (hasChannelInfluence[i] && channelMask[i] > 0.0f) {
-                totalMask += channelMask[i]; // 合計マスク強度を加算
+                totalMask += channelMask[i];
+            }
+        }
 
-                if (channelMask[i] > 0.5f) {
+        // 単純化したブレンド処理
+        for (int i = 0; i < 3; i++) {
+            if (hasChannelInfluence[i] && channelMask[i] > 0.0f) {
+                float factor = channelMask[i];
+
+                if (factor > 0.5f) {
                     // 最小値で合成（よりダークになるように）
                     cmyResult.x = _fminf(cmyResult.x, channelColors[i].x);
                     cmyResult.y = _fminf(cmyResult.y, channelColors[i].y);
                     cmyResult.z = _fminf(cmyResult.z, channelColors[i].z);
                 } else {
-                    // エッジ部分はブレンド（より強い効果に調整）
-                    float blendFactor = channelMask[i] * 2.5f; // ブレンド強度を増加
-
-                    float4 blendedColor;
-                    blendedColor.x = _mix(cmyResult.x, _fminf(cmyResult.x, channelColors[i].x), blendFactor);
-                    blendedColor.y = _mix(cmyResult.y, _fminf(cmyResult.y, channelColors[i].y), blendFactor);
-                    blendedColor.z = _mix(cmyResult.z, _fminf(cmyResult.z, channelColors[i].z), blendFactor);
-
-                    // より暗い場合のみ適用
-                    cmyResult = blendedColor;
+                    // エッジ部分はブレンド
+                    float blendFactor = factor * 2.5f;
+                    cmyResult.x = _mix(cmyResult.x, _fminf(cmyResult.x, channelColors[i].x), blendFactor);
+                    cmyResult.y = _mix(cmyResult.y, _fminf(cmyResult.y, channelColors[i].y), blendFactor);
+                    cmyResult.z = _mix(cmyResult.z, _fminf(cmyResult.z, channelColors[i].z), blendFactor);
                 }
             }
         }
 
-        // 全体の濃度調整（オプション）
+        // 全体の濃度調整（最適化）
         if (totalMask > 0.0f) {
-            // ドットの重なりがある場合は全体をわずかに暗く
             float darkening = _fminf(totalMask / 3.0f * 0.2f, 0.2f);
-            cmyResult.x *= (1.0f - darkening);
-            cmyResult.y *= (1.0f - darkening);
-            cmyResult.z *= (1.0f - darkening);
+            float brightnessFactor = 1.0f - darkening;
+            cmyResult.x *= brightnessFactor;
+            cmyResult.y *= brightnessFactor;
+            cmyResult.z *= brightnessFactor;
         }
 
         // K版の適用
@@ -470,74 +473,50 @@ __KERNEL__ void CmykKernel(__CONSTANTREF__ HalftoneParams *params, __TEXTURE2D__
             } else {
                 // エッジブレンド
                 float blendFactor = channelMask[3] * 2.0f;
-                float4 blendedColor = _mix(cmyResult, to_float4(0.0f, 0.0f, 0.0f, 1.0f), blendFactor);
-                result = blendedColor;
+                result = _mix(cmyResult, to_float4(0.0f, 0.0f, 0.0f, 1.0f), blendFactor);
             }
         }
 
-        // 紙の質感適用
-        if (params->paperTexture > 0.0f) {
+        // 紙の質感適用（効率化）
+        if (params->paperTexture > 0.01f) {
             float noise = 0.0f;
+            float intensityMod = 1.0f;
+            float frequencyMod = 1.0f;
 
-            // 紙の種類によって異なるノイズパターンを生成
+            // 紙のタイプに応じたパラメータ設定
             if (params->paperTextureType == 0) { // Smooth
-                // 滑らかな上質紙 - 細かいノイズ、方向性なし
-                float noiseA = _sinf(xf * 0.4f + yf * 0.37f) * _cosf(xf * 0.32f + yf * 0.31f);
-                float noiseB = _sinf(xf * 1.1f - yf * 1.3f) * 0.2f;
-                noise = noiseA + noiseB;
-                noise = (noise * 0.5f + 0.5f) * params->paperTexture * 0.15f;
+                frequencyMod = 0.9f;
+                intensityMod = 0.6f;
             }
-            else if (params->paperTextureType == 1) { // Light Texture
-                // 標準的な用紙 - 主に水平方向の繊維パターン
-                float noiseA = _sinf(xf * 0.15f + yf * 0.04f) * _cosf(yf * 0.1f); // 水平繊維
-                float noiseB = _sinf(yf * 0.15f + xf * 0.02f) * 0.3f; // 弱い垂直繊維
-                // 小さな粒子
-                float spots = 0.0f;
-                if (_fabs(_sinf(xf * 0.8f) * _cosf(yf * 0.7f)) > 0.95f) {
-                    spots = 0.4f;
-                }
-                noise = noiseA + noiseB + spots;
-                noise = (noise * 0.45f + 0.5f) * params->paperTexture * 0.25f;
+            else if (params->paperTextureType == 1) { // Light
+                frequencyMod = 0.5f;
+                intensityMod = 1.0f;
             }
-            else { // Heavy Texture (2)
-                // 再生紙/アート紙 - 様々な方向の繊維と粒状感
-                // 主な繊維パターン（水平と垂直）
-                float noiseH = _sinf(xf * 0.06f + yf * 0.02f) * _cosf(yf * 0.03f) * 1.2f; // 水平繊維
-                float noiseV = _sinf(yf * 0.08f + xf * 0.01f) * _cosf(xf * 0.02f) * 0.8f; // 垂直繊維
-
-                // 粒状感（より自然なランダム配置）
-                float grain = 0.0f;
-                float rand1 = _fabs(_sinf(xf * 1.2f + yf * 0.9f));
-                float rand2 = _fabs(_cosf(xf * 0.7f - yf * 1.3f));
-                float rand3 = _fabs(_sinf(xf * 1.0f) * _cosf(yf * 0.9f));
-
-                if (rand1 > 0.97f) {
-                    grain = 0.8f * _fminf(rand1 * 10.0f - 9.7f, 0.3f) / 0.3f;
-                }
-                else if (rand2 > 0.98f) {
-                    grain = 0.7f * _fminf(rand2 * 10.0f - 9.8f, 0.2f) / 0.2f;
-                }
-                else if (rand3 > 0.95f) {
-                    grain = 0.5f * _fminf(rand3 * 10.0f - 9.5f, 0.5f) / 0.5f;
-                }
-
-                noise = noiseH + noiseV + grain;
-                noise = (noise * 0.4f + 0.55f) * params->paperTexture * 0.35f;
+            else { // Heavy
+                frequencyMod = 0.3f;
+                intensityMod = 1.8f;
             }
 
-            // コントラストとバランスの調整
-            noise = noise - params->paperTexture * 0.05f;
+            // 共通の効率的なノイズ計算
+            float baseNoise = _sinf(xf * 0.3f * frequencyMod + yf * 0.27f) *
+                             _cosf(yf * 0.13f * frequencyMod + xf * 0.07f);
 
-            // 色に適用（明暗両方の効果を均等に）
-            if (noise < 0.0f) {
-                noise *= 1.5f;
-            } else {
-                noise *= 1.2f;
+            // Heavy Texture用に追加の粒状感
+            if (params->paperTextureType == 2 &&
+                _fabs(_sinf(xf * 1.2f + yf * 1.3f)) > 0.96f) {
+                baseNoise += 0.7f;
             }
 
-            result.x = _clampf(result.x + noise, 0.0f, 1.0f);
-            result.y = _clampf(result.y + noise, 0.0f, 1.0f);
-            result.z = _clampf(result.z + noise, 0.0f, 1.0f);
+            noise = (baseNoise * 0.5f + 0.5f) * params->paperTexture * 0.25f * intensityMod;
+
+            // コントラスト調整（分岐を減らす）
+            float noiseEffect = noise - params->paperTexture * 0.05f;
+            noiseEffect *= (noise < 0.0f) ? 1.5f : 1.2f;
+
+            // 色に適用
+            result.x = _clampf(result.x + noiseEffect, 0.0f, 1.0f);
+            result.y = _clampf(result.y + noiseEffect, 0.0f, 1.0f);
+            result.z = _clampf(result.z + noiseEffect, 0.0f, 1.0f);
         }
 
         _tex2DVec4Write(dst, x, y, result);
@@ -546,6 +525,8 @@ __KERNEL__ void CmykKernel(__CONSTANTREF__ HalftoneParams *params, __TEXTURE2D__
 ]]
 
 function Create()
+    local groupID = 0
+
     InUseCMYKMode = self:AddInput("CMYK Mode", "UseCMYKMode", {
         LINKID_DataType = "Number",
         INPID_InputControl = "CheckboxControl",
@@ -569,7 +550,7 @@ function Create()
         INPID_InputControl = "SliderControl",
         INP_Default = 130.0,
         INP_MinAllowed = 0.001,
-        INP_MaxAllowed = 300.0,
+        INP_MaxAllowed = 600.0,
         INPID_PreviewControl = "RangeControl",
         INP_Integer = false,
         INPS_StatusText = "Controls the density of the halftone pattern in CMYK mode",
@@ -634,6 +615,8 @@ function Create()
         INPS_StatusText = "Controls Under Color Removal in CMYK mode",
     })
 
+    self:BeginControlNest("Paper", "Paper", true);
+
     InPaperTexture = self:AddInput("Paper Texture", "PaperTexture", {
         LINKID_DataType = "Number",
         INPID_InputControl = "SliderControl",
@@ -654,6 +637,7 @@ function Create()
         INPS_StatusText = "Selects the type of paper texture pattern",
     })
 
+    groupID = groupID + 1
     InPaperColorRed = self:AddInput("Paper Color Red", "PaperColorRed", {
         LINKID_DataType    = "Number",
         INPID_InputControl = "ColorControl",
@@ -662,7 +646,7 @@ function Create()
         INP_Default        = 1.0,
         ICS_Name           = "Color",
         CLRC_ShowWheel     = false,
-        IC_ControlGroup    = 1,
+        IC_ControlGroup    = groupID,
         IC_ControlID       = 0, -- Red ID
         INPS_StatusText    = "Sets the paper color (background)",
     })
@@ -675,7 +659,7 @@ function Create()
         INP_Default        = 1.0,
         ICS_Name           = "Color",
         CLRC_ShowWheel     = false,
-        IC_ControlGroup    = 1,
+        IC_ControlGroup    = groupID,
         IC_ControlID       = 1, -- Green ID
         INPS_StatusText    = "Sets the paper color (background)",
     })
@@ -688,7 +672,7 @@ function Create()
         INP_Default        = 1.0,
         ICS_Name           = "Color",
         CLRC_ShowWheel     = false,
-        IC_ControlGroup    = 1,
+        IC_ControlGroup    = groupID,
         IC_ControlID       = 2, -- Blue ID
         INPS_StatusText    = "Sets the paper color (background)",
     })
@@ -701,10 +685,11 @@ function Create()
         INP_Default        = 1.0,
         ICS_Name           = "Color",
         CLRC_ShowWheel     = false,
-        IC_ControlGroup    = 1,
+        IC_ControlGroup    = groupID,
         IC_ControlID       = 3, -- Alpha ID
         INPS_StatusText    = "Sets the paper color (background)",
     })
+    self:EndControlNest()
 
     InImage = self:AddInput("Input Image", "Image", {
         LINKID_DataType = "Image",
@@ -725,6 +710,7 @@ function Process(req)
     local regError = InRegError:GetValue(req).Value
     local ucrAmount = InUcrAmount:GetValue(req).Value
     local paperTexture = InPaperTexture:GetValue(req).Value
+    local paperType = InPaperType:GetValue(req).Value
     local paperColor = {
         InPaperColorRed:GetValue(req).Value,
         InPaperColorGreen:GetValue(req).Value,
@@ -770,6 +756,7 @@ function Process(req)
             params.regError = regError
             params.ucrAmount = ucrAmount
             params.paperTexture = paperTexture
+            params.paperTextureType = paperType
             params.paperColor[0] = paperColor[1] -- R
             params.paperColor[1] = paperColor[2] -- G
             params.paperColor[2] = paperColor[3] -- B
