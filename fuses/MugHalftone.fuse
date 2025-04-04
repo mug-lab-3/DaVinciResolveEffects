@@ -2,7 +2,7 @@ FuRegisterClass("MugHalftone", CT_SourceTool, {
     REGS_Category          = "Fuses\\Mug",
     REGS_OpIconString      = "MHT",
     REGS_OpDescription     = "Mug Halftone",
-    REGS_HelpTopic         = "https://x.com/MugLab3",    --This can be a URL
+    REGS_HelpTopic         = "https://x.com/MugLab3",     --This can be a URL
     REGS_URL               = "https://www.youtube.com/@MugLabVideoEditing",
     REGS_IconID            = "Icons.Tools.Icons.Example", -- This can be Inline as an array of Values
     REG_NoObjMatCtrls      = true,
@@ -406,16 +406,17 @@ __KERNEL__ void CmykKernel(__CONSTANTREF__ HalftoneParams *params, __TEXTURE2D__
                             if (channel < 3) {
                                 if (params->useOriginalColor == 1) {
                                     // 元の色を基に、該当チャンネルだけ削除
+                                    // 紙の色ではなく純粋な黒または他のチャンネル値を使用
                                     channelColors[channel] = cellColor;
-                                    if (channel == 0) channelColors[channel].x = 0.0f;
-                                    else if (channel == 1) channelColors[channel].y = 0.0f;
-                                    else channelColors[channel].z = 0.0f;
+                                    if (channel == 0) channelColors[channel].x = 0.0f; // 紙の色に関係なく0に
+                                    else if (channel == 1) channelColors[channel].y = 0.0f; // 紙の色に関係なく0に
+                                    else channelColors[channel].z = 0.0f; // 紙の色に関係なく0に
                                 } else {
-                                    // プロセスカラー
+                                    // プロセスカラーも紙の色に影響されない固定値
                                     channelColors[channel] = to_float4(colors[channel].x, colors[channel].y, colors[channel].z, 1.0f);
                                 }
                             } else {
-                                // K版は黒
+                                // K版は常に純粋な黒（紙の色に関係なく）
                                 channelColors[channel] = to_float4(0.0f, 0.0f, 0.0f, 1.0f);
                             }
                         }
@@ -425,7 +426,13 @@ __KERNEL__ void CmykKernel(__CONSTANTREF__ HalftoneParams *params, __TEXTURE2D__
         }
 
         // CMY版の適用（最適化）
-        float4 cmyResult = result;
+        float4 cmyResult;
+        if (params->useOriginalBackground == 1) {
+            cmyResult = pixelColor;
+        } else {
+            // 紙の色の代わりに純粋な白から始める（インク色用）
+            cmyResult = to_float4(1.0f, 1.0f, 1.0f, 1.0f);
+        }
         float totalMask = 0.0f;
 
         // マスクの合計を先に計算
@@ -465,16 +472,31 @@ __KERNEL__ void CmykKernel(__CONSTANTREF__ HalftoneParams *params, __TEXTURE2D__
         }
 
         // K版の適用
-        result = cmyResult;
+        float4 inkResult = cmyResult;  // inkResultはインク色のみを計算
         if (hasChannelInfluence[3] && channelMask[3] > 0.0f) {
             if (channelMask[3] > 0.5f) {
                 // 中心部分は黒で上書き
-                result = to_float4(0.0f, 0.0f, 0.0f, 1.0f);
+                inkResult = to_float4(0.0f, 0.0f, 0.0f, 1.0f);
             } else {
                 // エッジブレンド
                 float blendFactor = channelMask[3] * 2.0f;
-                result = _mix(cmyResult, to_float4(0.0f, 0.0f, 0.0f, 1.0f), blendFactor);
+                inkResult = _mix(cmyResult, to_float4(0.0f, 0.0f, 0.0f, 1.0f), blendFactor);
             }
+        }
+
+        // インク色と紙の色を合成（インク部分のマスクを計算）
+        float inkMask = 0.0f;
+        for (int i = 0; i < 4; i++) {
+            if (hasChannelInfluence[i]) {
+                inkMask = _fmaxf(inkMask, channelMask[i]);
+            }
+        }
+
+        // インク色と紙の色（またはオリジナル背景）をブレンド
+        if (inkMask > 0.001f) {
+            result = _mix(result, inkResult, inkMask);
+        } else {
+            // インクの影響がない場合はそのまま背景色
         }
 
         // 紙の質感適用（効率化）
