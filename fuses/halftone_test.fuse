@@ -2,33 +2,43 @@
 -- Registry declaration
 
 FuRegisterClass("GPUSampleFuse", CT_SourceTool, {
-	REGS_Category = "Fuses\\Examples",
-	REGS_OpIconString = "GFu",
-	REGS_OpDescription = "GPU Sample Fuse",
+    REGS_Category = "Fuses\\Examples",
+    REGS_OpIconString = "GFu",
+    REGS_OpDescription = "GPU Sample Fuse",
 
-	REG_NoObjMatCtrls = true,
-	REG_NoMotionBlurCtrls = true,
+    REG_NoObjMatCtrls = true,
+    REG_NoMotionBlurCtrls = true,
 
-	REG_Source_GlobalCtrls = true,
-	REG_Source_SizeCtrls = true,
-	REG_Source_AspectCtrls = true,
-	REG_Source_DepthCtrls = true,
+    REG_Source_GlobalCtrls = true,
+    REG_Source_SizeCtrls = true,
+    REG_Source_AspectCtrls = true,
+    REG_Source_DepthCtrls = true,
 })
 
 
 --------------------------------
 -- source of kernel
 
+-- パラメーター構造体
 HalftoneParams = [[
   int srcSize[2];        // ソース画像のサイズ
   float dotSize;         // ドットのサイズ調整（大きいほど細かいパターン）
   float contrast;        // コントラスト調整（1.0がデフォルト）
   int useOriginalColor;  // 元の色を使用するかどうか（0=白黒、1=カラー）
-  int useOriginalBackground; // 背景も元の色にするかどうか（0=白、1=元の色）
+  int useOriginalBackground; // 背景も元の色にするかどうか（0=紙の色、1=元の色）
   int useCMYKMode;       // CMYKモードを使用するかどうか（0=標準ハーフトーン、1=CMYKスタイル）
   float dotAngle;        // ドットの角度（CMYK モードでのみ使用）
+  float aaStrength;      // アンチエイリアス強度（0.0=無効、1.0=強い）
+  float dotGain;         // ドットゲイン効果の強さ（0.0-1.0）
+  float regError;        // 色版ずれの程度（0.0-1.0）
+  float ucrAmount;       // UCR/GCR適用量（0.0-1.0）
+  float paperTexture;    // 紙の質感強度（0.0-1.0）
+  int paperTextureType;  // 紙の種類（0=なめらか、1=わずかな繊維、2=強い繊維）
+  float screenDensity;   // スクリーンの密度
+  float paperColor[4];   // 紙の色（背景色）[R,G,B,A]
 ]]
 
+-- 標準ハーフトーンカーネル
 HalftoneKernel = [[
 __KERNEL__ void HalftoneKernel(__CONSTANTREF__ HalftoneParams *params, __TEXTURE2D__ src, __TEXTURE2D_WRITE__ dst)
 {
@@ -36,239 +46,498 @@ __KERNEL__ void HalftoneKernel(__CONSTANTREF__ HalftoneParams *params, __TEXTURE
 
     if (x < params->srcSize[0] && y < params->srcSize[1])
     {
-        // 基本ドットサイズ - 単純なグリッドサイズとして使用
+        // 基本ドットサイズ設定
         float cellSize = _fmaxf(1.0f, params->dotSize);
 
-        // 現在のピクセルの正規化座標（一度だけ計算）
+        // 座標正規化
+        float xNorm = (float)x / (float)params->srcSize[0];
+        float yNorm = (float)y / (float)params->srcSize[1];
+        float4 pixelColor = _tex2DVecN(src, xNorm, yNorm, 15);
+
+        // デフォルト値として背景色を設定
+        float4 result;
+        if (params->useOriginalBackground == 1) {
+            result = pixelColor;
+        } else {
+            // 配列から float4 を構築
+            result = to_float4(
+                params->paperColor[0],  // R
+                params->paperColor[1],  // G
+                params->paperColor[2],  // B
+                params->paperColor[3]   // A
+            );
+        }
+
+        // ドット計算用変数
+        float dotMask = 0.0f;
+        float4 dotColor = to_float4(0.0f, 0.0f, 0.0f, 1.0f);
+        bool hasInfluence = false;
+
+        // 45度回転座標系
+        float angle = 45.0f * 0.01745329f;
+        float cosAngle = _cosf(angle);
+        float sinAngle = _sinf(angle);
+        float xf = (float)x;
+        float yf = (float)y;
+        float rotX = xf * cosAngle - yf * sinAngle;
+        float rotY = xf * sinAngle + yf * cosAngle;
+
+        // セル特定
+        int cellIdX = (int)(rotX / cellSize);
+        int cellIdY = (int)(rotY / cellSize);
+
+        // 周囲の検索範囲を対称化して修正
+        for (int dy = -1; dy <= 1; dy++) {
+            for (int dx = -1; dx <= 1; dx++) {
+                int checkX = cellIdX + dx;
+                int checkY = cellIdY + dy;
+
+                // 奇数行オフセット
+                float offsetX = ((checkY % 2) != 0) ? 0.5f : 0.0f;
+
+                // 特殊オフセット計算
+                bool isOddCell = ((checkX + checkY) % 2 != 0);
+                float specialOffsetY = isOddCell ? 0.075f : -0.075f;
+
+                // 市松模様補正
+                if ((checkY % 2) != 0 && (checkX % 2) == 0) {
+                    specialOffsetY += 0.075f;
+                } else if ((checkY % 2) == 0 && (checkX % 2) != 0) {
+                    specialOffsetY -= 0.075f;
+                }
+
+                // セル中心計算
+                float cellCenterX = (checkX + offsetX) * cellSize;
+                float cellCenterY = checkY * cellSize + cellSize * 0.5f + specialOffsetY * cellSize;
+
+                // 距離計算
+                float distX = rotX - cellCenterX;
+                float distY = rotY - cellCenterY;
+                float dist = _sqrtf(distX*distX + distY*distY);
+
+                // 早期脱出: 距離が大きすぎる場合
+                if (dist > cellSize * 0.8f) continue;
+
+                // 画像上の逆変換座標
+                float invX = cellCenterX * cosAngle + cellCenterY * sinAngle;
+                float invY = -cellCenterX * sinAngle + cellCenterY * cosAngle;
+                float centerUVx = invX * (1.0f / (float)params->srcSize[0]);
+                float centerUVy = invY * (1.0f / (float)params->srcSize[1]);
+
+                // 有効範囲チェック
+                if (centerUVx >= 0.0f && centerUVx <= 1.0f && centerUVy >= 0.0f && centerUVy <= 1.0f) {
+                    float4 cellColor = _tex2DVecN(src, centerUVx, centerUVy, 15);
+
+                    // 輝度計算
+                    float cellLuma = cellColor.x * 0.3f + cellColor.y * 0.59f + cellColor.z * 0.11f;
+                    cellLuma = _clampf((cellLuma - 0.5f) * params->contrast + 0.5f, 0.0f, 1.0f);
+
+                    // ドット半径計算
+                    float radius = 0.45f * (1.0f - cellLuma);
+                    radius = _fmaxf(radius, 0.01f);
+
+                    // 暗部補正
+                    if (cellLuma < 0.3f) {
+                        radius += (0.3f - cellLuma) * 0.1f;
+                    }
+
+                    // ドットゲイン適用
+                    if (params->dotGain > 0.0f) {
+                        radius *= (1.0f + params->dotGain * 0.2f);
+                    }
+
+                    // アンチエイリアス処理
+                    float normDist = dist / cellSize;
+                    float aaWidth = 0.7f / cellSize * params->aaStrength;
+                    float t = _clampf((normDist - radius + aaWidth) / _fmaxf(aaWidth, 0.0001f), 0.0f, 1.0f);
+                    float alpha = 1.0f - (t * t * (3.0f - 2.0f * t));
+
+                    // 影響度が高い場合のみ更新
+                    if (alpha > 0.01f && alpha > dotMask) {
+                        dotMask = alpha;
+                        dotColor = params->useOriginalColor == 1 ? cellColor : to_float4(0.0f, 0.0f, 0.0f, 1.0f);
+                        hasInfluence = true;
+                    }
+                }
+            }
+        }
+
+        // ドット適用
+        if (hasInfluence) {
+            if (dotMask > 0.5f) {
+                // 中心部分処理
+                if (params->useOriginalColor == 1) {
+                    // 輝度比較（暗い場合のみ適用）
+                    float resultLuma = result.x * 0.3f + result.y * 0.59f + result.z * 0.11f;
+                    float dotLuma = dotColor.x * 0.3f + dotColor.y * 0.59f + dotColor.z * 0.11f;
+                    if (dotLuma < resultLuma) {
+                        result = dotColor;
+                    }
+                } else {
+                    // 黒ドットは常に適用
+                    result = dotColor;
+                }
+            } else {
+                // エッジ部分処理
+                float blendFactor = dotMask * 2.0f;
+                float4 blendedColor;
+                blendedColor.x = _mix(result.x, dotColor.x, blendFactor);
+                blendedColor.y = _mix(result.y, dotColor.y, blendFactor);
+                blendedColor.z = _mix(result.z, dotColor.z, blendFactor);
+
+                // 輝度比較（暗くなる場合のみ適用）
+                float resultLuma = result.x * 0.3f + result.y * 0.59f + result.z * 0.11f;
+                float blendedLuma = blendedColor.x * 0.3f + blendedColor.y * 0.59f + blendedColor.z * 0.11f;
+                if (blendedLuma < resultLuma) {
+                    result = blendedColor;
+                }
+            }
+        }
+
+        // 紙の質感適用（簡略化）
+        if (params->paperTexture > 0.0f) {
+            float noise = _sinf(xf * 0.1f + yf * 0.3f) * _cosf(xf * 0.05f);
+            noise = (noise * 0.5f + 0.5f) * params->paperTexture * 0.1f;
+            result.x = _clampf(result.x + noise, 0.0f, 1.0f);
+            result.y = _clampf(result.y + noise, 0.0f, 1.0f);
+            result.z = _clampf(result.z + noise, 0.0f, 1.0f);
+        }
+
+        _tex2DVec4Write(dst, x, y, result);
+    }
+}
+]]
+
+
+-- CMYKモード処理用のカーネル
+CmykKernel = [[
+__KERNEL__ void CmykKernel(__CONSTANTREF__ HalftoneParams *params, __TEXTURE2D__ src, __TEXTURE2D_WRITE__ dst)
+{
+    DEFINE_KERNEL_ITERATORS_XY(x, y);
+
+    if (x < params->srcSize[0] && y < params->srcSize[1])
+    {
+        // 基本設定 スクリーン線数からドットサイズを計算
+        float cellSize = 1000.0f / _fmaxf(0.1f, params->screenDensity);
+
+        // 現在のピクセルの正規化座標
         float xNorm = (float)x / (float)params->srcSize[0];
         float yNorm = (float)y / (float)params->srcSize[1];
         float2 pixelUV = to_float2(xNorm, yNorm);
 
         // 現在のピクセルの色を取得
         float4 pixelColor = _tex2DVecN(src, pixelUV.x, pixelUV.y, 15);
+
+        // デフォルト値として背景色を設定
         float4 result;
-
-        if (params->useCMYKMode == 1) {
-            // CMYK風のハーフトーン処理
-            float4 cmykResult = to_float4(1.0f, 1.0f, 1.0f, 1.0f); // 初期値は白
-
-            // 事前計算
-            float xf = (float)x;
-            float yf = (float)y;
-
-            // 各チャンネル（CMY）ごとに処理
-            float angles[4] = {15.0f, 75.0f, 0.0f, 45.0f}; // C、M、Y、Kの角度（標準的な印刷角度）
-            float3 colors[3] = {
-                to_float3(0.0f, 1.0f, 1.0f), // シアン
-                to_float3(1.0f, 0.0f, 1.0f), // マゼンタ
-                to_float3(1.0f, 1.0f, 0.0f)  // イエロー
-            };
-
-            // 効率化: サイズ係数とオフセットを事前に計算
-            float cellSizes[4] = {
-                cellSize,             // シアン
-                cellSize * 1.05f,     // マゼンタ
-                cellSize * 0.95f,     // イエロー
-                cellSize              // ブラック
-            };
-
-            float2 offsets[4] = {
-                to_float2(0.0f, 0.0f),
-                to_float2(cellSizes[1] * 0.25f, 0.0f),
-                to_float2(0.0f, cellSizes[2] * 0.25f),
-                to_float2(cellSizes[3] * 0.125f, cellSizes[3] * 0.125f)
-            };
-
-            // CMYチャンネルループ
-            for (int channel = 0; channel < 3; channel++) {
-                float angle = angles[channel] * 0.01745329f; // ラジアンに変換 (3.14159/180)
-                float cosAngle = _cosf(angle);
-                float sinAngle = _sinf(angle);
-
-                // 回転とオフセットを一度に適用
-                float rotX = xf * cosAngle - yf * sinAngle + offsets[channel].x;
-                float rotY = xf * sinAngle + yf * cosAngle + offsets[channel].y;
-
-                // セルID計算を簡略化
-                float invCellSize = 1.0f / cellSizes[channel];
-                float cellIdXf = floor(rotX * invCellSize);
-                float cellIdYf = floor(rotY * invCellSize);
-
-                // セル内相対位置 - 高速化
-                float cellPosX = rotX * invCellSize - cellIdXf;
-                float cellPosY = rotY * invCellSize - cellIdYf;
-
-                // セル中心座標計算を簡略化
-                float centerX = (cellIdXf + 0.5f) * cellSizes[channel];
-                float centerY = (cellIdYf + 0.5f) * cellSizes[channel];
-
-                // 逆回転 - 効率化
-                float invX = centerX * cosAngle + centerY * sinAngle - offsets[channel].x;
-                float invY = -centerX * sinAngle + centerY * cosAngle - offsets[channel].y;
-
-                // 正規化座標
-                float centerUVx = invX * (1.0f / (float)params->srcSize[0]);
-                float centerUVy = invY * (1.0f / (float)params->srcSize[1]);
-
-                // テクスチャ範囲チェックを簡略化
-                if (centerUVx >= 0.0f && centerUVx <= 1.0f && centerUVy >= 0.0f && centerUVy <= 1.0f) {
-                    // セル中心の色
-                    float4 cellColor = _tex2DVecN(src, centerUVx, centerUVy, 15);
-
-                    // チャンネル値計算
-                    float channelValue;
-                    if (channel == 0) channelValue = 1.0f - cellColor.x;
-                    else if (channel == 1) channelValue = 1.0f - cellColor.y;
-                    else channelValue = 1.0f - cellColor.z;
-
-                    // コントラスト調整
-                    channelValue = _clampf((channelValue - 0.5f) * params->contrast + 0.5f, 0.0f, 1.0f);
-
-                    // セル中心からの距離を計算
-                    float dx = cellPosX - 0.5f;
-                    float dy = cellPosY - 0.5f;
-                    float dist = _sqrtf(dx * dx + dy * dy);
-
-                    // 半径計算 - 条件分岐を減らして効率化
-                    float radius = 0.0f;
-                    if (channelValue > 0.05f) {  // ドットが必要な場合のみ計算
-                        radius = 0.45f * channelValue;
-                        if (channelValue > 0.8f) {
-                            radius += (channelValue - 0.8f) * 0.5f;
-                            if (radius > 0.65f) radius = 0.65f;
-                        }
-                    }
-
-                    // ドット内にあるかチェック
-                    if (dist < radius) {
-                        if (params->useOriginalColor == 1) {
-                            // カラーモードではオリジナル色を保持
-                            float3 channelOrigColor;
-                            if (channel == 0) channelOrigColor = to_float3(0.0f, cellColor.y, cellColor.z);
-                            else if (channel == 1) channelOrigColor = to_float3(cellColor.x, 0.0f, cellColor.z);
-                            else channelOrigColor = to_float3(cellColor.x, cellColor.y, 0.0f);
-
-                            cmykResult.x = _fminf(cmykResult.x, channelOrigColor.x);
-                            cmykResult.y = _fminf(cmykResult.y, channelOrigColor.y);
-                            cmykResult.z = _fminf(cmykResult.z, channelOrigColor.z);
-                        } else {
-                            // CMY色モード
-                            cmykResult.x = _fminf(cmykResult.x, colors[channel].x);
-                            cmykResult.y = _fminf(cmykResult.y, colors[channel].y);
-                            cmykResult.z = _fminf(cmykResult.z, colors[channel].z);
-                        }
-                    }
-                }
-            }
-
-            // Kチャンネル（黒）を効率的に処理
-            {
-                int channel = 3;
-                float angle = angles[channel] * 0.01745329f;
-                float cosAngle = _cosf(angle);
-                float sinAngle = _sinf(angle);
-
-                float rotX = xf * cosAngle - yf * sinAngle + offsets[channel].x;
-                float rotY = xf * sinAngle + yf * cosAngle + offsets[channel].y;
-
-                float invCellSize = 1.0f / cellSizes[channel];
-                float cellIdXf = floor(rotX * invCellSize);
-                float cellIdYf = floor(rotY * invCellSize);
-
-                float cellPosX = rotX * invCellSize - cellIdXf;
-                float cellPosY = rotY * invCellSize - cellIdYf;
-
-                float centerX = (cellIdXf + 0.5f) * cellSizes[channel];
-                float centerY = (cellIdYf + 0.5f) * cellSizes[channel];
-
-                float invX = centerX * cosAngle + centerY * sinAngle - offsets[channel].x;
-                float invY = -centerX * sinAngle + centerY * cosAngle - offsets[channel].y;
-
-                float centerUVx = invX * (1.0f / (float)params->srcSize[0]);
-                float centerUVy = invY * (1.0f / (float)params->srcSize[1]);
-
-                if (centerUVx >= 0.0f && centerUVx <= 1.0f && centerUVy >= 0.0f && centerUVy <= 1.0f) {
-                    float4 cellColor = _tex2DVecN(src, centerUVx, centerUVy, 15);
-
-                    // Kチャンネル値を効率的に計算
-                    float r = cellColor.x;
-                    float g = cellColor.y;
-                    float b = cellColor.z;
-                    float kValue = 1.0f - (r > g ? (r > b ? r : b) : (g > b ? g : b));
-
-                    kValue = _clampf((kValue - 0.5f) * params->contrast + 0.5f, 0.0f, 1.0f);
-
-                    float dx = cellPosX - 0.5f;
-                    float dy = cellPosY - 0.5f;
-                    float dist = _sqrtf(dx * dx + dy * dy);
-
-                    float radius = 0.0f;
-                    if (kValue > 0.05f) {
-                        radius = 0.45f * kValue;
-                        if (kValue > 0.8f) {
-                            radius += (kValue - 0.8f) * 0.5f;
-                            if (radius > 0.65f) radius = 0.65f;
-                        }
-                    }
-
-                    if (dist < radius) {
-                        cmykResult.x *= 0.3f;
-                        cmykResult.y *= 0.3f;
-                        cmykResult.z *= 0.3f;
-                    }
-                }
-            }
-
-            result = to_float4(cmykResult.x, cmykResult.y, cmykResult.z, 1.0f);
+        if (params->useOriginalBackground == 1) {
+            result = pixelColor;
         } else {
-            // 標準ハーフトーン処理 - 大幅に効率化
-
-            // スケール計算を簡略化
-            float invCellSize = 1.0f / cellSize;
-            float scaledX = xNorm * params->srcSize[0] * invCellSize;
-            float scaledY = yNorm * params->srcSize[1] * invCellSize;
-
-            // セル計算
-            float cellIdX = floor(scaledX);
-            float cellIdY = floor(scaledY);
-            float cellPosX = scaledX - cellIdX;
-            float cellPosY = scaledY - cellIdY;
-
-            // セル中心の色を取得
-            float2 cellCenterUV = to_float2(
-                (cellIdX + 0.5f) * cellSize / (float)params->srcSize[0],
-                (cellIdY + 0.5f) * cellSize / (float)params->srcSize[1]
+            // 配列から float4 を構築
+            result = to_float4(
+                params->paperColor[0],  // R
+                params->paperColor[1],  // G
+                params->paperColor[2],  // B
+                params->paperColor[3]   // A
             );
+        }
 
-            float4 cellColor = _tex2DVecN(src, cellCenterUV.x, cellCenterUV.y, 15);
+        // 事前計算
+        float xf = (float)x;
+        float yf = (float)y;
 
-            // 輝度計算を効率化
-            float cellLuma = cellColor.x * 0.3f + cellColor.y * 0.59f + cellColor.z * 0.11f;
-            cellLuma = _clampf((cellLuma - 0.5f) * params->contrast + 0.5f, 0.0f, 1.0f);
+        // 各チャンネル（CMYK）ごとに処理
+        float angles[4] = {18.4f, 71.6f, 0.0f, 45.0f}; // C、M、Y、Kの角度
+        float3 colors[3] = {
+            to_float3(0.0f, 0.85f, 0.85f), // シアン（より濃いめ）
+            to_float3(0.85f, 0.0f, 0.85f), // マゼンタ（より濃いめ）
+            to_float3(0.85f, 0.85f, 0.0f)  // イエロー（より濃いめ）
+        };
 
-            // 距離計算を効率化
-            float dx = cellPosX - 0.5f;
-            float dy = cellPosY - 0.5f;
-            float dist = _sqrtf(dx * dx + dy * dy);
+        // サイズ係数を計算
+        float cellSizes[4];
+        for (int i = 0; i < 4; i++) {
+            cellSizes[i] = cellSize;
+            if (i == 1) cellSizes[i] *= 1.05f;      // マゼンタ
+            else if (i == 2) cellSizes[i] *= 0.95f; // イエロー
+        }
 
-            // 半径計算を効率化
-            float radius;
-            if (cellLuma < 0.05f) {
-                radius = 0.67f;
-            } else {
-                radius = 0.45f * (1.0f - cellLuma);
-                if (cellLuma < 0.2f) {
-                    radius += (0.2f - cellLuma) * 0.5f;
-                    if (radius > 0.65f) radius = 0.65f;
+        // 基本オフセットとレジストレーションエラー
+        float2 offsets[4];
+        for (int i = 0; i < 4; i++) {
+            offsets[i] = to_float2(0.0f, 0.0f);
+        }
+        offsets[1].x = cellSizes[1] * 0.25f;
+        offsets[2].y = cellSizes[2] * 0.25f;
+        offsets[3].x = cellSizes[3] * 0.125f;
+        offsets[3].y = cellSizes[3] * 0.125f;
+
+        // レジストレーションエラーを計算（単純化）
+        float regError = params->regError * 0.1f;
+        if (regError > 0.0f) {
+            offsets[0].x += regError * cellSize * 0.53f;
+            offsets[0].y += regError * cellSize * 0.23f;
+            offsets[1].x += regError * cellSize * -0.33f;
+            offsets[1].y += regError * cellSize * 0.41f;
+            offsets[2].x += regError * cellSize * 0.17f;
+            offsets[2].y += regError * cellSize * -0.37f;
+        }
+
+        // 各チャンネルの影響度
+        float channelMask[4] = {0.0f, 0.0f, 0.0f, 0.0f};
+        float4 channelColors[4];
+        bool hasChannelInfluence[4] = {false, false, false, false};
+
+        // CMYKの各チャンネルごとの処理
+        for (int channel = 0; channel < 4; channel++) {
+            float angle = angles[channel] * 0.01745329f; // ラジアンに変換
+            float cosAngle = _cosf(angle);
+            float sinAngle = _sinf(angle);
+
+            // 回転とオフセットを適用
+            float rotX = xf * cosAngle - yf * sinAngle + offsets[channel].x;
+            float rotY = xf * sinAngle + yf * cosAngle + offsets[channel].y;
+
+            // 最も近いセルの中心を見つける
+            int cellIdX = (int)(rotX / cellSizes[channel]);
+            int cellIdY = (int)(rotY / cellSizes[channel]);
+
+            // 周囲のセルをチェック - 検索範囲を対称に拡大
+            for (int dy = -1; dy <= 1; dy++) {
+                for (int dx = -1; dx <= 1; dx++) {
+                    int checkX = cellIdX + dx;
+                    int checkY = cellIdY + dy;
+
+                    // 奇数行は水平方向にオフセット
+                    float offsetX = ((checkY % 2) != 0) ? 0.5f : 0.0f;
+
+                    // セル中心座標
+                    float cellCenterX = (checkX + offsetX) * cellSizes[channel];
+                    float cellCenterY = checkY * cellSizes[channel] + cellSizes[channel] * 0.5f;
+
+                    // 特別なセルパターン調整（K版のみ）
+                    if (channel == 3) {
+                        bool isOddCell = ((checkX + checkY) % 2 != 0);
+                        float adjustY = isOddCell ? 0.075f : -0.075f;
+                        cellCenterY += cellSizes[channel] * adjustY;
+
+                        // 市松模様補正
+                        if ((checkY % 2) != 0 && (checkX % 2) == 0) {
+                            cellCenterY += cellSizes[channel] * 0.075f;
+                        } else if ((checkY % 2) == 0 && (checkX % 2) != 0) {
+                            cellCenterY -= cellSizes[channel] * 0.075f;
+                        }
+                    }
+
+                    // 現在のピクセルからセル中心への距離
+                    float distX = rotX - cellCenterX;
+                    float distY = rotY - cellCenterY;
+                    float dist = _sqrtf(distX*distX + distY*distY);
+
+                    // 早期脱出条件も調整（通常はセルサイズの70%程度が妥当）
+                    if (dist > cellSizes[channel] * 0.8f) continue;
+
+                    // セル中心の画像上の座標に変換
+                    float invX = cellCenterX * cosAngle + cellCenterY * sinAngle - offsets[channel].x;
+                    float invY = -cellCenterX * sinAngle + cellCenterY * cosAngle - offsets[channel].y;
+
+                    // 正規化座標
+                    float centerUVx = invX * (1.0f / (float)params->srcSize[0]);
+                    float centerUVy = invY * (1.0f / (float)params->srcSize[1]);
+
+                    // テクスチャ範囲内かチェック
+                    if (centerUVx >= 0.0f && centerUVx <= 1.0f && centerUVy >= 0.0f && centerUVy <= 1.0f) {
+                        // セル中心の色
+                        float4 cellColor = _tex2DVecN(src, centerUVx, centerUVy, 15);
+
+                        // チャンネル値計算 - UCR/GCR処理を適用
+                        float channelValue = 0.0f;
+
+                        // CMY版の場合
+                        if (channel < 3) {
+                            channelValue = channel == 0 ? (1.0f - cellColor.x) :
+                                          (channel == 1 ? (1.0f - cellColor.y) : (1.0f - cellColor.z));
+
+                            // UCR処理
+                            if (params->ucrAmount > 0.0f) {
+                                float minVal = _fminf(_fminf(1.0f-cellColor.x, 1.0f-cellColor.y), 1.0f-cellColor.z);
+                                channelValue -= minVal * params->ucrAmount;
+                                channelValue = _fmaxf(0.0f, channelValue);
+                            }
+                        } else {
+                            // K版の場合
+                            channelValue = 1.0f - _fmaxf(_fmaxf(cellColor.x, cellColor.y), cellColor.z);
+
+                            // UCR強化
+                            if (params->ucrAmount > 0.0f) {
+                                float minVal = _fminf(_fminf(1.0f-cellColor.x, 1.0f-cellColor.y), 1.0f-cellColor.z);
+                                channelValue = _fminf(1.0f, channelValue + minVal * params->ucrAmount * 0.7f);
+                            }
+                        }
+
+                        // コントラスト調整
+                        channelValue = _clampf((channelValue - 0.5f) * params->contrast + 0.5f, 0.0f, 1.0f);
+
+                        // ドット半径計算
+                        float radius = 0.5f * channelValue; // 基本半径を大きくして濃度を上げる
+                        radius = _fmaxf(radius, 0.01f);
+
+                        // ドットゲイン効果
+                        if (params->dotGain > 0.0f) {
+                            // 修正前: radius *= (1.0f + params->dotGain * 0.2f);
+                            radius *= (1.0f + params->dotGain * 0.3f); // ゲイン効果も強化
+                        }
+
+                        // セル半径と距離を比較
+                        float normDist = dist / cellSizes[channel];
+
+                        // アンチエイリアス処理
+                        float edge = radius;
+                        float aaWidth = 0.7f / cellSizes[channel] * params->aaStrength;
+                        float t = _clampf((normDist - edge + aaWidth) / _fmaxf(aaWidth, 0.0001f), 0.0f, 1.0f);
+                        float alpha = 1.0f - (t * t * (3.0f - 2.0f * t)); // smoothstep
+
+                        // 影響度の更新
+                        if (alpha > 0.01f && alpha > channelMask[channel]) {
+                            channelMask[channel] = alpha;
+                            hasChannelInfluence[channel] = true;
+
+                            // 色の設定
+                            if (channel < 3) {
+                                if (params->useOriginalColor == 1) {
+                                    // 元の色を基に、該当チャンネルだけ削除
+                                    channelColors[channel] = cellColor;
+                                    if (channel == 0) channelColors[channel].x = 0.0f;
+                                    else if (channel == 1) channelColors[channel].y = 0.0f;
+                                    else channelColors[channel].z = 0.0f;
+                                } else {
+                                    // プロセスカラー
+                                    channelColors[channel] = to_float4(colors[channel].x, colors[channel].y, colors[channel].z, 1.0f);
+                                }
+                            } else {
+                                // K版は黒
+                                channelColors[channel] = to_float4(0.0f, 0.0f, 0.0f, 1.0f);
+                            }
+                        }
+                    }
                 }
             }
+        }
 
-            // 最終的なピクセル色の決定を効率化
-            if (dist < radius) {
-                result = params->useOriginalColor == 1 ? cellColor : to_float4(0.0f, 0.0f, 0.0f, 1.0f);
-            } else {
-                result = params->useOriginalBackground == 1 ? pixelColor : to_float4(1.0f, 1.0f, 1.0f, 1.0f);
+        // CMY版の適用
+        float4 cmyResult = result;
+        float totalMask = 0.0f; // 合計マスク強度を追跡
+
+        for (int i = 0; i < 3; i++) {
+            if (hasChannelInfluence[i] && channelMask[i] > 0.0f) {
+                totalMask += channelMask[i]; // 合計マスク強度を加算
+
+                if (channelMask[i] > 0.5f) {
+                    // 最小値で合成（よりダークになるように）
+                    cmyResult.x = _fminf(cmyResult.x, channelColors[i].x);
+                    cmyResult.y = _fminf(cmyResult.y, channelColors[i].y);
+                    cmyResult.z = _fminf(cmyResult.z, channelColors[i].z);
+                } else {
+                    // エッジ部分はブレンド（より強い効果に調整）
+                    float blendFactor = channelMask[i] * 2.5f; // ブレンド強度を増加
+
+                    float4 blendedColor;
+                    blendedColor.x = _mix(cmyResult.x, _fminf(cmyResult.x, channelColors[i].x), blendFactor);
+                    blendedColor.y = _mix(cmyResult.y, _fminf(cmyResult.y, channelColors[i].y), blendFactor);
+                    blendedColor.z = _mix(cmyResult.z, _fminf(cmyResult.z, channelColors[i].z), blendFactor);
+
+                    // より暗い場合のみ適用
+                    cmyResult = blendedColor;
+                }
             }
+        }
+
+        // 全体の濃度調整（オプション）
+        if (totalMask > 0.0f) {
+            // ドットの重なりがある場合は全体をわずかに暗く
+            float darkening = _fminf(totalMask / 3.0f * 0.2f, 0.2f);
+            cmyResult.x *= (1.0f - darkening);
+            cmyResult.y *= (1.0f - darkening);
+            cmyResult.z *= (1.0f - darkening);
+        }
+
+        // K版の適用
+        result = cmyResult;
+        if (hasChannelInfluence[3] && channelMask[3] > 0.0f) {
+            if (channelMask[3] > 0.5f) {
+                // 中心部分は黒で上書き
+                result = to_float4(0.0f, 0.0f, 0.0f, 1.0f);
+            } else {
+                // エッジブレンド
+                float blendFactor = channelMask[3] * 2.0f;
+                float4 blendedColor = _mix(cmyResult, to_float4(0.0f, 0.0f, 0.0f, 1.0f), blendFactor);
+                result = blendedColor;
+            }
+        }
+
+        // 紙の質感適用
+        if (params->paperTexture > 0.0f) {
+            float noise = 0.0f;
+
+            // 紙の種類によって異なるノイズパターンを生成
+            if (params->paperTextureType == 0) { // Smooth
+                // 滑らかな上質紙 - 細かいノイズ、方向性なし
+                float noiseA = _sinf(xf * 0.4f + yf * 0.37f) * _cosf(xf * 0.32f + yf * 0.31f);
+                float noiseB = _sinf(xf * 1.1f - yf * 1.3f) * 0.2f;
+                noise = noiseA + noiseB;
+                noise = (noise * 0.5f + 0.5f) * params->paperTexture * 0.15f;
+            }
+            else if (params->paperTextureType == 1) { // Light Texture
+                // 標準的な用紙 - 主に水平方向の繊維パターン
+                float noiseA = _sinf(xf * 0.15f + yf * 0.04f) * _cosf(yf * 0.1f); // 水平繊維
+                float noiseB = _sinf(yf * 0.15f + xf * 0.02f) * 0.3f; // 弱い垂直繊維
+                // 小さな粒子
+                float spots = 0.0f;
+                if (_fabs(_sinf(xf * 0.8f) * _cosf(yf * 0.7f)) > 0.95f) {
+                    spots = 0.4f;
+                }
+                noise = noiseA + noiseB + spots;
+                noise = (noise * 0.45f + 0.5f) * params->paperTexture * 0.25f;
+            }
+            else { // Heavy Texture (2)
+                // 再生紙/アート紙 - 様々な方向の繊維と粒状感
+                // 主な繊維パターン（水平と垂直）
+                float noiseH = _sinf(xf * 0.06f + yf * 0.02f) * _cosf(yf * 0.03f) * 1.2f; // 水平繊維
+                float noiseV = _sinf(yf * 0.08f + xf * 0.01f) * _cosf(xf * 0.02f) * 0.8f; // 垂直繊維
+
+                // 粒状感（より自然なランダム配置）
+                float grain = 0.0f;
+                float rand1 = _fabs(_sinf(xf * 1.2f + yf * 0.9f));
+                float rand2 = _fabs(_cosf(xf * 0.7f - yf * 1.3f));
+                float rand3 = _fabs(_sinf(xf * 1.0f) * _cosf(yf * 0.9f));
+
+                if (rand1 > 0.97f) {
+                    grain = 0.8f * _fminf(rand1 * 10.0f - 9.7f, 0.3f) / 0.3f;
+                }
+                else if (rand2 > 0.98f) {
+                    grain = 0.7f * _fminf(rand2 * 10.0f - 9.8f, 0.2f) / 0.2f;
+                }
+                else if (rand3 > 0.95f) {
+                    grain = 0.5f * _fminf(rand3 * 10.0f - 9.5f, 0.5f) / 0.5f;
+                }
+
+                noise = noiseH + noiseV + grain;
+                noise = (noise * 0.4f + 0.55f) * params->paperTexture * 0.35f;
+            }
+
+            // コントラストとバランスの調整
+            noise = noise - params->paperTexture * 0.05f;
+
+            // 色に適用（明暗両方の効果を均等に）
+            if (noise < 0.0f) {
+                noise *= 1.5f;
+            } else {
+                noise *= 1.2f;
+            }
+
+            result.x = _clampf(result.x + noise, 0.0f, 1.0f);
+            result.y = _clampf(result.y + noise, 0.0f, 1.0f);
+            result.z = _clampf(result.z + noise, 0.0f, 1.0f);
         }
 
         _tex2DVec4Write(dst, x, y, result);
@@ -277,88 +546,272 @@ __KERNEL__ void HalftoneKernel(__CONSTANTREF__ HalftoneParams *params, __TEXTURE
 ]]
 
 function Create()
-	InDotSize = self:AddInput("Dot Size", "DotSize", {
-		LINKID_DataType = "Number",
-		INPID_InputControl = "SliderControl",
-		INP_Default = 15.0,
-		INP_MinAllowed = 1.0,
-		INP_MaxAllowed = 10000.0,
-	})
+    InUseCMYKMode = self:AddInput("CMYK Mode", "UseCMYKMode", {
+        LINKID_DataType = "Number",
+        INPID_InputControl = "CheckboxControl",
+        INP_Integer = true,
+        INP_Default = 0.0,
+        INP_DoNotifyChanged = true,
+        INPS_StatusText = "Enables CMYK-style halftone separation",
+    })
 
-	InContrast = self:AddInput("Contrast", "Contrast", {
-		LINKID_DataType = "Number",
-		INPID_InputControl = "SliderControl",
-		INP_Default = 1.0,
-		INP_MinAllowed = 0.1,
-		INP_MaxAllowed = 5.0,
-	})
+    InDotSize = self:AddInput("Dot Size", "DotSize", {
+        LINKID_DataType = "Number",
+        INPID_InputControl = "SliderControl",
+        INP_Default = 15.0,
+        INP_MinAllowed = 1.0,
+        INP_MaxAllowed = 500.0,
+        INPS_StatusText = "Controls the size of halftone dots in standard mode",
+    })
 
-	InUseOriginalColor = self:AddInput("Use Original Color", "UseOriginalColor", {
-		LINKID_DataType = "Number",
-		INPID_InputControl = "CheckboxControl",
-		INP_Default = 0.0, -- デフォルトはオフ
-	})
+    InScreenDensity = self:AddInput("Screen Density", "ScreenDensity", {
+        LINKID_DataType = "Number",
+        INPID_InputControl = "SliderControl",
+        INP_Default = 130.0,
+        INP_MinAllowed = 0.001,
+        INP_MaxAllowed = 300.0,
+        INPID_PreviewControl = "RangeControl",
+        INP_Integer = false,
+        INPS_StatusText = "Controls the density of the halftone pattern in CMYK mode",
+    })
 
-	InUseOriginalBackground = self:AddInput("Color Background", "UseOriginalBackground", {
-		LINKID_DataType = "Number",
-		INPID_InputControl = "CheckboxControl",
-		INP_Default = 0.0, -- デフォルトはオフ
-	})
+    InContrast = self:AddInput("Contrast", "Contrast", {
+        LINKID_DataType = "Number",
+        INPID_InputControl = "SliderControl",
+        INP_Default = 1.0,
+        INP_MinAllowed = 0.1,
+        INP_MaxAllowed = 15.0,
+        INPS_StatusText = "Adjusts the contrast of the halftone pattern",
+    })
 
-	InUseCMYKMode = self:AddInput("CMYK Mode", "UseCMYKMode", {
-		LINKID_DataType = "Number",
-		INPID_InputControl = "CheckboxControl",
-		INP_Default = 0.0, -- デフォルトはオフ
-	})
+    InUseOriginalColor = self:AddInput("Use Original Color", "UseOriginalColor", {
+        LINKID_DataType = "Number",
+        INPID_InputControl = "CheckboxControl",
+        INP_Default = 0.0,
+        INPS_StatusText = "Preserves original colors instead of black and white",
+    })
 
-	InImage = self:AddInput("Input Image", "Image", {
-		LINKID_DataType = "Image",
-		LINK_Main = 1, -- これはメインの入力として設定
-	})
+    InUseOriginalBackground = self:AddInput("Color Background", "UseOriginalBackground", {
+        LINKID_DataType = "Number",
+        INPID_InputControl = "CheckboxControl",
+        INP_Default = 0.0,
+        INPS_StatusText = "Uses original image colors for background instead of white",
+    })
 
-	-- OutImage is automatically created for us, as we're a CT_SourceTool
+    InAAStrength = self:AddInput("AA Strength", "AAStrength", {
+        LINKID_DataType = "Number",
+        INPID_InputControl = "SliderControl",
+        INP_Default = 0.3,
+        INP_MinAllowed = 0.0,
+        INP_MaxAllowed = 10.0,
+        INPS_StatusText = "Controls the strength of anti-aliasing on dot edges",
+    })
+
+    InDotGain = self:AddInput("Dot Gain", "DotGain", {
+        LINKID_DataType = "Number",
+        INPID_InputControl = "SliderControl",
+        INP_Default = 0.3,
+        INP_MinAllowed = 0.0,
+        INP_MaxAllowed = 1.0,
+        INPS_StatusText = "Simulates ink spread on paper",
+    })
+
+    InRegError = self:AddInput("Registration Error", "RegError", {
+        LINKID_DataType = "Number",
+        INPID_InputControl = "SliderControl",
+        INP_Default = 0.2,
+        INP_MinAllowed = 0.0,
+        INP_MaxAllowed = 1.0,
+        INPS_StatusText = "Simulates misalignment between color plates",
+    })
+
+    InUcrAmount = self:AddInput("UCR Amount", "UcrAmount", {
+        LINKID_DataType = "Number",
+        INPID_InputControl = "SliderControl",
+        INP_Default = 0.5,
+        INP_MinAllowed = 0.0,
+        INP_MaxAllowed = 1.0,
+        INPS_StatusText = "Controls Under Color Removal in CMYK mode",
+    })
+
+    InPaperTexture = self:AddInput("Paper Texture", "PaperTexture", {
+        LINKID_DataType = "Number",
+        INPID_InputControl = "SliderControl",
+        INP_Default = 0.1,
+        INP_MinAllowed = 0.0,
+        INP_MaxAllowed = 1.0,
+        INPS_StatusText = "Adds simulated paper texture to the output",
+    })
+
+    InPaperType = self:AddInput("Paper Type", "PaperType", {
+        LINKID_DataType = "Number",
+        INPID_InputControl = "ComboControl",
+        INP_Default = 0,
+        INP_Integer = true,
+        { CCS_AddString = "Smooth" },
+        { CCS_AddString = "Light Texture" },
+        { CCS_AddString = "Heavy Texture" },
+        INPS_StatusText = "Selects the type of paper texture pattern",
+    })
+
+    InPaperColorRed = self:AddInput("Paper Color Red", "PaperColorRed", {
+        LINKID_DataType    = "Number",
+        INPID_InputControl = "ColorControl",
+        INP_MinScale       = 0.0,
+        INP_MaxScale       = 1.0,
+        INP_Default        = 1.0,
+        ICS_Name           = "Color",
+        CLRC_ShowWheel     = false,
+        IC_ControlGroup    = 1,
+        IC_ControlID       = 0, -- Red ID
+        INPS_StatusText    = "Sets the paper color (background)",
+    })
+
+    InPaperColorGreen = self:AddInput("Paper Color Green", "PaperColorGreen", {
+        LINKID_DataType    = "Number",
+        INPID_InputControl = "ColorControl",
+        INP_MinScale       = 0.0,
+        INP_MaxScale       = 1.0,
+        INP_Default        = 1.0,
+        ICS_Name           = "Color",
+        CLRC_ShowWheel     = false,
+        IC_ControlGroup    = 1,
+        IC_ControlID       = 1, -- Green ID
+        INPS_StatusText    = "Sets the paper color (background)",
+    })
+
+    InPaperColorBlue = self:AddInput("Paper Color Blue", "PaperColorBlue", {
+        LINKID_DataType    = "Number",
+        INPID_InputControl = "ColorControl",
+        INP_MinScale       = 0.0,
+        INP_MaxScale       = 1.0,
+        INP_Default        = 1.0,
+        ICS_Name           = "Color",
+        CLRC_ShowWheel     = false,
+        IC_ControlGroup    = 1,
+        IC_ControlID       = 2, -- Blue ID
+        INPS_StatusText    = "Sets the paper color (background)",
+    })
+
+    InPaperColorAlpha = self:AddInput("Paper Color Alpha", "PaperColorAlpha", {
+        LINKID_DataType    = "Number",
+        INPID_InputControl = "ColorControl",
+        INP_MinScale       = 0.0,
+        INP_MaxScale       = 1.0,
+        INP_Default        = 1.0,
+        ICS_Name           = "Color",
+        CLRC_ShowWheel     = false,
+        IC_ControlGroup    = 1,
+        IC_ControlID       = 3, -- Alpha ID
+        INPS_StatusText    = "Sets the paper color (background)",
+    })
+
+    InImage = self:AddInput("Input Image", "Image", {
+        LINKID_DataType = "Image",
+        LINK_Main = 1,
+        INPS_StatusText = "Input image to be processed",
+    })
 end
 
 function Process(req)
-	local dotSize = InDotSize:GetValue(req).Value
-	local contrast = InContrast:GetValue(req).Value
-	local useOriginalColor = InUseOriginalColor:GetValue(req).Value
-	local useOriginalBackground = InUseOriginalBackground:GetValue(req).Value
-	local useCMYKMode = InUseCMYKMode:GetValue(req).Value
+    local dotSize = InDotSize:GetValue(req).Value
+    local contrast = InContrast:GetValue(req).Value
+    local useOriginalColor = InUseOriginalColor:GetValue(req).Value
+    local useOriginalBackground = InUseOriginalBackground:GetValue(req).Value
+    local useCMYKMode = InUseCMYKMode:GetValue(req).Value
+    local aaStrength = InAAStrength:GetValue(req).Value
+    local screenDensity = InScreenDensity:GetValue(req).Value
+    local dotGain = InDotGain:GetValue(req).Value
+    local regError = InRegError:GetValue(req).Value
+    local ucrAmount = InUcrAmount:GetValue(req).Value
+    local paperTexture = InPaperTexture:GetValue(req).Value
+    local paperColor = {
+        InPaperColorRed:GetValue(req).Value,
+        InPaperColorGreen:GetValue(req).Value,
+        InPaperColorBlue:GetValue(req).Value,
+        InPaperColorAlpha:GetValue(req).Value,
+    }
 
-	local img = InImage:GetValue(req)
-	local out
 
-	if img then
-		out = Image({ IMG_Like = img })
+    local img = InImage:GetValue(req)
+    local out
 
-		local node = DVIPComputeNode(req, "HalftoneKernel", HalftoneKernel, "HalftoneParams", HalftoneParams)
+    if img then
+        out = Image({ IMG_Like = img })
 
-		if node then
-			-- create image
-			local params = node:GetParamBlock(HalftoneParams)
+        -- CMYKモードかどうかによってカーネルを選択
+        local kernelName, kernelCode
+        if useCMYKMode > 0.5 then
+            kernelName = "CmykKernel"
+            kernelCode = CmykKernel
+        else
+            kernelName = "HalftoneKernel"
+            kernelCode = HalftoneKernel
+        end
 
-			params.contrast = contrast
-			params.dotSize = dotSize
-			params.srcSize[0] = out.DataWindow:Width()
-			params.srcSize[1] = out.DataWindow:Height()
-			params.useOriginalColor = useOriginalColor > 0.5 and 1 or 0 -- チェックボックスの値を整数に変換
-			params.useOriginalBackground = useOriginalBackground > 0.5 and 1 or 0
-			params.useCMYKMode = useCMYKMode > 0.5 and 1 or 0
-			params.dotAngle = 0.0 -- 現在は使用されていない
+        local node = DVIPComputeNode(req, kernelName, kernelCode, "HalftoneParams", HalftoneParams)
 
-			node:SetParamBlock(params)
+        if node then
+            -- create image
+            local params = node:GetParamBlock(HalftoneParams)
 
-			node:AddSampler("RowSampler", TEX_FILTER_MODE_LINEAR, TEX_ADDRESS_MODE_CLAMP, TEX_NORMALIZED_COORDS_TRUE)
-			node:AddInput("src", img)
-			node:AddOutput("dst", out)
+            -- 基本パラメータ設定
+            params.contrast = contrast
+            params.dotSize = dotSize
+            params.screenDensity = screenDensity
+            params.srcSize[0] = out.DataWindow:Width()
+            params.srcSize[1] = out.DataWindow:Height()
+            params.useOriginalColor = useOriginalColor > 0.5 and 1 or 0
+            params.useOriginalBackground = useOriginalBackground > 0.5 and 1 or 0
+            params.useCMYKMode = useCMYKMode > 0.5 and 1 or 0
+            params.dotAngle = 0.0
+            params.aaStrength = aaStrength
+            params.dotGain = dotGain
+            params.regError = regError
+            params.ucrAmount = ucrAmount
+            params.paperTexture = paperTexture
+            params.paperColor[0] = paperColor[1] -- R
+            params.paperColor[1] = paperColor[2] -- G
+            params.paperColor[2] = paperColor[3] -- B
+            params.paperColor[3] = paperColor[4] -- A
 
-			success = node:RunSession(req)
-		else
-			out = nil
-		end
-	end
+            node:SetParamBlock(params)
 
-	OutImage:Set(req, out)
-	--OutImage:Set(req, img)
+            node:AddSampler("RowSampler", TEX_FILTER_MODE_LINEAR, TEX_ADDRESS_MODE_CLAMP, TEX_NORMALIZED_COORDS_TRUE)
+            node:AddInput("src", img)
+            node:AddOutput("dst", out)
+
+            success = node:RunSession(req)
+        else
+            out = nil
+        end
+    end
+
+    OutImage:Set(req, out)
+end
+
+-- NotifyChanged 関数を追加して、CMYK モード切り替え時にドットサイズを無効化
+function NotifyChanged(inp, param, time)
+    if inp == InUseCMYKMode then
+        -- CMYK モードが有効な場合、Dot Size を無効化
+        local cmykMode = (param.Value > 0.5)
+        -- Halftone Mode
+        InDotSize:SetAttrs({
+            INPS_Disabled = cmykMode,
+            IC_Visible = not cmykMode,
+        })
+        -- CYMMK Mode
+        InScreenDensity:SetAttrs({
+            INPS_Disabled = not cmykMode,
+            IC_Visible = cmykMode,
+        })
+    elseif inp == InUseOriginalBackground then
+        -- オリジナル背景を使用する場合は紙の色設定を無効化
+        local useOrigBg = (param.Value > 0.5)
+        InPaperColor:SetAttrs({
+            INPS_Disabled = useOrigBg,
+        })
+    end
+
+    return true
 end
