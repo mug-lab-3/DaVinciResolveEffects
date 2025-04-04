@@ -2,11 +2,12 @@ FuRegisterClass("MugHalftone", CT_SourceTool, {
     REGS_Category          = "Fuses\\Mug",
     REGS_OpIconString      = "MHT",
     REGS_OpDescription     = "Mug Halftone",
-    REGS_HelpTopic         = "https://x.com/MugLab3",     --This can be a URL
+    REGS_HelpTopic         = "https://x.com/MugLab3", --This can be a URL
     REGS_URL               = "https://www.youtube.com/@MugLabVideoEditing",
-    REGS_IconID            = "Icons.Tools.Icons.Example", -- This can be Inline as an array of Values
-    REG_NoObjMatCtrls      = true,
-    REG_NoMotionBlurCtrls  = true,
+    -- REGS_IconID            = "Icons.Tools.Icons.Example", -- This can be Inline as an array of Values
+    REG_OpNoMask           = false,
+    REG_NoObjMatCtrls      = false,
+    REG_NoMotionBlurCtrls  = false,
     REG_Source_GlobalCtrls = true,
     REG_Source_SizeCtrls   = true,
     REG_Source_AspectCtrls = true,
@@ -659,6 +660,31 @@ function Create()
         INPS_StatusText = "Selects the type of paper texture pattern",
     })
 
+    InPaperColorPreset = self:AddInput("Paper Color Preset", "PaperColorPreset", {
+        LINKID_DataType = "Number",
+        INPID_InputControl = "ComboControl",
+        INP_Default = 0,
+        INP_Integer = true,
+        INP_DoNotifyChanged = true,
+        { CCS_AddString = "Custom" },
+        { CCS_AddString = "Pure White" },
+        { CCS_AddString = "Warm White" },
+        { CCS_AddString = "Cool White" },
+        { CCS_AddString = "Natural White" },
+        { CCS_AddString = "Cream" },
+        { CCS_AddString = "Ivory" },
+        { CCS_AddString = "Light Gray" },
+        { CCS_AddString = "Newspaper" },
+        { CCS_AddString = "Vintage" },
+        { CCS_AddString = "Kraft" },
+        { CCS_AddString = "Recycled" },
+        { CCS_AddString = "Light Blue" },
+        { CCS_AddString = "Light Green" },
+        { CCS_AddString = "Light Pink" },
+        { CCS_AddString = "Light Yellow" },
+        INPS_StatusText = "Select from common paper color presets",
+    })
+
     groupID = groupID + 1
     InPaperColorRed = self:AddInput("Paper Color Red", "PaperColorRed", {
         LINKID_DataType    = "Number",
@@ -799,7 +825,6 @@ function Process(req)
     OutImage:Set(req, out)
 end
 
--- NotifyChanged 関数を追加して、CMYK モード切り替え時にドットサイズを無効化
 function NotifyChanged(inp, param, time)
     if inp == InUseCMYKMode then
         -- CMYK モードが有効な場合、Dot Size を無効化
@@ -817,9 +842,56 @@ function NotifyChanged(inp, param, time)
     elseif inp == InUseOriginalBackground then
         -- オリジナル背景を使用する場合は紙の色設定を無効化
         local useOrigBg = (param.Value > 0.5)
-        InPaperColor:SetAttrs({
-            INPS_Disabled = useOrigBg,
-        })
+        InPaperColorRed:SetAttrs({ INPS_Disabled = useOrigBg })
+        InPaperColorGreen:SetAttrs({ INPS_Disabled = useOrigBg })
+        InPaperColorBlue:SetAttrs({ INPS_Disabled = useOrigBg })
+        InPaperColorAlpha:SetAttrs({ INPS_Disabled = useOrigBg })
+        InPaperColorPreset:SetAttrs({ INPS_Disabled = useOrigBg })
+    elseif inp == InPaperColorPreset then
+        -- 紙の色プリセットが選択された場合
+        local presetIndex = math.floor(param.Value + 0.5)
+
+        -- プリセット値の設定
+        local r, g, b = 1.0, 1.0, 1.0 -- デフォルト値（白）
+
+        if presetIndex == 1 then      -- Pure White
+            r, g, b = 1.00, 1.00, 1.00
+        elseif presetIndex == 2 then  -- Warm White
+            r, g, b = 1.00, 0.98, 0.94
+        elseif presetIndex == 3 then  -- Cool White
+            r, g, b = 0.97, 0.97, 1.00
+        elseif presetIndex == 4 then  -- Natural White
+            r, g, b = 0.98, 0.98, 0.96
+        elseif presetIndex == 5 then  -- Cream
+            r, g, b = 0.97, 0.95, 0.86
+        elseif presetIndex == 6 then  -- Ivory
+            r, g, b = 1.00, 0.97, 0.90
+        elseif presetIndex == 7 then  -- Light Gray
+            r, g, b = 0.90, 0.90, 0.90
+        elseif presetIndex == 8 then  -- Newspaper
+            r, g, b = 0.93, 0.91, 0.83
+        elseif presetIndex == 9 then  -- Vintage
+            r, g, b = 0.96, 0.92, 0.80
+        elseif presetIndex == 10 then -- Kraft
+            r, g, b = 0.85, 0.75, 0.58
+        elseif presetIndex == 11 then -- Recycled
+            r, g, b = 0.87, 0.87, 0.82
+        elseif presetIndex == 12 then -- Light Blue
+            r, g, b = 0.90, 0.95, 1.00
+        elseif presetIndex == 13 then -- Light Green
+            r, g, b = 0.90, 0.98, 0.90
+        elseif presetIndex == 14 then -- Light Pink
+            r, g, b = 1.00, 0.90, 0.93
+        elseif presetIndex == 15 then -- Light Yellow
+            r, g, b = 1.00, 1.00, 0.88
+        end
+
+        -- カラーコントロールに値をセット
+        if presetIndex > 0 then
+            InPaperColorRed:SetSource(Number(r), time)
+            InPaperColorGreen:SetSource(Number(g), time)
+            InPaperColorBlue:SetSource(Number(b), time)
+        end
     end
 
     return true
