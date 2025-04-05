@@ -882,6 +882,19 @@ __KERNEL__ void CmykKernel(__CONSTANTREF__ HalftoneParams *params, __TEXTURE2D__
         float xf = (float)x;
         float yf = (float)y;
 
+        // AA関連の定数
+        const float PI = 3.14159265359f;
+        const bool useAA = params->aaStrength > 0.001f;
+        const float baseAAWidth = useAA ? params->aaStrength * 0.5f / cellSize : 0.0f;
+        const bool isSmallCell = cellSize < 12.0f;
+        const bool isVerySmallCell = cellSize < 8.0f;
+
+        // サブサンプリングAA関連
+        const bool useSubSamplingAA = params->useSubSamplingAA > 0 && useAA && isVerySmallCell;
+        const int subSampleCount = params->subSampleCount;
+        const int sqrtSampleCount = _fmaxf(1, (int)_sqrtf((float)subSampleCount));
+        const float subPixelStep = 1.0f / (float)sqrtSampleCount;
+
         // 各チャンネル（CMYK）ごとに処理
         float angles[4] = {18.4f, 71.6f, 0.0f, 45.0f}; // C、M、Y、Kの角度
         float3 colors[3] = {
@@ -975,7 +988,8 @@ __KERNEL__ void CmykKernel(__CONSTANTREF__ HalftoneParams *params, __TEXTURE2D__
                     // 現在のピクセルからセル中心への距離
                     float distX = rotX - cellCenterX;
                     float distY = rotY - cellCenterY;
-                    float dist = _sqrtf(distX*distX + distY*distY);
+                    float distSq = distX*distX + distY*distY;
+                    float dist = _sqrtf(distSq);
 
                     // 早期脱出条件を強化（性能改善）
                     if (dist > cellSizes[channel] * 0.75f) continue;
@@ -1031,22 +1045,123 @@ __KERNEL__ void CmykKernel(__CONSTANTREF__ HalftoneParams *params, __TEXTURE2D__
                         // セル半径と距離を比較
                         float normDist = dist / cellSizes[channel];
 
-                        // アンチエイリアス処理
+                        // 大きなドットの判定
                         float edge = radius;
-                        float aaWidth = 0.7f / cellSizes[channel] * params->aaStrength;
-                        float t = _clampf((normDist - edge + aaWidth) / _fmaxf(aaWidth, 0.0001f), 0.0f, 1.0f);
-                        float alpha = 1.0f - (t * t * (3.0f - 2.0f * t)); // smoothstep
+                        bool isLargeDot = radius > 0.35f;
 
-                        // 影響度の更新
+                        // アンチエイリアス処理（改良版）
+                        float alpha;
+
+                        if (useSubSamplingAA && !isLargeDot) {
+                            // サブサンプリングAA - 高密度時のみ使用
+                            float alpha_sum = 0.0f;
+                            int effectiveSamples = 0;
+
+                            // サブピクセルサンプリング
+                            for (float dy = -0.5f + subPixelStep * 0.5f; dy < 0.5f; dy += subPixelStep) {
+                                for (float dx = -0.5f + subPixelStep * 0.5f; dx < 0.5f; dx += subPixelStep) {
+                                    // 各サブピクセル位置での距離計算
+                                    float sub_distX = distX + dx;
+                                    float sub_distY = distY + dy;
+                                    float sub_dist = _sqrtf(sub_distX*sub_distX + sub_distY*sub_distY);
+                                    float sub_normDist = sub_dist / cellSizes[channel];
+
+                                    // 各サブピクセルでのアルファ計算
+                                    float sub_alpha;
+
+                                    if (!useAA) {
+                                        sub_alpha = (sub_normDist <= edge) ? 1.0f : 0.0f;
+                                    } else {
+                                        float aaWidth = baseAAWidth;
+                                        if (isVerySmallCell) {
+                                            aaWidth *= 1.1f;
+                                        }
+
+                                        // エッジ距離の計算
+                                        float edgeDist = sub_normDist - edge;
+
+                                        if (edgeDist < 0.0f) {
+                                            sub_alpha = 1.0f;
+                                        }
+                                        else if (edgeDist < aaWidth) {
+                                            float t = edgeDist / aaWidth;
+                                            if (isVerySmallCell) {
+                                                // 高密度用スムーズステップ
+                                                sub_alpha = 1.0f - (t * t * (3.0f - 2.0f * t));
+                                            } else {
+                                                sub_alpha = 1.0f - (t * t * (1.0f + 0.25f * t));
+                                            }
+                                        }
+                                        else {
+                                            sub_alpha = 0.0f;
+                                        }
+                                    }
+
+                                    alpha_sum += sub_alpha;
+                                    effectiveSamples++;
+                                }
+                            }
+
+                            // サブピクセル平均値計算
+                            alpha = alpha_sum / (float)effectiveSamples;
+
+                        } else {
+                            // 標準AA処理（単一サンプル）
+                            if (!useAA || isLargeDot) {
+                                // AAなし、または大きなドットでは単純閾値処理
+                                alpha = (normDist <= edge) ? 1.0f : 0.0f;
+                            } else {
+                                // AAありの場合
+                                float aaWidth = baseAAWidth;
+
+                                // 大きなドットの場合はAAの幅を狭める
+                                if (radius > 0.3f && radius <= 0.35f) {
+                                    // 中間サイズのドットではAAを弱める
+                                    aaWidth *= (0.35f - radius) * 3.33f; // 0.3→0.35で1→0に変化
+                                }
+
+                                // 高密度時は幅を拡張
+                                if (isVerySmallCell) {
+                                    aaWidth *= 1.1f;
+                                }
+
+                                // エッジ距離の計算
+                                float edgeDist = normDist - edge;
+
+                                if (edgeDist < 0.0f) {
+                                    alpha = 1.0f;
+                                }
+                                else if (edgeDist < aaWidth) {
+                                    float t = edgeDist / aaWidth;
+
+                                    if (isVerySmallCell) {
+                                        // 高密度用スムーズステップ
+                                        alpha = 1.0f - (t * t * (3.0f - 2.0f * t));
+                                    }
+                                    else if (radius > 0.3f) {
+                                        // 大きめのドット用 - より急峻なカーブ
+                                        alpha = 1.0f - (t * t * t);
+                                    }
+                                    else {
+                                        // 標準サイズドット用カーブ
+                                        alpha = 1.0f - (t * t * (1.0f + 0.25f * t));
+                                    }
+                                }
+                                else {
+                                    alpha = 0.0f;
+                                }
+                            }
+                        }
+
+                        // 影響度の更新（最適化）
                         if (alpha > 0.01f && alpha > channelMask[channel]) {
                             channelMask[channel] = alpha;
                             hasChannelInfluence[channel] = true;
 
-                            // 色の設定
+                            // 色の設定（処理を統一化）
                             if (channel < 3) {
                                 if (params->useOriginalColor == 1) {
                                     // 元の色を基に、該当チャンネルだけ削除
-                                    // 紙の色ではなく純粋な黒または他のチャンネル値を使用
                                     channelColors[channel] = cellColor;
                                     if (channel == 0) channelColors[channel].x = 0.0f; // 紙の色に関係なく0に
                                     else if (channel == 1) channelColors[channel].y = 0.0f; // 紙の色に関係なく0に
@@ -1084,8 +1199,15 @@ __KERNEL__ void CmykKernel(__CONSTANTREF__ HalftoneParams *params, __TEXTURE2D__
             if (hasChannelInfluence[i] && channelMask[i] > 0.0f) {
                 float factor = channelMask[i];
 
-                if (factor > 0.5f) {
-                    // 最小値で合成（よりダークになるように）
+                // 完全な黒塗りケースを優先（大きなドット）
+                if (factor > 0.95f) {
+                    // 純粋なチャンネルカラーで上書き（ブレンドせず）
+                    if (i == 0) cmyResult.x = channelColors[i].x;
+                    else if (i == 1) cmyResult.y = channelColors[i].y;
+                    else cmyResult.z = channelColors[i].z;
+                }
+                else if (factor > 0.5f) {
+                    // 中心部は最小値で合成（よりダークに）
                     cmyResult.x = _fminf(cmyResult.x, channelColors[i].x);
                     cmyResult.y = _fminf(cmyResult.y, channelColors[i].y);
                     cmyResult.z = _fminf(cmyResult.z, channelColors[i].z);
@@ -1111,9 +1233,14 @@ __KERNEL__ void CmykKernel(__CONSTANTREF__ HalftoneParams *params, __TEXTURE2D__
         // K版の適用
         float4 inkResult = cmyResult;  // inkResultはインク色のみを計算
         if (hasChannelInfluence[3] && channelMask[3] > 0.0f) {
-            if (channelMask[3] > 0.5f) {
-                // 中心部分は黒で上書き
+            if (channelMask[3] > 0.9f) {
+                // 高アルファでは完全に上書き（純黒）
                 inkResult = to_float4(0.0f, 0.0f, 0.0f, 1.0f);
+            }
+            else if (channelMask[3] > 0.5f) {
+                // 中程度のアルファでは強いブレンド
+                float strongBlendFactor = 0.8f + channelMask[3] * 0.2f;
+                inkResult = _mix(cmyResult, to_float4(0.0f, 0.0f, 0.0f, 1.0f), strongBlendFactor);
             } else {
                 // エッジブレンド
                 float blendFactor = channelMask[3] * 2.0f;
