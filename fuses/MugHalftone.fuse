@@ -33,10 +33,11 @@ HalftoneParams = [[
   float screenDensity;   // スクリーンの密度
   float paperColor[4];   // 紙の色（背景色）[R,G,B,A]
   float dotColor[4];     // ドットの色（前景色）[R,G,B,A]
+  float brightnessCutoff; // 明るさの閾値（これより明るい部分はドットを描画しない）
+  float minDotRadius;    // 最小ドット半径（これより小さいドットは描画しない）
 ]]
 
 -- 標準ハーフトーンカーネル（サブサンプリングAA対応版）
--- HalftoneKernelを修正してドットカラーを使用するように更新
 HalftoneKernel = [[
 __KERNEL__ void HalftoneKernel(__CONSTANTREF__ HalftoneParams *params, __TEXTURE2D__ src, __TEXTURE2D_WRITE__ dst)
 {
@@ -83,6 +84,10 @@ __KERNEL__ void HalftoneKernel(__CONSTANTREF__ HalftoneParams *params, __TEXTURE
         const float highDensityFactor = _fmaxf(1.0f, _fminf(1.5f, 200.0f / params->screenDensity));
         const float aaDensityFactor = _fminf(1.0f + (200.0f / params->screenDensity) * 0.15f, 1.3f);
         const bool useAA = params->aaStrength > 0.001f;
+
+        // 明るい領域のドット除去用の閾値
+        const float brightnessCutoff = params->brightnessCutoff;
+        const float minDotRadius = params->minDotRadius;
 
         // サブサンプリングAA関連
         const bool useSubSamplingAA = params->useSubSamplingAA > 0 && useAA;
@@ -226,6 +231,12 @@ __KERNEL__ void HalftoneKernel(__CONSTANTREF__ HalftoneParams *params, __TEXTURE
                         0.0f, 1.0f
                     );
 
+                    // 明るさによるドット描画スキップ
+                    if (cellLuma > brightnessCutoff) {
+                        // 明るすぎる領域はドットを描画しない
+                        goto ProcessNeighbors; // 隣接セルの処理に進む
+                    }
+
                     // ドット半径計算
                     float radius = MAX_CELL_RADIUS * (1.0f - cellLuma);
                     radius = _fmaxf(radius, 0.01f);
@@ -246,6 +257,12 @@ __KERNEL__ void HalftoneKernel(__CONSTANTREF__ HalftoneParams *params, __TEXTURE
 
                     // ドットゲイン適用
                     radius *= smallCellBoost * dotGainFactor;
+
+                    // 最小ドットサイズチェック
+                    if (radius < minDotRadius) {
+                        // 小さすぎるドットは描画しない
+                        goto ProcessNeighbors; // 隣接セルの処理に進む
+                    }
 
                     // 大きなドットかどうかをチェック
                     const bool isLargeDot = radius > 0.35f;
@@ -429,6 +446,9 @@ __KERNEL__ void HalftoneKernel(__CONSTANTREF__ HalftoneParams *params, __TEXTURE
             }
         }
 
+        // 隣接セルの処理ラベル
+        ProcessNeighbors:
+
         // 隣接セルの参照テーブル
         const int (*hexNeighbors)[2] = isCurrentRowOffset ? hexNeighborsOdd : hexNeighborsEven;
 
@@ -517,6 +537,12 @@ __KERNEL__ void HalftoneKernel(__CONSTANTREF__ HalftoneParams *params, __TEXTURE
                     0.0f, 1.0f
                 );
 
+                // 明るさによるドット描画スキップ
+                if (cellLuma > brightnessCutoff) {
+                    // 明るすぎる領域はドットを描画しない
+                    continue;
+                }
+
                 // ドット半径計算
                 float radius = MAX_CELL_RADIUS * (1.0f - cellLuma);
                 radius = _fmaxf(radius, 0.01f);
@@ -537,6 +563,12 @@ __KERNEL__ void HalftoneKernel(__CONSTANTREF__ HalftoneParams *params, __TEXTURE
 
                 // ドットゲイン適用
                 radius *= smallCellBoost * dotGainFactor;
+
+                // 最小ドットサイズチェック
+                if (radius < minDotRadius) {
+                    // 小さすぎるドットは描画しない
+                    continue;
+                }
 
                 // 大きなドットかどうかをチェック
                 const bool isLargeDot = radius > 0.35f;
@@ -1504,6 +1536,24 @@ function Create()
         INPS_StatusText = "Simulates ink spread on paper",
     })
 
+    InBrightnessCutoff = self:AddInput("Brightness Cutoff", "BrightnessCutoff", {
+        LINKID_DataType = "Number",
+        INPID_InputControl = "SliderControl",
+        INP_Default = 0.75,
+        INP_MinAllowed = 0.0,
+        INP_MaxAllowed = 1.0,
+        INPS_StatusText = "Brightness threshold above which dots are not drawn",
+    })
+
+    InMinDotRadius = self:AddInput("Minimum Dot Radius", "MinDotRadius", {
+        LINKID_DataType = "Number",
+        INPID_InputControl = "SliderControl",
+        INP_Default = 0.05,
+        INP_MinAllowed = 0.0,
+        INP_MaxAllowed = 0.2,
+        INPS_StatusText = "Dots smaller than this radius are not drawn",
+    })
+
     InRegError = self:AddInput("Registration Error", "RegError", {
         LINKID_DataType = "Number",
         INPID_InputControl = "SliderControl",
@@ -1796,6 +1846,8 @@ function Process(req)
             params.useSubSamplingAA = useSubSamplingAA > 0.5 and 1 or 0
             params.subSampleCount = subSampleCount
             params.dotGain = dotGain
+            params.brightnessCutoff = InBrightnessCutoff:GetValue(req).Value
+            params.minDotRadius = InMinDotRadius:GetValue(req).Value
             params.dotColor[0] = dotColor[1] -- R
             params.dotColor[1] = dotColor[2] -- G
             params.dotColor[2] = dotColor[3] -- B
