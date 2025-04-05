@@ -1552,10 +1552,12 @@ function Create()
         LINKID_DataType = "Number",
         INPID_InputControl = "ComboControl",
         INP_Integer = true,
-        INP_Default = 2,
+        INP_Default = 0,
         { CCS_AddString = "4 samples (2x2)" },
         { CCS_AddString = "9 samples (3x3)" },
         { CCS_AddString = "16 samples (4x4)" },
+        { CCS_AddString = "64 samples (8x8)" },
+        { CCS_AddString = "256 samples (16x16)" },
         INPS_StatusText = "Number of subsamples for high-quality AA",
     })
     self:EndControlNest()
@@ -1699,11 +1701,15 @@ function Process(req)
     -- サブサンプル数の計算
     local subSampleCount
     if subSampleCountOption == 0 then
-        subSampleCount = 4  -- 2x2
+        subSampleCount = 4   -- 2x2
     elseif subSampleCountOption == 1 then
-        subSampleCount = 9  -- 3x3
+        subSampleCount = 9   -- 3x3
+    elseif subSampleCountOption == 2 then
+        subSampleCount = 16  -- 4x4
+    elseif subSampleCountOption == 3 then
+        subSampleCount = 64  -- 8x8
     else
-        subSampleCount = 16 -- 4x4
+        subSampleCount = 256 -- 16x16
     end
 
     local img = InImage:GetValue(req)
