@@ -35,7 +35,7 @@ HalftoneParams = [[
 ]]
 
 -- 標準ハーフトーンカーネル
--- 標準ハーフトーンカーネル（最適化版）
+-- 標準ハーフトーンカーネル（高品質AA処理版）
 HalftoneKernel = [[
 __KERNEL__ void HalftoneKernel(__CONSTANTREF__ HalftoneParams *params, __TEXTURE2D__ src, __TEXTURE2D_WRITE__ dst)
 {
@@ -60,6 +60,7 @@ __KERNEL__ void HalftoneKernel(__CONSTANTREF__ HalftoneParams *params, __TEXTURE
     {
         // 定数の事前計算
         const float SIN60 = 0.866025f; // √3/2
+        const float PI = 3.14159265359f;
 
         // ドット半径の基準定数 - Gain=0でセルいっぱい、Gain=-0.5で半分、Gain=1でセルの2倍
         const float MAX_CELL_RADIUS = 0.433f;
@@ -81,9 +82,17 @@ __KERNEL__ void HalftoneKernel(__CONSTANTREF__ HalftoneParams *params, __TEXTURE
         const float highDensityFactor = _fmaxf(1.0f, _fminf(1.5f, 200.0f / params->screenDensity));
         const float aaDensityFactor = _fminf(1.0f + (200.0f / params->screenDensity) * 0.15f, 1.3f);
         const bool useAA = params->aaStrength > 0.001f;
+
+        // 新しいAA関連パラメータ
+        const float densityScale = _fmaxf(1.0f, 8.0f / cellSize);
+        const float baseAAWidth = useAA ?
+            _fmaxf(0.5f / cellSizeX * params->aaStrength * aaDensityFactor * densityScale, 0.005f) : 0.0f;
+
+        // セルサイズに応じたAA幅調整
+        const float aaWidthScale = _fmaxf(1.0f, _fminf(1.5f, 8.0f / cellSize));
         const float aaWidthBase = useAA ?
-                         _fmaxf(0.5f / cellSizeX * params->aaStrength * aaDensityFactor, 0.005f) :
-                         0.0f;
+            baseAAWidth * (_fmaxf(1.0f, 1.0f + (params->aaStrength - 0.5f) * 0.5f)) :
+            0.0f;
 
         // 座標正規化
         const float xf = (float)x;
@@ -106,7 +115,7 @@ __KERNEL__ void HalftoneKernel(__CONSTANTREF__ HalftoneParams *params, __TEXTURE
         // ドットゲイン補正
         const float dotGainFactor = 1.0f + params->dotGain;
 
-        // デフォルト値として背景色を設定
+        // デフォルト値として背景色を設定（常に紙の色を使用）
         float4 result = to_float4(
             params->paperColor[0],
             params->paperColor[1],
@@ -125,13 +134,18 @@ __KERNEL__ void HalftoneKernel(__CONSTANTREF__ HalftoneParams *params, __TEXTURE
         const bool isSmallCell = cellSize < 12.0f;
         const bool isVerySmallCell = cellSize < 8.0f;
         const bool isTinyCell = cellSize < 6.0f;
-        float smallCellBoost = 1.0f;
-        if (isSmallCell) {
-            smallCellBoost = 1.0f + (12.0f - cellSize) * (_fminf(0.06f, 0.03f * highDensityFactor));
-        }
+        const bool isUltraSmallCell = cellSize < 3.5f;
 
-        // Original background/color flags
+        // スモールセルブースト - 条件分岐削減
+        const float smallCellBoostFactor = isSmallCell ?
+                   (12.0f - cellSize) * (_fminf(0.06f, 0.03f * highDensityFactor)) : 0.0f;
+        const float smallCellBoost = 1.0f + smallCellBoostFactor;
+
+        // Original color flag
         const bool useOriginalColor = params->useOriginalColor == 1;
+
+        // 暗部強調係数の事前計算 - 多用されるので定数化
+        const float darknessEnhanceFactor = 0.15f;
 
         // 中心セルを処理
         {
@@ -143,24 +157,39 @@ __KERNEL__ void HalftoneKernel(__CONSTANTREF__ HalftoneParams *params, __TEXTURE
             float distX = xf - cellCenterX;
             float distY = yf - cellCenterY;
 
-            // 高密度時の歪み補正
-            if (isVerySmallCell) {
-                distY *= _fmaxf(0.8f, 1.0f - (10.0f - cellSize) * 0.02f);
-            }
+            // 高密度時の歪み補正（条件分岐を減少）
+            const float distYMult = isVerySmallCell ?
+                                   _fmaxf(0.8f, 1.0f - (10.0f - cellSize) * 0.02f) : 1.0f;
+            distY *= distYMult;
 
             const float distXNorm = distX / cellSizeX;
             const float distYNorm = distY / cellSizeY;
             float normDistSq = distXNorm*distXNorm + distYNorm*distYNorm;
 
-            // 高密度時の六角形形状への補正
+            // 高密度時の形状補正（条件分岐を減少）
             if (isVerySmallCell) {
                 const float dirFactor = _fabs(distXNorm) / (_fabs(distYNorm) + 0.0001f);
 
+                // 密度に応じた形状調整
+                float shapeAdjust = 1.0f;
                 if (dirFactor > 1.5f) {
-                    normDistSq *= _fmaxf(0.85f, 1.0f - (8.0f - cellSize) * 0.02f);
+                    // X方向優勢パターン
+                    const float adjustFactor = _fminf(dirFactor - 1.5f, 1.0f) * 0.2f;
+                    shapeAdjust = 1.0f - adjustFactor * (8.0f - cellSize) * 0.03f;
                 } else if (dirFactor < 0.65f) {
-                    normDistSq *= _fmaxf(0.90f, 1.0f - (8.0f - cellSize) * 0.015f);
+                    // Y方向優勢パターン
+                    const float adjustFactor = _fminf(0.65f - dirFactor, 0.5f) * 0.4f;
+                    shapeAdjust = 1.0f - adjustFactor * (8.0f - cellSize) * 0.025f;
                 }
+
+                // 対角線方向の補正（複雑な形状のためにブレンド）
+                if (dirFactor > 0.8f && dirFactor < 1.2f) {
+                    const float diagFactor = 1.0f - _fabs(dirFactor - 1.0f) * 0.4f;
+                    const float diagAdjust = 1.0f + diagFactor * 0.05f;
+                    shapeAdjust *= diagAdjust;
+                }
+
+                normDistSq *= shapeAdjust;
             }
 
             // 早期脱出チェック
@@ -175,9 +204,9 @@ __KERNEL__ void HalftoneKernel(__CONSTANTREF__ HalftoneParams *params, __TEXTURE
                     const float4 cellColor = _tex2DVecN(src, centerUVx, centerUVy, 15);
 
                     // 輝度とコントラスト計算
+                    const float rawLuma = cellColor.x * 0.3f + cellColor.y * 0.59f + cellColor.z * 0.11f;
                     const float cellLuma = _clampf(
-                        ((cellColor.x * 0.3f + cellColor.y * 0.59f + cellColor.z * 0.11f) - 0.5f)
-                            * params->contrast + 0.5f,
+                        (rawLuma - 0.5f) * params->contrast + 0.5f,
                         0.0f, 1.0f
                     );
 
@@ -185,39 +214,80 @@ __KERNEL__ void HalftoneKernel(__CONSTANTREF__ HalftoneParams *params, __TEXTURE
                     float radius = MAX_CELL_RADIUS * (1.0f - cellLuma);
                     radius = _fmaxf(radius, 0.01f);
 
-                    // 高密度時の調整
+                    // 高密度と暗部調整の統合
                     if (isTinyCell && cellLuma < 0.4f) {
                         radius = _fmaxf(radius, 0.08f * (1.0f - cellSize / 6.0f));
                     }
 
-                    // 暗部強調
                     if (cellLuma < 0.3f) {
-                        radius += (0.3f - cellLuma) * 0.15f;
+                        radius += (0.3f - cellLuma) * darknessEnhanceFactor;
+                    }
+
+                    // 高密度時の微調整 - 超小型セルでは若干半径を大きく
+                    if (isUltraSmallCell) {
+                        radius *= 1.05f;
                     }
 
                     // ドットゲイン適用
                     radius *= smallCellBoost * dotGainFactor;
 
-                    // AA処理
+                    // 完全に刷新したAA処理
+                    float alpha = 0.0f;
                     const float normDist = _sqrtf(normDistSq);
-                    float alpha;
 
                     if (!useAA) {
+                        // AAなしの場合は単純な閾値処理
                         alpha = (normDist <= radius) ? 1.0f : 0.0f;
                     } else {
-                        const float t = _clampf(
-                            (normDist - radius + aaWidthBase) / _fmaxf(aaWidthBase, 0.0001f),
-                            0.0f, 1.0f
-                        );
-                        alpha = 1.0f - (t * t * (1.0f + 0.25f * t));
+                        // 新しい適応型AA幅計算
+                        float aaWidth = aaWidthBase;
+
+                        // 超高密度時は幅を拡張
+                        if (isVerySmallCell) {
+                            aaWidth *= 1.0f + (8.0f - cellSize) * 0.1f;
+                        }
+
+                        // エッジ距離の計算
+                        const float edgeDist = normDist - radius;
+
+                        if (edgeDist < 0.0f) {
+                            // ドット内部 - 完全に不透明
+                            alpha = 1.0f;
+                        }
+                        else if (edgeDist < aaWidth) {
+                            // エッジ部分 - 密度に応じて最適なカーブを選択
+                            const float t = edgeDist / aaWidth;
+
+                            if (isUltraSmallCell) {
+                                // 超高密度用 - cosカーブ（非常に滑らか）
+                                alpha = 0.5f * (1.0f + _cosf(PI * t));
+                            }
+                            else if (isVerySmallCell) {
+                                // 高密度用 - smoothstep
+                                alpha = 1.0f - (t * t * (3.0f - 2.0f * t));
+                            }
+                            else {
+                                // 標準密度用の3次曲線 - 少しシャープ
+                                alpha = 1.0f - (t * t * (1.0f + 0.25f * t));
+                            }
+
+                            // 超高密度時はAAをわずかに強化
+                            if (isUltraSmallCell && alpha > 0.0f && alpha < 1.0f) {
+                                alpha = _powf(alpha, 0.85f);
+                            }
+                        }
+                        else {
+                            // エッジ外 - 完全に透明
+                            alpha = 0.0f;
+                        }
                     }
 
+                    // 閾値による早期決定
                     if (alpha > 0.01f) {
                         const float currentDotLuma = useOriginalColor ? cellLuma : 0.0f;
 
-                        const float lumaScore = (1.0f - currentDotLuma) * 5.0f;
-                        const float alphaScore = alpha * alpha * 1.2f;
-                        const float score = lumaScore + alphaScore;
+                        // スコア計算を統合
+                        const float score = (1.0f - currentDotLuma) * 5.0f + alpha * alpha * 1.2f;
 
                         bestScore = score;
                         bestAlpha = alpha;
@@ -252,40 +322,52 @@ __KERNEL__ void HalftoneKernel(__CONSTANTREF__ HalftoneParams *params, __TEXTURE
             float distX = xf - cellCenterX;
             float distY = yf - cellCenterY;
 
-            // 高密度時の歪み補正
-            if (isVerySmallCell) {
-                distY *= _fmaxf(0.8f, 1.0f - (10.0f - cellSize) * 0.02f);
-            }
+            // 高密度時の歪み補正（条件分岐を減少）
+            const float distYMult = isVerySmallCell ?
+                                   _fmaxf(0.8f, 1.0f - (10.0f - cellSize) * 0.02f) : 1.0f;
+            distY *= distYMult;
 
             const float distXNorm = distX / cellSizeX;
             const float distYNorm = distY / cellSizeY;
             float normDistSq = distXNorm*distXNorm + distYNorm*distYNorm;
 
-            // 高密度時の形状補正
+            // 高密度時の形状補正（条件分岐を減少）
             if (isVerySmallCell) {
                 const float dirFactor = _fabs(distXNorm) / (_fabs(distYNorm) + 0.0001f);
 
+                // 密度に応じた形状調整
+                float shapeAdjust = 1.0f;
                 if (dirFactor > 1.5f) {
-                    normDistSq *= _fmaxf(0.85f, 1.0f - (8.0f - cellSize) * 0.02f);
+                    // X方向優勢パターン
+                    const float adjustFactor = _fminf(dirFactor - 1.5f, 1.0f) * 0.2f;
+                    shapeAdjust = 1.0f - adjustFactor * (8.0f - cellSize) * 0.03f;
                 } else if (dirFactor < 0.65f) {
-                    normDistSq *= _fmaxf(0.90f, 1.0f - (8.0f - cellSize) * 0.015f);
+                    // Y方向優勢パターン
+                    const float adjustFactor = _fminf(0.65f - dirFactor, 0.5f) * 0.4f;
+                    shapeAdjust = 1.0f - adjustFactor * (8.0f - cellSize) * 0.025f;
                 }
+
+                // 対角線方向の補正（複雑な形状のためにブレンド）
+                if (dirFactor > 0.8f && dirFactor < 1.2f) {
+                    const float diagFactor = 1.0f - _fabs(dirFactor - 1.0f) * 0.4f;
+                    const float diagAdjust = 1.0f + diagFactor * 0.05f;
+                    shapeAdjust *= diagAdjust;
+                }
+
+                normDistSq *= shapeAdjust;
             }
 
-            // 距離閾値計算
+            // 距離閾値計算（条件分岐を最適化）
             float distThresholdSq = (isCurrentRowOffset == isCheckRowOffset) ?
                                   distThresholdBaseSq :
                                   distThresholdAltSq;
 
             // 垂直方向補正
-            if (dy != 0) {
-                distThresholdSq *= verticalBoostFactor;
-            }
+            distThresholdSq *= (dy != 0) ? verticalBoostFactor : 1.0f;
 
-            // 高密度時の調整
-            if (isVerySmallCell) {
-                distThresholdSq *= (1.0f + (8.0f - cellSize) * 0.03f);
-            }
+            // 高密度時の調整（条件を簡略化）
+            distThresholdSq *= isVerySmallCell ?
+                            (1.0f + (8.0f - cellSize) * 0.03f) : 1.0f;
 
             // 早期脱出
             if (normDistSq > distThresholdSq) continue;
@@ -299,9 +381,9 @@ __KERNEL__ void HalftoneKernel(__CONSTANTREF__ HalftoneParams *params, __TEXTURE
                 const float4 cellColor = _tex2DVecN(src, centerUVx, centerUVy, 15);
 
                 // 輝度計算
+                const float rawLuma = cellColor.x * 0.3f + cellColor.y * 0.59f + cellColor.z * 0.11f;
                 const float cellLuma = _clampf(
-                    ((cellColor.x * 0.3f + cellColor.y * 0.59f + cellColor.z * 0.11f) - 0.5f)
-                        * params->contrast + 0.5f,
+                    (rawLuma - 0.5f) * params->contrast + 0.5f,
                     0.0f, 1.0f
                 );
 
@@ -309,54 +391,94 @@ __KERNEL__ void HalftoneKernel(__CONSTANTREF__ HalftoneParams *params, __TEXTURE
                 float radius = MAX_CELL_RADIUS * (1.0f - cellLuma);
                 radius = _fmaxf(radius, 0.01f);
 
-                // 高密度時の調整
+                // 高密度と暗部調整の統合
                 if (isTinyCell && cellLuma < 0.4f) {
                     radius = _fmaxf(radius, 0.08f * (1.0f - cellSize / 6.0f));
                 }
 
-                // 暗部強調
                 if (cellLuma < 0.3f) {
-                    radius += (0.3f - cellLuma) * 0.15f;
+                    radius += (0.3f - cellLuma) * darknessEnhanceFactor;
+                }
+
+                // 高密度時の微調整 - 超小型セルでは若干半径を大きく
+                if (isUltraSmallCell) {
+                    radius *= 1.05f;
                 }
 
                 // ドットゲイン適用
                 radius *= smallCellBoost * dotGainFactor;
 
-                // アンチエイリアス
+                // 完全に刷新したAA処理
+                float alpha = 0.0f;
                 const float normDist = _sqrtf(normDistSq);
-                float alpha;
 
                 if (!useAA) {
+                    // AAなしの場合は単純な閾値処理
                     alpha = (normDist <= radius) ? 1.0f : 0.0f;
                 } else {
-                    const float t = _clampf(
-                        (normDist - radius + aaWidthBase) / _fmaxf(aaWidthBase, 0.0001f),
-                        0.0f, 1.0f
-                    );
-                    alpha = 1.0f - (t * t * (1.0f + 0.25f * t));
+                    // 新しい適応型AA幅計算
+                    float aaWidth = aaWidthBase;
+
+                    // 超高密度時は幅を拡張
+                    if (isVerySmallCell) {
+                        aaWidth *= 1.0f + (8.0f - cellSize) * 0.1f;
+                    }
+
+                    // エッジ距離の計算
+                    const float edgeDist = normDist - radius;
+
+                    if (edgeDist < 0.0f) {
+                        // ドット内部 - 完全に不透明
+                        alpha = 1.0f;
+                    }
+                    else if (edgeDist < aaWidth) {
+                        // エッジ部分 - 密度に応じて最適なカーブを選択
+                        const float t = edgeDist / aaWidth;
+
+                        if (isUltraSmallCell) {
+                            // 超高密度用 - cosカーブ（非常に滑らか）
+                            alpha = 0.5f * (1.0f + _cosf(PI * t));
+                        }
+                        else if (isVerySmallCell) {
+                            // 高密度用 - smoothstep
+                            alpha = 1.0f - (t * t * (3.0f - 2.0f * t));
+                        }
+                        else {
+                            // 標準密度用の3次曲線 - 少しシャープ
+                            alpha = 1.0f - (t * t * (1.0f + 0.25f * t));
+                        }
+
+                        // 超高密度時はAAをわずかに強化
+                        if (isUltraSmallCell && alpha > 0.0f && alpha < 1.0f) {
+                            alpha = _powf(alpha, 0.85f);
+                        }
+                    }
+                    else {
+                        // エッジ外 - 完全に透明
+                        alpha = 0.0f;
+                    }
                 }
 
+                // 閾値による早期脱出
                 if (alpha > 0.01f) {
                     const float currentDotLuma = useOriginalColor ? cellLuma : 0.0f;
 
+                    // ボーナス係数を効率的に計算
                     const float dirBonus = (!isCurrentRowOffset && dy != 0) ? 0.3f : 0.0f;
                     const float rowTypeBonus = (isCurrentRowOffset == isCheckRowOffset) ? 0.2f : 0.0f;
 
+                    // アルファスコア計算の効率化
+                    const float alphaSq = alpha * alpha;
+                    const float alphaCube = isCurrentRowOffset ? 0.0f : alphaSq * alpha * 0.2f;
+
+                    // 高密度時の暗い部分を強調（条件分岐を最適化）
+                    const float densityMod = 1.0f +
+                                           (isVerySmallCell && currentDotLuma < 0.3f ?
+                                           (0.3f - currentDotLuma) * 0.5f : 0.0f);
+
+                    // スコア計算を統合
                     const float lumaScore = (1.0f - currentDotLuma) * 5.0f;
-                    const float alphaPower = isCurrentRowOffset ? 2.0f : 2.2f;
-                    float alphaScore = alpha * alpha;
-
-                    if (alphaPower > 2.0f) {
-                        alphaScore *= alpha * 0.2f;
-                    }
-
-                    // 高密度時の暗い部分を強調
-                    float densityMod = 1.0f;
-                    if (isVerySmallCell && currentDotLuma < 0.3f) {
-                        densityMod = 1.0f + (0.3f - currentDotLuma) * 0.5f;
-                    }
-
-                    const float score = lumaScore * densityMod + alphaScore + dirBonus + rowTypeBonus;
+                    const float score = lumaScore * densityMod + alphaSq + alphaCube + dirBonus + rowTypeBonus;
 
                     if (score > bestScore) {
                         bestScore = score;
@@ -369,44 +491,59 @@ __KERNEL__ void HalftoneKernel(__CONSTANTREF__ HalftoneParams *params, __TEXTURE
             }
         }
 
-        // 最適なドット適用
+        // 最適なドット適用方法を根本的に刷新
         if (hasInfluence) {
             const float bgLuma = result.x * 0.3f + result.y * 0.59f + result.z * 0.11f;
             const float darknessFactor = 1.0f - bestLuma;
 
-            const float densityBoost = 1.0f + _fmaxf(0.0f, (8.0f - cellSize) * 0.05f);
-            const float rowTypeEnhancement = isCurrentRowOffset ?
-                                           2.0f * densityBoost :
-                                           2.25f * densityBoost;
-
-            const float adjustedDarkness = _fminf(darknessFactor * rowTypeEnhancement, 1.0f);
-            float enhancedBlend = bestAlpha + adjustedDarkness * (1.0f - bestAlpha);
-
-            if (!isCurrentRowOffset) {
-                enhancedBlend = _fminf(enhancedBlend * 1.1f, 1.0f);
-            }
+            // 密度とアルファに応じた柔軟なブレンド係数
+            float adaptiveBlendFactor;
 
             if (isTinyCell) {
-                enhancedBlend = _powf(enhancedBlend, 0.8f);
+                // 超小型セルでの特別処理
+                if (bestAlpha > 0.9f) {
+                    // 高アルファでも柔軟なブレンド
+                    adaptiveBlendFactor = 0.95f;
+                } else {
+                    // より柔軟なブレンド（グレーの中間色を許可）
+                    adaptiveBlendFactor = bestAlpha * (0.7f + darknessFactor * 0.3f);
+
+                    // 高密度用微調整
+                    if (isUltraSmallCell) {
+                        adaptiveBlendFactor = _powf(adaptiveBlendFactor, 0.9f);
+                    }
+                }
+            } else {
+                // 通常サイズのセル
+                if (bestAlpha > 0.7f) {
+                    // 高アルファでも完全な上書きではなく強いブレンド
+                    adaptiveBlendFactor = 0.85f + bestAlpha * 0.15f;
+                } else {
+                    // 通常のブレンド計算（暗さの影響も考慮）
+                    adaptiveBlendFactor = bestAlpha * 0.7f + darknessFactor * bestAlpha * 0.3f;
+                }
             }
 
-            if (bestAlpha > 0.7f) {
-                // 高アルファの場合は直接上書き
-                result = bestColor;
-            }
-            else if (bestLuma < bgLuma || bestAlpha > 0.3f) {
-                const float blendFactor = _fminf(_fmaxf(bestAlpha * 1.5f, enhancedBlend), 1.0f);
+            // 密度調整係数を追加
+            const float densityBoost = 1.0f + _fmaxf(0.0f, (8.0f - cellSize) * 0.05f);
+            adaptiveBlendFactor *= densityBoost;
 
-                // ブレンド処理
-                result.x = _mix(result.x, bestColor.x, blendFactor);
-                result.y = _mix(result.y, bestColor.y, blendFactor);
-                result.z = _mix(result.z, bestColor.z, blendFactor);
-            }
+            // 行タイプによる調整
+            adaptiveBlendFactor *= !isCurrentRowOffset ? 1.1f : 1.0f;
+
+            // 最終的なブレンド係数のクランプ
+            adaptiveBlendFactor = _fminf(adaptiveBlendFactor, 1.0f);
+
+            // ブレンド処理（常に中間色が発生できるようにする）
+            result.x = _mix(result.x, bestColor.x, adaptiveBlendFactor);
+            result.y = _mix(result.y, bestColor.y, adaptiveBlendFactor);
+            result.z = _mix(result.z, bestColor.z, adaptiveBlendFactor);
         }
 
         // 紙の質感処理
         if (params->paperTexture > 0.01f) {
-            float intensityMod, frequencyMod;
+            // テクスチャタイプごとの事前計算を最適化
+            float frequencyMod, intensityMod;
 
             switch(params->paperTextureType) {
                 case 0: // Smooth
@@ -423,23 +560,24 @@ __KERNEL__ void HalftoneKernel(__CONSTANTREF__ HalftoneParams *params, __TEXTURE
                     break;
             }
 
-            // ノイズ計算
+            // ノイズ計算の最適化
             const float xyTerm = xf * 0.3f * frequencyMod + yf * 0.27f;
             const float yxTerm = yf * 0.13f * frequencyMod + xf * 0.07f;
             float baseNoise = _sinf(xyTerm) * _cosf(yxTerm);
 
-            // Heavy用の特殊効果
-            if (params->paperTextureType == 2 &&
-                _fabs(_sinf(xf * 1.2f + yf * 1.3f)) > 0.96f) {
-                baseNoise += 0.7f;
+            // Heavy用の特殊効果 - 条件分岐を削減
+            if (params->paperTextureType == 2) {
+                const float specialFactor = _fabs(_sinf(xf * 1.2f + yf * 1.3f));
+                baseNoise += specialFactor > 0.96f ? 0.7f : 0.0f;
             }
 
             // ノイズ適用
             const float noiseIntensity = params->paperTexture * 0.25f * intensityMod;
             const float noise = (baseNoise * 0.5f + 0.5f) * noiseIntensity;
 
-            const float noiseEffect = (noise - params->paperTexture * 0.05f) *
-                                     ((noise < 0.0f) ? 1.5f : 1.2f);
+            const float paperTexOffset = params->paperTexture * 0.05f;
+            const float noiseDiff = noise - paperTexOffset;
+            const float noiseEffect = noiseDiff * (noiseDiff < 0.0f ? 1.5f : 1.2f);
 
             // 色に適用
             result.x = _clampf(result.x + noiseEffect, 0.0f, 1.0f);
@@ -825,7 +963,7 @@ function Create()
     InScreenDensity = self:AddInput("Screen Density", "ScreenDensity", {
         LINKID_DataType = "Number",
         INPID_InputControl = "SliderControl",
-        INP_Default = 130.0,
+        INP_Default = 100.0,
         INP_MinAllowed = 0.001,
         INP_MaxAllowed = 600.0,
         INPID_PreviewControl = "RangeControl",
@@ -852,9 +990,9 @@ function Create()
     InAAStrength = self:AddInput("AA Strength", "AAStrength", {
         LINKID_DataType = "Number",
         INPID_InputControl = "SliderControl",
-        INP_Default = 0.3,
+        INP_Default = 1.0,
         INP_MinAllowed = 0.0,
-        INP_MaxAllowed = 10.0,
+        INP_MaxAllowed = 5.0,
         INPS_StatusText = "Controls the strength of anti-aliasing on dot edges",
     })
 
