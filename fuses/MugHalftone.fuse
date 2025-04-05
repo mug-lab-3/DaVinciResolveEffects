@@ -852,6 +852,7 @@ __KERNEL__ void HalftoneKernel(__CONSTANTREF__ HalftoneParams *params, __TEXTURE
 ]]
 
 -- CMYKモード処理用のカーネル
+-- CMYKモード処理用のカーネル（常にAAを適用）
 CmykKernel = [[
 __KERNEL__ void CmykKernel(__CONSTANTREF__ HalftoneParams *params, __TEXTURE2D__ src, __TEXTURE2D_WRITE__ dst)
 {
@@ -888,9 +889,10 @@ __KERNEL__ void CmykKernel(__CONSTANTREF__ HalftoneParams *params, __TEXTURE2D__
         const float baseAAWidth = useAA ? params->aaStrength * 0.5f / cellSize : 0.0f;
         const bool isSmallCell = cellSize < 12.0f;
         const bool isVerySmallCell = cellSize < 8.0f;
+        const bool isUltraSmallCell = cellSize < 3.5f;
 
         // サブサンプリングAA関連
-        const bool useSubSamplingAA = params->useSubSamplingAA > 0 && useAA && isVerySmallCell;
+        const bool useSubSamplingAA = params->useSubSamplingAA > 0 && useAA;
         const int subSampleCount = params->subSampleCount;
         const int sqrtSampleCount = _fmaxf(1, (int)_sqrtf((float)subSampleCount));
         const float subPixelStep = 1.0f / (float)sqrtSampleCount;
@@ -903,12 +905,13 @@ __KERNEL__ void CmykKernel(__CONSTANTREF__ HalftoneParams *params, __TEXTURE2D__
             to_float3(0.85f, 0.85f, 0.0f)  // イエロー（より濃いめ）
         };
 
-        // サイズ係数を計算
+        // サイズ係数を計算 - モアレ対策として各チャンネルの線数を微調整
+        float densityFactors[4] = {1.0f, 0.97f, 0.95f, 1.0f}; // 黄色は調整
         float cellSizes[4];
         for (int i = 0; i < 4; i++) {
-            cellSizes[i] = cellSize;
+            cellSizes[i] = cellSize * densityFactors[i];
             if (i == 1) cellSizes[i] *= 1.05f;      // マゼンタ
-            else if (i == 2) cellSizes[i] *= 0.95f; // イエロー
+            else if (i == 2) cellSizes[i] *= 0.95f; // 黄色（面積を縮小）
         }
 
         // 基本オフセットとレジストレーションエラー
@@ -937,6 +940,15 @@ __KERNEL__ void CmykKernel(__CONSTANTREF__ HalftoneParams *params, __TEXTURE2D__
         float4 channelColors[4];
         bool hasChannelInfluence[4] = {false, false, false, false};
 
+        // K版用の特別探索範囲設定
+        int searchRangeMinK = -1;
+        int searchRangeMaxK = 1;
+
+        if (params->ucrAmount > 0.5f) {
+            searchRangeMinK = -2;
+            searchRangeMaxK = 2;
+        }
+
         // CMYKの各チャンネルごとの処理
         for (int channel = 0; channel < 4; channel++) {
             float angle = angles[channel] * 0.01745329f; // ラジアンに変換
@@ -951,13 +963,29 @@ __KERNEL__ void CmykKernel(__CONSTANTREF__ HalftoneParams *params, __TEXTURE2D__
             int cellIdX = (int)(rotX / cellSizes[channel]);
             int cellIdY = (int)(rotY / cellSizes[channel]);
 
-            // 周囲のセルをチェック - 検索範囲を最適化
-            for (int dy = -1; dy <= 1; dy++) {
-                for (int dx = -1; dx <= 1; dx++) {
-                    // 対角セルの場合は効率化（対角セルは距離が遠いので75%スキップ）
-                    if (abs(dx) + abs(dy) == 2) {
-                        if (_fabs(_sinf(xf * 12.34f + yf * 56.78f)) > 0.5f) {
-                            continue;
+            // チャンネルに応じた探索範囲設定
+            int searchRangeMin = (channel == 3) ? searchRangeMinK : -1;
+            int searchRangeMax = (channel == 3) ? searchRangeMaxK : 1;
+
+            // 周囲のセルをチェック
+            for (int dy = searchRangeMin; dy <= searchRangeMax; dy++) {
+                for (int dx = searchRangeMin; dx <= searchRangeMax; dx++) {
+                    // K版の場合は異なる効率化
+                    if (channel == 3) {
+                        // 範囲外のセルをスキップ (より正確に)
+                        if (abs(dx) > 1 || abs(dy) > 1) {
+                            float skipPattern = _fabs(_sinf(xf * 23.45f + yf * 67.89f));
+                            if ((skipPattern > 0.4f && abs(dx) + abs(dy) > 2) ||
+                               (skipPattern > 0.7f)) {
+                                continue;
+                            }
+                        }
+                    } else {
+                        // CMY版の効率化
+                        if (abs(dx) + abs(dy) == 2) {
+                            if (_fabs(_sinf(xf * 12.34f + yf * 56.78f)) > 0.5f) {
+                                continue;
+                            }
                         }
                     }
 
@@ -974,25 +1002,33 @@ __KERNEL__ void CmykKernel(__CONSTANTREF__ HalftoneParams *params, __TEXTURE2D__
                     // 特別なセルパターン調整（K版のみ）
                     if (channel == 3) {
                         bool isOddCell = ((checkX + checkY) % 2 != 0);
-                        float adjustY = isOddCell ? 0.075f : -0.075f;
+                        float adjustY = isOddCell ? 0.1f : -0.1f;  // より明確に
                         cellCenterY += cellSizes[channel] * adjustY;
 
-                        // 市松模様補正
+                        // 市松模様補正強化
                         if ((checkY % 2) != 0 && (checkX % 2) == 0) {
-                            cellCenterY += cellSizes[channel] * 0.075f;
+                            cellCenterY += cellSizes[channel] * 0.1f; // 強化
                         } else if ((checkY % 2) == 0 && (checkX % 2) != 0) {
-                            cellCenterY -= cellSizes[channel] * 0.075f;
+                            cellCenterY -= cellSizes[channel] * 0.1f; // 強化
                         }
                     }
 
                     // 現在のピクセルからセル中心への距離
                     float distX = rotX - cellCenterX;
                     float distY = rotY - cellCenterY;
+
+                    // 黄版の微調整（楕円ではなく単純な縮小）
+                    if (channel == 2) { // Yellow
+                        distX *= 1.02f;
+                        distY *= 1.02f;
+                    }
+
                     float distSq = distX*distX + distY*distY;
                     float dist = _sqrtf(distSq);
 
                     // 早期脱出条件を強化（性能改善）
-                    if (dist > cellSizes[channel] * 0.75f) continue;
+                    float searchRadius = cellSizes[channel] * (channel == 3 ? 0.85f : 0.75f);
+                    if (dist > searchRadius) continue;
 
                     // セル中心の画像上の座標に変換
                     float invX = cellCenterX * cosAngle + cellCenterY * sinAngle - offsets[channel].x;
@@ -1010,25 +1046,48 @@ __KERNEL__ void CmykKernel(__CONSTANTREF__ HalftoneParams *params, __TEXTURE2D__
                         // チャンネル値計算 - UCR/GCR処理を適用
                         float channelValue = 0.0f;
 
+                        // 共通のUCR計算部分
+                        float minVal = _fminf(_fminf(1.0f-cellColor.x, 1.0f-cellColor.y), 1.0f-cellColor.z);
+
                         // CMY版の場合
                         if (channel < 3) {
                             channelValue = channel == 0 ? (1.0f - cellColor.x) :
                                           (channel == 1 ? (1.0f - cellColor.y) : (1.0f - cellColor.z));
 
-                            // UCR処理
+                            // UCR処理 - チャンネル別に調整
                             if (params->ucrAmount > 0.0f) {
-                                float minVal = _fminf(_fminf(1.0f-cellColor.x, 1.0f-cellColor.y), 1.0f-cellColor.z);
-                                channelValue -= minVal * params->ucrAmount;
+                                // 黄色はより積極的に減らす
+                                float ucrFactor = params->ucrAmount;
+                                if (channel == 2) { // Yellow
+                                    ucrFactor *= 1.2f; // 黄色版は20%多く除去
+                                } else if (channel == 0) { // Cyan
+                                    ucrFactor *= 1.1f; // シアン版も10%多く除去
+                                }
+
+                                channelValue -= minVal * ucrFactor;
                                 channelValue = _fmaxf(0.0f, channelValue);
                             }
                         } else {
                             // K版の場合
                             channelValue = 1.0f - _fmaxf(_fmaxf(cellColor.x, cellColor.y), cellColor.z);
 
-                            // UCR強化
+                            // UCR強化 - 増加係数を調整
                             if (params->ucrAmount > 0.0f) {
-                                float minVal = _fminf(_fminf(1.0f-cellColor.x, 1.0f-cellColor.y), 1.0f-cellColor.z);
-                                channelValue = _fminf(1.0f, channelValue + minVal * params->ucrAmount * 0.7f);
+                                // 黒の増加量を増やす
+                                float kBoostFactor = 0.9f;
+
+                                // UCR高値ならさらに強く
+                                if (params->ucrAmount > 0.7f) {
+                                    kBoostFactor = 0.95f;
+                                }
+
+                                channelValue = _fminf(1.0f, channelValue + minVal * params->ucrAmount * kBoostFactor);
+
+                                // グレー領域での黒を強化
+                                if (minVal > 0.3f && minVal < 0.7f) {
+                                    float greyBoost = (minVal - 0.3f) * 0.2f * params->ucrAmount;
+                                    channelValue = _fminf(channelValue + greyBoost, 1.0f);
+                                }
                             }
                         }
 
@@ -1039,30 +1098,53 @@ __KERNEL__ void CmykKernel(__CONSTANTREF__ HalftoneParams *params, __TEXTURE2D__
                         float radius = 0.5f * channelValue;
                         radius = _fmaxf(radius, 0.01f);
 
+                        // K版は強調（UCR高値時）
+                        if (channel == 3 && params->ucrAmount > 0.6f && minVal > 0.2f) {
+                            // 灰色域でのK版ドットを大きく
+                            radius *= 1.05f + (params->ucrAmount - 0.6f) * 0.1f;
+                        }
+
                         // ドットゲイン効果（条件分岐削減）
                         radius *= (1.0f + params->dotGain * 0.3f);
+
+                        // 黄色版のみ半径を小さく
+                        if (channel == 2) { // Yellow
+                            radius *= 0.93f; // 黄色のドットを小さく調整
+                        }
 
                         // セル半径と距離を比較
                         float normDist = dist / cellSizes[channel];
 
-                        // 大きなドットの判定
+                        // エッジの位置とドット半径
                         float edge = radius;
-                        bool isLargeDot = radius > 0.35f;
 
-                        // アンチエイリアス処理（改良版）
+                        // アンチエイリアス処理（常に適用）
                         float alpha;
 
-                        if (useSubSamplingAA && !isLargeDot) {
-                            // サブサンプリングAA - 高密度時のみ使用
+                        if (useSubSamplingAA) {
+                            // サブサンプリングAA（常に使用）
                             float alpha_sum = 0.0f;
                             int effectiveSamples = 0;
 
+                            // サブピクセルパスを適応的に調整（セルサイズに応じて）
+                            float gridStep = subPixelStep;
+                            if (isVerySmallCell || isUltraSmallCell) {
+                                gridStep *= (_fminf(0.65f, cellSize * 0.1f));
+                            }
+
                             // サブピクセルサンプリング
-                            for (float dy = -0.5f + subPixelStep * 0.5f; dy < 0.5f; dy += subPixelStep) {
-                                for (float dx = -0.5f + subPixelStep * 0.5f; dx < 0.5f; dx += subPixelStep) {
+                            for (float dy = -0.5f + gridStep * 0.5f; dy < 0.5f; dy += gridStep) {
+                                for (float dx = -0.5f + gridStep * 0.5f; dx < 0.5f; dx += gridStep) {
                                     // 各サブピクセル位置での距離計算
                                     float sub_distX = distX + dx;
                                     float sub_distY = distY + dy;
+
+                                    // 黄版の微調整適用
+                                    if (channel == 2) {
+                                        sub_distX *= 1.02f;
+                                        sub_distY *= 1.02f;
+                                    }
+
                                     float sub_dist = _sqrtf(sub_distX*sub_distX + sub_distY*sub_distY);
                                     float sub_normDist = sub_dist / cellSizes[channel];
 
@@ -1073,8 +1155,17 @@ __KERNEL__ void CmykKernel(__CONSTANTREF__ HalftoneParams *params, __TEXTURE2D__
                                         sub_alpha = (sub_normDist <= edge) ? 1.0f : 0.0f;
                                     } else {
                                         float aaWidth = baseAAWidth;
+
+                                        // セルサイズに応じたAA幅調整
                                         if (isVerySmallCell) {
                                             aaWidth *= 1.1f;
+                                        }
+
+                                        // K版とチャンネル特性に応じたAA幅調整
+                                        if (channel == 3) {
+                                            aaWidth *= 1.15f; // K版はAAを強化
+                                        } else if (channel == 2) {
+                                            aaWidth *= 1.05f; // 黄版も少しだけ強化
                                         }
 
                                         // エッジ距離の計算
@@ -1085,10 +1176,20 @@ __KERNEL__ void CmykKernel(__CONSTANTREF__ HalftoneParams *params, __TEXTURE2D__
                                         }
                                         else if (edgeDist < aaWidth) {
                                             float t = edgeDist / aaWidth;
-                                            if (isVerySmallCell) {
+                                            if (isUltraSmallCell) {
+                                                // 超高密度用cosカーブ（非常に滑らか）
+                                                sub_alpha = 0.5f * (1.0f + _cosf(PI * t));
+                                            }
+                                            else if (isVerySmallCell) {
                                                 // 高密度用スムーズステップ
                                                 sub_alpha = 1.0f - (t * t * (3.0f - 2.0f * t));
+                                            } else if (channel == 3) {
+                                                // K版は特にエッジを滑らかに
+                                                float cosVal = 0.5f * (1.0f + _cosf(PI * t));
+                                                float cubicVal = 1.0f - (t * t * (1.0f + 0.25f * t));
+                                                sub_alpha = _mix(cubicVal, cosVal, 0.3f);
                                             } else {
+                                                // 標準サイズドット用カーブ
                                                 sub_alpha = 1.0f - (t * t * (1.0f + 0.25f * t));
                                             }
                                         }
@@ -1105,24 +1206,30 @@ __KERNEL__ void CmykKernel(__CONSTANTREF__ HalftoneParams *params, __TEXTURE2D__
                             // サブピクセル平均値計算
                             alpha = alpha_sum / (float)effectiveSamples;
 
+                            // 超高密度時はAAをわずかに強化
+                            if (isUltraSmallCell && alpha > 0.0f && alpha < 1.0f) {
+                                alpha = _powf(alpha, 0.85f);
+                            }
+
                         } else {
-                            // 標準AA処理（単一サンプル）
-                            if (!useAA || isLargeDot) {
-                                // AAなし、または大きなドットでは単純閾値処理
+                            // 標準AA処理（単一サンプル - 常に適用）
+                            if (!useAA) {
+                                // AAなしの場合は単純閾値処理
                                 alpha = (normDist <= edge) ? 1.0f : 0.0f;
                             } else {
                                 // AAありの場合
                                 float aaWidth = baseAAWidth;
 
-                                // 大きなドットの場合はAAの幅を狭める
-                                if (radius > 0.3f && radius <= 0.35f) {
-                                    // 中間サイズのドットではAAを弱める
-                                    aaWidth *= (0.35f - radius) * 3.33f; // 0.3→0.35で1→0に変化
-                                }
-
                                 // 高密度時は幅を拡張
                                 if (isVerySmallCell) {
                                     aaWidth *= 1.1f;
+                                }
+
+                                // K版はAAを強化
+                                if (channel == 3) {
+                                    aaWidth *= 1.15f; // K版はAA強化
+                                } else if (channel == 2) {
+                                    aaWidth *= 1.05f; // 黄版も少し強化
                                 }
 
                                 // エッジ距離の計算
@@ -1134,17 +1241,28 @@ __KERNEL__ void CmykKernel(__CONSTANTREF__ HalftoneParams *params, __TEXTURE2D__
                                 else if (edgeDist < aaWidth) {
                                     float t = edgeDist / aaWidth;
 
-                                    if (isVerySmallCell) {
+                                    if (isUltraSmallCell) {
+                                        // 超高密度用cosカーブ（非常に滑らか）
+                                        alpha = 0.5f * (1.0f + _cosf(PI * t));
+                                    }
+                                    else if (isVerySmallCell) {
                                         // 高密度用スムーズステップ
                                         alpha = 1.0f - (t * t * (3.0f - 2.0f * t));
                                     }
-                                    else if (radius > 0.3f) {
-                                        // 大きめのドット用 - より急峻なカーブ
-                                        alpha = 1.0f - (t * t * t);
+                                    else if (channel == 3) {
+                                        // K版は特にエッジを滑らかに
+                                        float cosVal = 0.5f * (1.0f + _cosf(PI * t));
+                                        float cubicVal = 1.0f - (t * t * (1.0f + 0.25f * t));
+                                        alpha = _mix(cubicVal, cosVal, 0.3f);
                                     }
                                     else {
                                         // 標準サイズドット用カーブ
                                         alpha = 1.0f - (t * t * (1.0f + 0.25f * t));
+                                    }
+
+                                    // 超高密度時はAAをわずかに強化
+                                    if (isUltraSmallCell && alpha > 0.0f && alpha < 1.0f) {
+                                        alpha = _powf(alpha, 0.85f);
                                     }
                                 }
                                 else {
@@ -1153,26 +1271,34 @@ __KERNEL__ void CmykKernel(__CONSTANTREF__ HalftoneParams *params, __TEXTURE2D__
                             }
                         }
 
-                        // 影響度の更新（最適化）
-                        if (alpha > 0.01f && alpha > channelMask[channel]) {
-                            channelMask[channel] = alpha;
-                            hasChannelInfluence[channel] = true;
+                        // K版のアルファ強化（視認性向上） - UCR値に応じて調整
+                        if (channel == 3 && params->ucrAmount > 0.5f) {
+                            // UCR高値時にK版のアルファを強化
+                            alpha = _fminf(alpha * (1.0f + (params->ucrAmount - 0.5f) * 0.2f), 1.0f);
+                        }
 
-                            // 色の設定（処理を統一化）
-                            if (channel < 3) {
-                                if (params->useOriginalColor == 1) {
-                                    // 元の色を基に、該当チャンネルだけ削除
-                                    channelColors[channel] = cellColor;
-                                    if (channel == 0) channelColors[channel].x = 0.0f; // 紙の色に関係なく0に
-                                    else if (channel == 1) channelColors[channel].y = 0.0f; // 紙の色に関係なく0に
-                                    else channelColors[channel].z = 0.0f; // 紙の色に関係なく0に
+                        // 影響度の更新（最適化）
+                        if (alpha > 0.01f) {
+                            if (alpha > channelMask[channel]) {
+                                channelMask[channel] = alpha;
+                                hasChannelInfluence[channel] = true;
+
+                                // 色の設定（処理を統一化）
+                                if (channel < 3) {
+                                    if (params->useOriginalColor == 1) {
+                                        // 元の色を基に、該当チャンネルだけ削除
+                                        channelColors[channel] = cellColor;
+                                        if (channel == 0) channelColors[channel].x = 0.0f; // 紙の色に関係なく0に
+                                        else if (channel == 1) channelColors[channel].y = 0.0f; // 紙の色に関係なく0に
+                                        else channelColors[channel].z = 0.0f; // 紙の色に関係なく0に
+                                    } else {
+                                        // プロセスカラーも紙の色に影響されない固定値
+                                        channelColors[channel] = to_float4(colors[channel].x, colors[channel].y, colors[channel].z, 1.0f);
+                                    }
                                 } else {
-                                    // プロセスカラーも紙の色に影響されない固定値
-                                    channelColors[channel] = to_float4(colors[channel].x, colors[channel].y, colors[channel].z, 1.0f);
+                                    // K版は常に純粋な黒（紙の色に関係なく）
+                                    channelColors[channel] = to_float4(0.0f, 0.0f, 0.0f, 1.0f);
                                 }
-                            } else {
-                                // K版は常に純粋な黒（紙の色に関係なく）
-                                channelColors[channel] = to_float4(0.0f, 0.0f, 0.0f, 1.0f);
                             }
                         }
                     }
@@ -1194,10 +1320,23 @@ __KERNEL__ void CmykKernel(__CONSTANTREF__ HalftoneParams *params, __TEXTURE2D__
             }
         }
 
+        // UCR調整のための合計黒量を計算
+        float kInfluence = hasChannelInfluence[3] ? channelMask[3] : 0.0f;
+
         // 単純化したブレンド処理
         for (int i = 0; i < 3; i++) {
             if (hasChannelInfluence[i] && channelMask[i] > 0.0f) {
                 float factor = channelMask[i];
+
+                // UCR調整 - 黒の強度に応じてCMYを微調整
+                if (params->ucrAmount > 0.5f && kInfluence > 0.5f) {
+                    // 高UCR値でK版が濃い場合、CMY値を微調整
+                    if (i == 2) { // 黄色
+                        factor *= (1.0f - params->ucrAmount * 0.2f);  // 黄色をさらに弱く
+                    } else if (i == 0) { // シアン
+                        factor *= (1.0f - params->ucrAmount * 0.1f);  // シアンも弱く
+                    }
+                }
 
                 // 完全な黒塗りケースを優先（大きなドット）
                 if (factor > 0.95f) {
@@ -1230,20 +1369,32 @@ __KERNEL__ void CmykKernel(__CONSTANTREF__ HalftoneParams *params, __TEXTURE2D__
             cmyResult.z *= brightnessFactor;
         }
 
-        // K版の適用
+        // K版の適用 - 改善版
         float4 inkResult = cmyResult;  // inkResultはインク色のみを計算
         if (hasChannelInfluence[3] && channelMask[3] > 0.0f) {
-            if (channelMask[3] > 0.9f) {
+            // K版の効果を強化 - UCR値に応じて調整
+            float kBoost = params->ucrAmount > 0.5f ?
+                         1.0f + (params->ucrAmount - 0.5f) * 0.2f : 1.0f;
+
+            float effectiveKMask = _fminf(channelMask[3] * kBoost, 1.0f);
+
+            if (effectiveKMask > 0.9f) {
                 // 高アルファでは完全に上書き（純黒）
                 inkResult = to_float4(0.0f, 0.0f, 0.0f, 1.0f);
             }
-            else if (channelMask[3] > 0.5f) {
+            else if (effectiveKMask > 0.5f) {
                 // 中程度のアルファでは強いブレンド
-                float strongBlendFactor = 0.8f + channelMask[3] * 0.2f;
+                float strongBlendFactor = 0.8f + effectiveKMask * 0.2f;
+
+                // UCR高値のときはより強いK版影響
+                if (params->ucrAmount > 0.5f) {
+                    strongBlendFactor = _fminf(strongBlendFactor * 1.15f, 1.0f);
+                }
+
                 inkResult = _mix(cmyResult, to_float4(0.0f, 0.0f, 0.0f, 1.0f), strongBlendFactor);
             } else {
                 // エッジブレンド
-                float blendFactor = channelMask[3] * 2.0f;
+                float blendFactor = effectiveKMask * 2.0f;
                 inkResult = _mix(cmyResult, to_float4(0.0f, 0.0f, 0.0f, 1.0f), blendFactor);
             }
         }
@@ -1252,9 +1403,13 @@ __KERNEL__ void CmykKernel(__CONSTANTREF__ HalftoneParams *params, __TEXTURE2D__
         float inkMask = 0.0f;
         for (int i = 0; i < 4; i++) {
             if (hasChannelInfluence[i]) {
-                inkMask = _fmaxf(inkMask, channelMask[i]);
+                // K版の影響を優先（UCR高値時）
+                float channelWeight = (i == 3 && params->ucrAmount > 0.5f) ?
+                                     1.1f : 1.0f;
+                inkMask = _fmaxf(inkMask, channelMask[i] * channelWeight);
             }
         }
+        inkMask = _fminf(inkMask, 1.0f); // 最大値で制限
 
         // インク色と紙の色（またはオリジナル背景）をブレンド
         if (inkMask > 0.001f) {
@@ -1348,10 +1503,38 @@ function Create()
         INPS_StatusText = "Preserves original colors instead of black and white",
     })
 
+    InDotGain = self:AddInput("Dot Gain", "DotGain", {
+        LINKID_DataType = "Number",
+        INPID_InputControl = "SliderControl",
+        INP_Default = 0.08,
+        INP_MinAllowed = -0.5,
+        INP_MaxAllowed = 0.5,
+        INPS_StatusText = "Simulates ink spread on paper",
+    })
+
+    InRegError = self:AddInput("Registration Error", "RegError", {
+        LINKID_DataType = "Number",
+        INPID_InputControl = "SliderControl",
+        INP_Default = 0.5,
+        INP_MinAllowed = 0.0,
+        INP_MaxAllowed = 1.0,
+        INPS_StatusText = "Simulates misalignment between color plates",
+    })
+
+    InUcrAmount = self:AddInput("UCR Amount", "UcrAmount", {
+        LINKID_DataType = "Number",
+        INPID_InputControl = "SliderControl",
+        INP_Default = 0.0,
+        INP_MinAllowed = 0.0,
+        INP_MaxAllowed = 1.0,
+        INPS_StatusText = "Controls Under Color Removal in CMYK mode",
+    })
+
+    self:BeginControlNest("Anti-aliasing", "AntiAliasing", true);
     InAAStrength = self:AddInput("AA Strength", "AAStrength", {
         LINKID_DataType = "Number",
         INPID_InputControl = "SliderControl",
-        INP_Default = 0.3,
+        INP_Default = 0.0,
         INP_MinAllowed = 0.0,
         INP_MaxAllowed = 5.0,
         INPS_StatusText = "Controls the strength of anti-aliasing on dot edges",
@@ -1375,36 +1558,9 @@ function Create()
         { CCS_AddString = "16 samples (4x4)" },
         INPS_StatusText = "Number of subsamples for high-quality AA",
     })
-
-    InDotGain = self:AddInput("Dot Gain", "DotGain", {
-        LINKID_DataType = "Number",
-        INPID_InputControl = "SliderControl",
-        INP_Default = 0.08,
-        INP_MinAllowed = -0.5,
-        INP_MaxAllowed = 0.5,
-        INPS_StatusText = "Simulates ink spread on paper",
-    })
-
-    InRegError = self:AddInput("Registration Error", "RegError", {
-        LINKID_DataType = "Number",
-        INPID_InputControl = "SliderControl",
-        INP_Default = 0.2,
-        INP_MinAllowed = 0.0,
-        INP_MaxAllowed = 1.0,
-        INPS_StatusText = "Simulates misalignment between color plates",
-    })
-
-    InUcrAmount = self:AddInput("UCR Amount", "UcrAmount", {
-        LINKID_DataType = "Number",
-        INPID_InputControl = "SliderControl",
-        INP_Default = 0.0,
-        INP_MinAllowed = 0.0,
-        INP_MaxAllowed = 1.0,
-        INPS_StatusText = "Controls Under Color Removal in CMYK mode",
-    })
+    self:EndControlNest()
 
     self:BeginControlNest("Paper", "Paper", true);
-
     InPaperTexture = self:AddInput("Paper Texture", "PaperTexture", {
         LINKID_DataType = "Number",
         INPID_InputControl = "SliderControl",
