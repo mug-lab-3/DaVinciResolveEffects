@@ -15,7 +15,7 @@ FuRegisterClass("MugHalftone", CT_SourceTool, {
     REG_Version            = 0.1,
 })
 
--- パラメーター構造体の更新
+-- パラメーター構造体
 HalftoneParams = [[
   int srcSize[2];        // ソース画像のサイズ
   float contrast;        // コントラスト調整（1.0がデフォルト）
@@ -32,11 +32,11 @@ HalftoneParams = [[
   int paperTextureType;  // 紙の種類（0=なめらか、1=わずかな繊維、2=強い繊維）
   float screenDensity;   // スクリーンの密度
   float paperColor[4];   // 紙の色（背景色）[R,G,B,A]
-  int showCellBoundaries; // セル境界を表示（デバッグ用）
+  float dotColor[4];     // ドットの色（前景色）[R,G,B,A]
 ]]
 
 -- 標準ハーフトーンカーネル（サブサンプリングAA対応版）
--- 標準ハーフトーンカーネル（サブサンプリングAA対応版、大ドット時のAA抑制機能付き）
+-- HalftoneKernelを修正してドットカラーを使用するように更新
 HalftoneKernel = [[
 __KERNEL__ void HalftoneKernel(__CONSTANTREF__ HalftoneParams *params, __TEXTURE2D__ src, __TEXTURE2D_WRITE__ dst)
 {
@@ -128,6 +128,14 @@ __KERNEL__ void HalftoneKernel(__CONSTANTREF__ HalftoneParams *params, __TEXTURE
             params->paperColor[1],
             params->paperColor[2],
             params->paperColor[3]
+        );
+
+        // カスタムドットカラーを取得
+        float4 dotColor = to_float4(
+            params->dotColor[0],
+            params->dotColor[1],
+            params->dotColor[2],
+            params->dotColor[3]
         );
 
         // スコアリング用の変数
@@ -407,7 +415,14 @@ __KERNEL__ void HalftoneKernel(__CONSTANTREF__ HalftoneParams *params, __TEXTURE
                         bestAlpha = alpha;
                         bestLuma = currentDotLuma;
                         bestRadius = radius; // 半径も保存
-                        bestColor = useOriginalColor ? cellColor : to_float4(0.0f, 0.0f, 0.0f, 1.0f);
+
+                        // ドットカラーの選択 - オリジナルカラーかカスタムカラー
+                        if (useOriginalColor) {
+                            bestColor = cellColor;
+                        } else {
+                            bestColor = dotColor; // カスタムドットカラー
+                        }
+
                         hasInfluence = true;
                     }
                 }
@@ -706,7 +721,14 @@ __KERNEL__ void HalftoneKernel(__CONSTANTREF__ HalftoneParams *params, __TEXTURE
                         bestAlpha = alpha;
                         bestLuma = currentDotLuma;
                         bestRadius = radius; // 半径も保存
-                        bestColor = useOriginalColor ? cellColor : to_float4(0.0f, 0.0f, 0.0f, 1.0f);
+
+                        // ドットカラーの選択 - オリジナルカラーかカスタムカラー
+                        if (useOriginalColor) {
+                            bestColor = cellColor;
+                        } else {
+                            bestColor = dotColor; // カスタムドットカラー
+                        }
+
                         hasInfluence = true;
                     }
                 }
@@ -820,39 +842,12 @@ __KERNEL__ void HalftoneKernel(__CONSTANTREF__ HalftoneParams *params, __TEXTURE
             result.z = _clampf(result.z + noiseEffect, 0.0f, 1.0f);
         }
 
-        // デバッグモード
-        if (params->showCellBoundaries == 1) {
-            const float gridLineThickness = 1.0f;
-            const int currentCellX = (int)(xf / cellSizeX);
-            const int currentCellY = (int)(yf / cellRowSpacing);
-            const float cellLeft = currentCellX * cellSizeX;
-            const float cellTop = currentCellY * cellRowSpacing;
-            const float rowOffset = ((currentCellY & 1) != 0) ? cellSizeX * zigzagFactor : 0.0f;
-
-            // 境界チェック
-            if (_fabs(yf - cellTop) < gridLineThickness ||
-                _fabs(yf - (cellTop + cellSizeY)) < gridLineThickness ||
-                _fabs(xf - (cellLeft + rowOffset)) < gridLineThickness ||
-                _fabs(xf - (cellLeft + rowOffset + cellSizeX)) < gridLineThickness) {
-                result = to_float4(0.0f, 1.0f, 0.0f, 1.0f);
-            }
-            else {
-                const float centerX = currentCellX * cellSizeX + rowOffset + cellSizeX * 0.5f;
-                const float centerY = currentCellY * cellRowSpacing + cellSizeY * 0.5f;
-
-                if (_fabs(xf - centerX) < 2.0f && _fabs(yf - centerY) < 2.0f) {
-                    result = to_float4(0.0f, 0.0f, 1.0f, 1.0f); // 中心点
-                }
-            }
-        }
-
         _tex2DVec4Write(dst, x, y, result);
     }
 }
 ]]
 
 -- CMYKモード処理用のカーネル
--- CMYKモード処理用のカーネル（常にAAを適用）
 CmykKernel = [[
 __KERNEL__ void CmykKernel(__CONSTANTREF__ HalftoneParams *params, __TEXTURE2D__ src, __TEXTURE2D_WRITE__ dst)
 {
@@ -1473,13 +1468,14 @@ function Create()
         INPID_InputControl = "CheckboxControl",
         INP_Integer = true,
         INP_Default = 0.0,
+        INP_DoNotifyChanged = true,
         INPS_StatusText = "Enables CMYK-style halftone separation",
     })
 
     InScreenDensity = self:AddInput("Screen Density", "ScreenDensity", {
         LINKID_DataType = "Number",
         INPID_InputControl = "SliderControl",
-        INP_Default = 150.0,
+        INP_Default = 50.0,
         INP_MinAllowed = 0.001,
         INP_MaxAllowed = 600.0,
         INPID_PreviewControl = "RangeControl",
@@ -1496,12 +1492,8 @@ function Create()
         INPS_StatusText = "Adjusts the contrast of the halftone pattern",
     })
 
-    InUseOriginalColor = self:AddInput("Use Original Color", "UseOriginalColor", {
-        LINKID_DataType = "Number",
-        INPID_InputControl = "CheckboxControl",
-        INP_Default = 0.0,
-        INPS_StatusText = "Preserves original colors instead of black and white",
-    })
+
+    self:BeginControlNest("Dot", "Dot", true);
 
     InDotGain = self:AddInput("Dot Gain", "DotGain", {
         LINKID_DataType = "Number",
@@ -1529,6 +1521,67 @@ function Create()
         INP_MaxAllowed = 1.0,
         INPS_StatusText = "Controls Under Color Removal in CMYK mode",
     })
+
+    InUseOriginalColor = self:AddInput("Use Original Color", "UseOriginalColor", {
+        LINKID_DataType = "Number",
+        INPID_InputControl = "CheckboxControl",
+        INP_Default = 0.0,
+        INPS_StatusText = "Preserves original colors instead of black and white",
+    })
+
+    groupID = groupID + 1
+    InDotColorRed = self:AddInput("Dot Color Red", "DotColorRed", {
+        LINKID_DataType    = "Number",
+        INPID_InputControl = "ColorControl",
+        INP_MinScale       = 0.0,
+        INP_MaxScale       = 1.0,
+        INP_Default        = 0.0,
+        ICS_Name           = "Color",
+        CLRC_ShowWheel     = false,
+        IC_ControlGroup    = groupID,
+        IC_ControlID       = 0, -- Red ID
+        INPS_StatusText    = "Sets the dot color (foreground)",
+    })
+
+    InDotColorGreen = self:AddInput("Dot Color Green", "DotColorGreen", {
+        LINKID_DataType    = "Number",
+        INPID_InputControl = "ColorControl",
+        INP_MinScale       = 0.0,
+        INP_MaxScale       = 1.0,
+        INP_Default        = 0.0,
+        ICS_Name           = "Color",
+        CLRC_ShowWheel     = false,
+        IC_ControlGroup    = groupID,
+        IC_ControlID       = 1, -- Green ID
+        INPS_StatusText    = "Sets the dot color (foreground)",
+    })
+
+    InDotColorBlue = self:AddInput("Dot Color Blue", "DotColorBlue", {
+        LINKID_DataType    = "Number",
+        INPID_InputControl = "ColorControl",
+        INP_MinScale       = 0.0,
+        INP_MaxScale       = 1.0,
+        INP_Default        = 0.0,
+        ICS_Name           = "Color",
+        CLRC_ShowWheel     = false,
+        IC_ControlGroup    = groupID,
+        IC_ControlID       = 2, -- Blue ID
+        INPS_StatusText    = "Sets the dot color (foreground)",
+    })
+
+    InDotColorAlpha = self:AddInput("Dot Color Alpha", "DotColorAlpha", {
+        LINKID_DataType    = "Number",
+        INPID_InputControl = "ColorControl",
+        INP_MinScale       = 0.0,
+        INP_MaxScale       = 1.0,
+        INP_Default        = 1.0,
+        ICS_Name           = "Color",
+        CLRC_ShowWheel     = false,
+        IC_ControlGroup    = groupID,
+        IC_ControlID       = 3, -- Alpha ID
+        INPS_StatusText    = "Sets the dot color (foreground)",
+    })
+    self:EndControlNest()
 
     self:BeginControlNest("Anti-aliasing", "AntiAliasing", true);
     InAAStrength = self:AddInput("AA Strength", "AAStrength", {
@@ -1662,15 +1715,6 @@ function Create()
     })
     self:EndControlNest()
 
-
-    InShowCellBoundaries = self:AddInput("Show Cell Boundaries", "ShowCellBoundaries", {
-        LINKID_DataType = "Number",
-        INPID_InputControl = "CheckboxControl",
-        INP_Integer = true,
-        INP_Default = 0.0,
-        INPS_StatusText = "Debug: Show cell boundaries with green lines",
-    })
-
     InImage = self:AddInput("Input Image", "Image", {
         LINKID_DataType = "Image",
         LINK_Main = 1,
@@ -1687,6 +1731,12 @@ function Process(req)
     local subSampleCountOption = InSubSampleCount:GetValue(req).Value
     local screenDensity = InScreenDensity:GetValue(req).Value
     local dotGain = InDotGain:GetValue(req).Value
+    local dotColor = {
+        InDotColorRed:GetValue(req).Value,
+        InDotColorGreen:GetValue(req).Value,
+        InDotColorBlue:GetValue(req).Value,
+        InDotColorAlpha:GetValue(req).Value,
+    }
     local regError = InRegError:GetValue(req).Value
     local ucrAmount = InUcrAmount:GetValue(req).Value
     local paperTexture = InPaperTexture:GetValue(req).Value
@@ -1746,6 +1796,10 @@ function Process(req)
             params.useSubSamplingAA = useSubSamplingAA > 0.5 and 1 or 0
             params.subSampleCount = subSampleCount
             params.dotGain = dotGain
+            params.dotColor[0] = dotColor[1] -- R
+            params.dotColor[1] = dotColor[2] -- G
+            params.dotColor[2] = dotColor[3] -- B
+            params.dotColor[3] = dotColor[4] -- A
             params.regError = regError
             params.ucrAmount = ucrAmount
             params.paperTexture = paperTexture
@@ -1754,7 +1808,6 @@ function Process(req)
             params.paperColor[1] = paperColor[2] -- G
             params.paperColor[2] = paperColor[3] -- B
             params.paperColor[3] = paperColor[4] -- A
-            params.showCellBoundaries = InShowCellBoundaries:GetValue(req).Value > 0.5 and 1 or 0
 
             node:SetParamBlock(params)
 
@@ -1772,7 +1825,12 @@ function Process(req)
 end
 
 function NotifyChanged(inp, param, time)
-    if inp == InPaperColorPreset then
+    if inp == InUseCMYKMode then
+        -- Show/hide CMYK-specific controls based on CMYK mode
+        local useCMYK = param.Value > 0.5
+        InRegError:SetAttrs({ IC_Visible = useCMYK })
+        InUcrAmount:SetAttrs({ IC_Visible = useCMYK })
+    elseif inp == InPaperColorPreset then
         -- 紙の色プリセットが選択された場合
         local presetIndex = math.floor(param.Value + 0.5)
 
