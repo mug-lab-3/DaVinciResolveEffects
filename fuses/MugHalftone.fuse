@@ -35,6 +35,7 @@ HalftoneParams = [[
 ]]
 
 -- 標準ハーフトーンカーネル
+-- 標準ハーフトーンカーネル
 HalftoneKernel = [[
 __KERNEL__ void HalftoneKernel(__CONSTANTREF__ HalftoneParams *params, __TEXTURE2D__ src, __TEXTURE2D_WRITE__ dst)
 {
@@ -59,13 +60,15 @@ __KERNEL__ void HalftoneKernel(__CONSTANTREF__ HalftoneParams *params, __TEXTURE
     {
         // 定数の事前計算
         const float SIN60 = 0.866025f; // √3/2
-        const float MAX_DOT_RADIUS = 0.433f;
+
+        // ドット半径の基準定数 - Gain=0でセルいっぱい、Gain=-0.5で半分、Gain=1でセルの2倍
+        const float MAX_CELL_RADIUS = 0.433f;
 
         // 基本ドットサイズ設定 - 事前計算の拡充
         float cellSize = 1000.0f / params->screenDensity;
         float cellSizeX = cellSize;
         float cellSizeY = cellSize * SIN60;
-        float cellRowSpacing = MAX_DOT_RADIUS * 2.0f * cellSizeX * 0.88f;
+        float cellRowSpacing = MAX_CELL_RADIUS * 2.0f * cellSizeX * 0.88f;
         float zigzagFactor = 0.5f;
 
         // 平方根計算コストを下げるための閾値の二乗
@@ -113,9 +116,9 @@ __KERNEL__ void HalftoneKernel(__CONSTANTREF__ HalftoneParams *params, __TEXTURE
         bool hasInfluence = false;
         float bestScore = -1.0f;
 
-        // dotGain補正 - 高密度時はより強めに
-        float densityBasedGain = params->dotGain * (1.0f + (8.0f - _fminf(cellSize, 8.0f)) * 0.04f);
-        float dotGainFactor = 1.0f + densityBasedGain * 0.3f;
+        // ドットゲイン補正 - 簡素化版（線形スケーリング）
+        // -0.5 → 0.5（セルの半分）、 0.0 → 1.0（セルいっぱい）、 1.0 → 2.0（セルの2倍）
+        float dotGainFactor = 1.0f + params->dotGain;
 
         // 小セル時のブースト - 高密度時は補正値を増加
         float smallCellBoost = cellSize < 12.0f ?
@@ -172,8 +175,8 @@ __KERNEL__ void HalftoneKernel(__CONSTANTREF__ HalftoneParams *params, __TEXTURE
                     float cellLuma = cellColor.x * 0.3f + cellColor.y * 0.59f + cellColor.z * 0.11f;
                     cellLuma = _clampf((cellLuma - 0.5f) * params->contrast + 0.5f, 0.0f, 1.0f);
 
-                    // 効率的なドット半径計算 - 高密度時の形状補正
-                    float radius = MAX_DOT_RADIUS * (1.0f - cellLuma);
+                    // 効率的なドット半径計算 - Gain=0でセルいっぱいのサイズに
+                    float radius = MAX_CELL_RADIUS * (1.0f - cellLuma);
                     radius = _fmaxf(radius, 0.01f);
 
                     // 高密度時は小さな暗いドットでも見えるように最小値を調整
@@ -181,11 +184,12 @@ __KERNEL__ void HalftoneKernel(__CONSTANTREF__ HalftoneParams *params, __TEXTURE
                         radius = _fmaxf(radius, 0.08f * (1.0f - cellSize / 6.0f));
                     }
 
-                    // 条件分岐を削減し、計算を一括化
+                    // 暗い部分の強調
                     if (cellLuma < 0.3f) {
                         radius += (0.3f - cellLuma) * 0.15f;
                     }
 
+                    // ドットゲイン効果の適用 - 簡素化された線形計算
                     radius *= smallCellBoost * dotGainFactor;
 
                     // アンチエイリアス処理 (条件分岐を削減)
@@ -305,8 +309,8 @@ __KERNEL__ void HalftoneKernel(__CONSTANTREF__ HalftoneParams *params, __TEXTURE
                 float cellLuma = cellColor.x * 0.3f + cellColor.y * 0.59f + cellColor.z * 0.11f;
                 cellLuma = _clampf((cellLuma - 0.5f) * params->contrast + 0.5f, 0.0f, 1.0f);
 
-                // ドット半径計算 - 高密度時の形状補正
-                float radius = MAX_DOT_RADIUS * (1.0f - cellLuma);
+                // ドット半径計算 - 簡素化版
+                float radius = MAX_CELL_RADIUS * (1.0f - cellLuma);
                 radius = _fmaxf(radius, 0.01f);
 
                 // 高密度時は小さな暗いドットでも見えるように最小値を調整
@@ -314,11 +318,12 @@ __KERNEL__ void HalftoneKernel(__CONSTANTREF__ HalftoneParams *params, __TEXTURE
                     radius = _fmaxf(radius, 0.08f * (1.0f - cellSize / 6.0f));
                 }
 
-                // 条件分岐を最小化
+                // 暗い部分の強調
                 if (cellLuma < 0.3f) {
                     radius += (0.3f - cellLuma) * 0.15f;
                 }
 
+                // ドットゲイン効果の適用 - 簡素化された線形計算
                 radius *= smallCellBoost * dotGainFactor;
 
                 // 距離計算と必要な場合にのみ平方根を使用
@@ -538,7 +543,6 @@ __KERNEL__ void CmykKernel(__CONSTANTREF__ HalftoneParams *params, __TEXTURE2D__
                 params->paperColor[3]   // A
             );
         }
-
 
         // 事前計算
         float xf = (float)x;
@@ -905,9 +909,9 @@ function Create()
     InDotGain = self:AddInput("Dot Gain", "DotGain", {
         LINKID_DataType = "Number",
         INPID_InputControl = "SliderControl",
-        INP_Default = 0.3,
-        INP_MinAllowed = 0.0,
-        INP_MaxAllowed = 1.0,
+        INP_Default = 0.08,
+        INP_MinAllowed = -0.5,
+        INP_MaxAllowed = 0.5,
         INPS_StatusText = "Simulates ink spread on paper",
     })
 
