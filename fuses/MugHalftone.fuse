@@ -20,7 +20,7 @@ HalftoneParams = [[
   int srcSize[2];        // ソース画像のサイズ
   float contrast;        // コントラスト調整（1.0がデフォルト）
   int useOriginalColor;  // 元の色を使用するかどうか（0=白黒、1=カラー）
-  int useOriginalBackground; // 背景も元の色にするかどうか（0=紙の色、1=元の色）
+  // useOriginalBackground パラメータを削除
   int useCMYKMode;       // CMYKモードを使用するかどうか（0=標準ハーフトーン、1=CMYKスタイル）
   float dotAngle;        // ドットの角度（CMYK モードでのみ使用）
   float aaStrength;      // アンチエイリアス強度（0.0=無効、1.0=強い）
@@ -35,7 +35,7 @@ HalftoneParams = [[
 ]]
 
 -- 標準ハーフトーンカーネル
--- 標準ハーフトーンカーネル
+-- 標準ハーフトーンカーネル（最適化版）
 HalftoneKernel = [[
 __KERNEL__ void HalftoneKernel(__CONSTANTREF__ HalftoneParams *params, __TEXTURE2D__ src, __TEXTURE2D_WRITE__ dst)
 {
@@ -64,440 +64,408 @@ __KERNEL__ void HalftoneKernel(__CONSTANTREF__ HalftoneParams *params, __TEXTURE
         // ドット半径の基準定数 - Gain=0でセルいっぱい、Gain=-0.5で半分、Gain=1でセルの2倍
         const float MAX_CELL_RADIUS = 0.433f;
 
-        // 基本ドットサイズ設定 - 事前計算の拡充
-        float cellSize = 1000.0f / params->screenDensity;
-        float cellSizeX = cellSize;
-        float cellSizeY = cellSize * SIN60;
-        float cellRowSpacing = MAX_CELL_RADIUS * 2.0f * cellSizeX * 0.88f;
-        float zigzagFactor = 0.5f;
+        // 基本ドットサイズ設定
+        const float cellSize = 1000.0f / params->screenDensity;
+        const float cellSizeX = cellSize;
+        const float cellSizeY = cellSize * SIN60;
+        const float cellRowSpacing = MAX_CELL_RADIUS * 2.0f * cellSizeX * 0.88f;
+        const float zigzagFactor = 0.5f;
 
         // 平方根計算コストを下げるための閾値の二乗
-        float centerThresholdSq = 0.75f;
-        float distThresholdBaseSq = 0.625f * 0.625f;
-        float distThresholdAltSq = 0.645f * 0.645f;
-        float verticalBoostFactor = 1.1025f; // 1.05^2
+        const float centerThresholdSq = 0.75f;
+        const float distThresholdBaseSq = 0.625f * 0.625f;
+        const float distThresholdAltSq = 0.645f * 0.645f;
+        const float verticalBoostFactor = 1.1025f; // 1.05^2
 
-        // ドット形状の高密度時補正係数
-        float highDensityFactor = _fmaxf(1.0f, _fminf(1.5f, 200.0f / params->screenDensity));
-
-        // 高密度補正のAA調整値
-        float aaDensityFactor = _fminf(1.0f + (200.0f / params->screenDensity) * 0.15f, 1.3f);
-        float aaWidthBase = params->aaStrength > 0.001f ?
-                          _fmaxf(0.5f / cellSizeX * params->aaStrength * aaDensityFactor, 0.005f) :
-                          0.0f;
+        // 高密度関連の定数
+        const float highDensityFactor = _fmaxf(1.0f, _fminf(1.5f, 200.0f / params->screenDensity));
+        const float aaDensityFactor = _fminf(1.0f + (200.0f / params->screenDensity) * 0.15f, 1.3f);
+        const bool useAA = params->aaStrength > 0.001f;
+        const float aaWidthBase = useAA ?
+                         _fmaxf(0.5f / cellSizeX * params->aaStrength * aaDensityFactor, 0.005f) :
+                         0.0f;
 
         // 座標正規化
-        float xf = (float)x;
-        float yf = (float)y;
-        float xNorm = xf / (float)params->srcSize[0];
-        float yNorm = yf / (float)params->srcSize[1];
-        float4 pixelColor = _tex2DVecN(src, xNorm, yNorm, 15);
+        const float xf = (float)x;
+        const float yf = (float)y;
+        const float xNorm = xf / (float)params->srcSize[0];
+        const float yNorm = yf / (float)params->srcSize[1];
+        const float4 pixelColor = _tex2DVecN(src, xNorm, yNorm, 15);
+
+        // セルのグリッド計算
+        const int cellIdX = (int)(xf / cellSizeX);
+        const int cellIdY = (int)(yf / cellRowSpacing);
+
+        // 行オフセットフラグ
+        const bool isCurrentRowOffset = ((cellIdY & 1) != 0);
+
+        // テクスチャサイズの逆数
+        const float invSrcSizeX = 1.0f / (float)params->srcSize[0];
+        const float invSrcSizeY = 1.0f / (float)params->srcSize[1];
+
+        // ドットゲイン補正
+        const float dotGainFactor = 1.0f + params->dotGain;
 
         // デフォルト値として背景色を設定
-        float4 result = params->useOriginalBackground == 1 ?
-                      pixelColor :
-                      to_float4(params->paperColor[0], params->paperColor[1], params->paperColor[2], params->paperColor[3]);
+        float4 result = to_float4(
+            params->paperColor[0],
+            params->paperColor[1],
+            params->paperColor[2],
+            params->paperColor[3]
+        );
 
-        // セルのグリッド計算 - 行間を縮小して上下に重なるように (整数演算を維持)
-        int cellIdX = (int)(xf / cellSizeX);
-        int cellIdY = (int)(yf / cellRowSpacing);
-
-        // 現在の行がオフセットされているかをチェック (ビット演算で最適化)
-        bool isCurrentRowOffset = ((cellIdY & 1) != 0);
-
-        // テクスチャサイズの逆数を事前計算 (除算を乗算に変換)
-        float invSrcSizeX = 1.0f / (float)params->srcSize[0];
-        float invSrcSizeY = 1.0f / (float)params->srcSize[1];
-
-        // 効率的なスコアリング用の変数を事前に準備
+        // スコアリング用の変数
         float bestAlpha = 0.0f;
         float bestLuma = 1.0f;
         float4 bestColor = result;
         bool hasInfluence = false;
         float bestScore = -1.0f;
 
-        // ドットゲイン補正 - 簡素化版（線形スケーリング）
-        // -0.5 → 0.5（セルの半分）、 0.0 → 1.0（セルいっぱい）、 1.0 → 2.0（セルの2倍）
-        float dotGainFactor = 1.0f + params->dotGain;
-
-        // 小セル時のブースト - 高密度時は補正値を増加
-        float smallCellBoost = cellSize < 12.0f ?
-                              (1.0f + (12.0f - cellSize) * (_fminf(0.06f, 0.03f * highDensityFactor))) :
-                              1.0f;
-
-        // 中心セルを最初にチェック - 最も重要なセル
-        {
-            float rowOffsetX = isCurrentRowOffset ? cellSizeX * zigzagFactor : 0.0f;
-            float cellCenterX = cellIdX * cellSizeX + rowOffsetX + cellSizeX * 0.5f;
-            float cellCenterY = cellIdY * cellRowSpacing + cellSizeY * 0.5f;
-
-            // 距離計算 (正規化した形で計算)
-            float distX = xf - cellCenterX;
-            float distY = yf - cellCenterY;
-
-            // 高密度時の歪み補正 - XY比を調整
-            if (cellSize < 10.0f) {
-                // Y方向の圧縮を少し緩和（六角形特性に合わせる）
-                distY *= _fmaxf(0.8f, 1.0f - (10.0f - cellSize) * 0.02f);
-            }
-
-            float distXNorm = distX / cellSizeX;
-            float distYNorm = distY / cellSizeY;
-            float normDistSq = distXNorm*distXNorm + distYNorm*distYNorm;
-
-            // 高密度時の六角形形状への補正
-            if (cellSize < 8.0f) {
-                // 方向による補正係数
-                float dirFactor = _fabs(distXNorm) / (_fabs(distYNorm) + 0.001f);
-
-                // 六角形に近づくよう方向による調整
-                if (dirFactor > 1.5f) {
-                    // X方向優勢の場合、水平方向に引き伸ばす
-                    normDistSq *= _fmaxf(0.85f, 1.0f - (8.0f - cellSize) * 0.02f);
-                } else if (dirFactor < 0.65f) {
-                    // Y方向優勢の場合、垂直方向に引き伸ばす
-                    normDistSq *= _fmaxf(0.90f, 1.0f - (8.0f - cellSize) * 0.015f);
-                }
-            }
-
-            // 早期脱出で効率化
-            if (normDistSq <= centerThresholdSq) {
-                float centerUVx = cellCenterX * invSrcSizeX;
-                float centerUVy = cellCenterY * invSrcSizeY;
-
-                // テクスチャ範囲チェックを一度に実行
-                if (centerUVx >= 0.0f && centerUVx <= 1.0f &&
-                    centerUVy >= 0.0f && centerUVy <= 1.0f)
-                {
-                    float4 cellColor = _tex2DVecN(src, centerUVx, centerUVy, 15);
-
-                    // 輝度とコントラスト計算 (輝度計算を1回に)
-                    float cellLuma = cellColor.x * 0.3f + cellColor.y * 0.59f + cellColor.z * 0.11f;
-                    cellLuma = _clampf((cellLuma - 0.5f) * params->contrast + 0.5f, 0.0f, 1.0f);
-
-                    // 効率的なドット半径計算 - Gain=0でセルいっぱいのサイズに
-                    float radius = MAX_CELL_RADIUS * (1.0f - cellLuma);
-                    radius = _fmaxf(radius, 0.01f);
-
-                    // 高密度時は小さな暗いドットでも見えるように最小値を調整
-                    if (cellSize < 6.0f && cellLuma < 0.4f) {
-                        radius = _fmaxf(radius, 0.08f * (1.0f - cellSize / 6.0f));
-                    }
-
-                    // 暗い部分の強調
-                    if (cellLuma < 0.3f) {
-                        radius += (0.3f - cellLuma) * 0.15f;
-                    }
-
-                    // ドットゲイン効果の適用 - 簡素化された線形計算
-                    radius *= smallCellBoost * dotGainFactor;
-
-                    // アンチエイリアス処理 (条件分岐を削減)
-                    float normDist = _sqrtf(normDistSq);  // √が必要なのはここだけ
-                    float alpha;
-
-                    if (params->aaStrength <= 0.001f) {
-                        alpha = (normDist <= radius) ? 1.0f : 0.0f;
-                    } else {
-                        // 高密度時はAAの範囲を広げる（特に小さなドット）
-                        float t = _clampf((normDist - radius + aaWidthBase) /
-                                         _fmaxf(aaWidthBase, 0.0001f), 0.0f, 1.0f);
-                        // より六角形に近いAAカーブ
-                        alpha = 1.0f - (t * t * (1.0f + 0.25f * t));
-                    }
-
-                    // 最適化されたセル評価
-                    if (alpha > 0.01f) {
-                        float currentDotLuma = params->useOriginalColor == 1 ?
-                                             cellLuma : 0.0f;
-
-                        // スコア計算を簡略化
-                        float lumaScore = (1.0f - currentDotLuma) * 5.0f;
-                        float alphaScore = alpha * alpha * 1.2f; // powf()を乗算で置換
-                        float score = lumaScore + alphaScore;
-
-                        bestScore = score;
-                        bestAlpha = alpha;
-                        bestLuma = currentDotLuma;
-                        bestColor = params->useOriginalColor == 1 ? cellColor : to_float4(0.0f, 0.0f, 0.0f, 1.0f);
-                        hasInfluence = true;
-                    }
-                }
-            }
+        // 高密度時のブースト係数
+        const bool isSmallCell = cellSize < 12.0f;
+        const bool isVerySmallCell = cellSize < 8.0f;
+        const bool isTinyCell = cellSize < 6.0f;
+        float smallCellBoost = 1.0f;
+        if (isSmallCell) {
+            smallCellBoost = 1.0f + (12.0f - cellSize) * (_fminf(0.06f, 0.03f * highDensityFactor));
         }
 
-        // ルックアップテーブルを効率的に使うための処理
-        const int (*hexNeighbors)[2] = isCurrentRowOffset ?
-                              hexNeighborsOdd :
-                              hexNeighborsEven;
+        // Original background/color flags
+        const bool useOriginalColor = params->useOriginalColor == 1;
 
-        // 効率化のため固定ループを展開
-        #pragma unroll
-        for (int i = 0; i < 6; i++) {
-            int dx = hexNeighbors[i][0];
-            int dy = hexNeighbors[i][1];
-
-            int checkX = cellIdX + dx;
-            int checkY = cellIdY + dy;
-
-            // 行オフセット計算 (整数演算と条件分岐の最適化)
-            bool isCheckRowOffset = ((checkY & 1) != 0);
-            float rowOffsetX = isCheckRowOffset ? cellSizeX * zigzagFactor : 0.0f;
-
-            // セル中心計算
-            float cellCenterX = checkX * cellSizeX + rowOffsetX + cellSizeX * 0.5f;
-            float cellCenterY = checkY * cellRowSpacing + cellSizeY * 0.5f;
+        // 中心セルを処理
+        {
+            const float rowOffsetX = isCurrentRowOffset ? cellSizeX * zigzagFactor : 0.0f;
+            const float cellCenterX = cellIdX * cellSizeX + rowOffsetX + cellSizeX * 0.5f;
+            const float cellCenterY = cellIdY * cellRowSpacing + cellSizeY * 0.5f;
 
             // 距離計算
             float distX = xf - cellCenterX;
             float distY = yf - cellCenterY;
 
-            // 高密度時の歪み補正 - XY比を調整
-            if (cellSize < 10.0f) {
-                // Y方向の圧縮を少し緩和（六角形特性に合わせる）
+            // 高密度時の歪み補正
+            if (isVerySmallCell) {
                 distY *= _fmaxf(0.8f, 1.0f - (10.0f - cellSize) * 0.02f);
             }
 
-            float distXNorm = distX / cellSizeX;
-            float distYNorm = distY / cellSizeY;
+            const float distXNorm = distX / cellSizeX;
+            const float distYNorm = distY / cellSizeY;
             float normDistSq = distXNorm*distXNorm + distYNorm*distYNorm;
 
             // 高密度時の六角形形状への補正
-            if (cellSize < 8.0f) {
-                // 方向による補正係数
-                float dirFactor = _fabs(distXNorm) / (_fabs(distYNorm) + 0.001f);
+            if (isVerySmallCell) {
+                const float dirFactor = _fabs(distXNorm) / (_fabs(distYNorm) + 0.0001f);
 
-                // 六角形に近づくよう方向による調整
                 if (dirFactor > 1.5f) {
-                    // X方向優勢の場合、水平方向に引き伸ばす
                     normDistSq *= _fmaxf(0.85f, 1.0f - (8.0f - cellSize) * 0.02f);
                 } else if (dirFactor < 0.65f) {
-                    // Y方向優勢の場合、垂直方向に引き伸ばす
                     normDistSq *= _fmaxf(0.90f, 1.0f - (8.0f - cellSize) * 0.015f);
                 }
             }
 
-            // 距離判定を最適化 (平方根を回避)
-            float distThresholdSq = (isCurrentRowOffset == isCheckRowOffset) ?
-                                  distThresholdBaseSq :
-                                  distThresholdAltSq;
+            // 早期脱出チェック
+            if (normDistSq <= centerThresholdSq) {
+                const float centerUVx = cellCenterX * invSrcSizeX;
+                const float centerUVy = cellCenterY * invSrcSizeY;
 
-            // 垂直方向の強化 (条件分岐を減らす)
-            if (dy != 0) {
-                distThresholdSq *= verticalBoostFactor;
-            }
+                // テクスチャ範囲チェック
+                if (centerUVx >= 0.0f && centerUVx <= 1.0f &&
+                    centerUVy >= 0.0f && centerUVy <= 1.0f)
+                {
+                    const float4 cellColor = _tex2DVecN(src, centerUVx, centerUVy, 15);
 
-            // 高密度時は探索範囲を広げる
-            if (cellSize < 8.0f) {
-                distThresholdSq *= (1.0f + (8.0f - cellSize) * 0.03f);
-            }
+                    // 輝度とコントラスト計算
+                    const float cellLuma = _clampf(
+                        ((cellColor.x * 0.3f + cellColor.y * 0.59f + cellColor.z * 0.11f) - 0.5f)
+                            * params->contrast + 0.5f,
+                        0.0f, 1.0f
+                    );
 
-            // 最適化された早期脱出
-            if (normDistSq > distThresholdSq) continue;
+                    // ドット半径計算
+                    float radius = MAX_CELL_RADIUS * (1.0f - cellLuma);
+                    radius = _fmaxf(radius, 0.01f);
 
-            // テクスチャ座標計算 (乗算で最適化)
-            float centerUVx = cellCenterX * invSrcSizeX;
-            float centerUVy = cellCenterY * invSrcSizeY;
-
-            // 有効範囲チェック (範囲チェックを一括化)
-            if (centerUVx >= 0.0f && centerUVx <= 1.0f &&
-                centerUVy >= 0.0f && centerUVy <= 1.0f)
-            {
-                float4 cellColor = _tex2DVecN(src, centerUVx, centerUVy, 15);
-
-                // 輝度計算の統合
-                float cellLuma = cellColor.x * 0.3f + cellColor.y * 0.59f + cellColor.z * 0.11f;
-                cellLuma = _clampf((cellLuma - 0.5f) * params->contrast + 0.5f, 0.0f, 1.0f);
-
-                // ドット半径計算 - 簡素化版
-                float radius = MAX_CELL_RADIUS * (1.0f - cellLuma);
-                radius = _fmaxf(radius, 0.01f);
-
-                // 高密度時は小さな暗いドットでも見えるように最小値を調整
-                if (cellSize < 6.0f && cellLuma < 0.4f) {
-                    radius = _fmaxf(radius, 0.08f * (1.0f - cellSize / 6.0f));
-                }
-
-                // 暗い部分の強調
-                if (cellLuma < 0.3f) {
-                    radius += (0.3f - cellLuma) * 0.15f;
-                }
-
-                // ドットゲイン効果の適用 - 簡素化された線形計算
-                radius *= smallCellBoost * dotGainFactor;
-
-                // 距離計算と必要な場合にのみ平方根を使用
-                float normDist = _sqrtf(normDistSq);
-                float alpha;
-
-                if (params->aaStrength <= 0.001f) {
-                    alpha = (normDist <= radius) ? 1.0f : 0.0f;
-                } else {
-                    // 高密度時はAAの範囲を広げる（より自然なドット形状に）
-                    float t = _clampf((normDist - radius + aaWidthBase) /
-                                     _fmaxf(aaWidthBase, 0.0001f), 0.0f, 1.0f);
-                    // 六角形に近いAAカーブ
-                    alpha = 1.0f - (t * t * (1.0f + 0.25f * t));
-                }
-
-                // アルファが十分な場合のみスコア計算
-                if (alpha > 0.01f) {
-                    float currentDotLuma = params->useOriginalColor == 1 ?
-                                         cellLuma : 0.0f;
-
-                    // 最適化されたボーナス計算
-                    float dirBonus = (!isCurrentRowOffset && dy != 0) ? 0.3f : 0.0f;
-                    float rowTypeBonus = (isCurrentRowOffset == isCheckRowOffset) ? 0.2f : 0.0f;
-
-                    // 効率的なスコア計算
-                    float lumaScore = (1.0f - currentDotLuma) * 5.0f;
-                    float alphaPower = isCurrentRowOffset ? 2.0f : 2.2f;
-                    float alphaScore = alpha * alpha; // 2乗で近似
-                    if (alphaPower > 2.0f) {
-                        alphaScore *= alpha * 0.2f; // 近似的なpow
+                    // 高密度時の調整
+                    if (isTinyCell && cellLuma < 0.4f) {
+                        radius = _fmaxf(radius, 0.08f * (1.0f - cellSize / 6.0f));
                     }
 
-                    // 高密度時は暗い部分を少し強調
-                    if (cellSize < 8.0f && currentDotLuma < 0.3f) {
-                        lumaScore *= (1.0f + (0.3f - currentDotLuma) * 0.5f);
+                    // 暗部強調
+                    if (cellLuma < 0.3f) {
+                        radius += (0.3f - cellLuma) * 0.15f;
                     }
 
-                    float score = lumaScore + alphaScore + dirBonus + rowTypeBonus;
+                    // ドットゲイン適用
+                    radius *= smallCellBoost * dotGainFactor;
 
-                    // スコア比較を最適化
-                    if (score > bestScore) {
+                    // AA処理
+                    const float normDist = _sqrtf(normDistSq);
+                    float alpha;
+
+                    if (!useAA) {
+                        alpha = (normDist <= radius) ? 1.0f : 0.0f;
+                    } else {
+                        const float t = _clampf(
+                            (normDist - radius + aaWidthBase) / _fmaxf(aaWidthBase, 0.0001f),
+                            0.0f, 1.0f
+                        );
+                        alpha = 1.0f - (t * t * (1.0f + 0.25f * t));
+                    }
+
+                    if (alpha > 0.01f) {
+                        const float currentDotLuma = useOriginalColor ? cellLuma : 0.0f;
+
+                        const float lumaScore = (1.0f - currentDotLuma) * 5.0f;
+                        const float alphaScore = alpha * alpha * 1.2f;
+                        const float score = lumaScore + alphaScore;
+
                         bestScore = score;
                         bestAlpha = alpha;
                         bestLuma = currentDotLuma;
-                        bestColor = params->useOriginalColor == 1 ? cellColor : to_float4(0.0f, 0.0f, 0.0f, 1.0f);
+                        bestColor = useOriginalColor ? cellColor : to_float4(0.0f, 0.0f, 0.0f, 1.0f);
                         hasInfluence = true;
                     }
                 }
             }
         }
 
-        // 最適なドットを効率的に適用
+        // 隣接セルの参照テーブル
+        const int (*hexNeighbors)[2] = isCurrentRowOffset ? hexNeighborsOdd : hexNeighborsEven;
+
+        // 隣接セル処理
+        #pragma unroll
+        for (int i = 0; i < 6; i++) {
+            const int dx = hexNeighbors[i][0];
+            const int dy = hexNeighbors[i][1];
+
+            const int checkX = cellIdX + dx;
+            const int checkY = cellIdY + dy;
+
+            const bool isCheckRowOffset = ((checkY & 1) != 0);
+            const float rowOffsetX = isCheckRowOffset ? cellSizeX * zigzagFactor : 0.0f;
+
+            // セル中心計算
+            const float cellCenterX = checkX * cellSizeX + rowOffsetX + cellSizeX * 0.5f;
+            const float cellCenterY = checkY * cellRowSpacing + cellSizeY * 0.5f;
+
+            // 距離計算
+            float distX = xf - cellCenterX;
+            float distY = yf - cellCenterY;
+
+            // 高密度時の歪み補正
+            if (isVerySmallCell) {
+                distY *= _fmaxf(0.8f, 1.0f - (10.0f - cellSize) * 0.02f);
+            }
+
+            const float distXNorm = distX / cellSizeX;
+            const float distYNorm = distY / cellSizeY;
+            float normDistSq = distXNorm*distXNorm + distYNorm*distYNorm;
+
+            // 高密度時の形状補正
+            if (isVerySmallCell) {
+                const float dirFactor = _fabs(distXNorm) / (_fabs(distYNorm) + 0.0001f);
+
+                if (dirFactor > 1.5f) {
+                    normDistSq *= _fmaxf(0.85f, 1.0f - (8.0f - cellSize) * 0.02f);
+                } else if (dirFactor < 0.65f) {
+                    normDistSq *= _fmaxf(0.90f, 1.0f - (8.0f - cellSize) * 0.015f);
+                }
+            }
+
+            // 距離閾値計算
+            float distThresholdSq = (isCurrentRowOffset == isCheckRowOffset) ?
+                                  distThresholdBaseSq :
+                                  distThresholdAltSq;
+
+            // 垂直方向補正
+            if (dy != 0) {
+                distThresholdSq *= verticalBoostFactor;
+            }
+
+            // 高密度時の調整
+            if (isVerySmallCell) {
+                distThresholdSq *= (1.0f + (8.0f - cellSize) * 0.03f);
+            }
+
+            // 早期脱出
+            if (normDistSq > distThresholdSq) continue;
+
+            const float centerUVx = cellCenterX * invSrcSizeX;
+            const float centerUVy = cellCenterY * invSrcSizeY;
+
+            if (centerUVx >= 0.0f && centerUVx <= 1.0f &&
+                centerUVy >= 0.0f && centerUVy <= 1.0f)
+            {
+                const float4 cellColor = _tex2DVecN(src, centerUVx, centerUVy, 15);
+
+                // 輝度計算
+                const float cellLuma = _clampf(
+                    ((cellColor.x * 0.3f + cellColor.y * 0.59f + cellColor.z * 0.11f) - 0.5f)
+                        * params->contrast + 0.5f,
+                    0.0f, 1.0f
+                );
+
+                // ドット半径計算
+                float radius = MAX_CELL_RADIUS * (1.0f - cellLuma);
+                radius = _fmaxf(radius, 0.01f);
+
+                // 高密度時の調整
+                if (isTinyCell && cellLuma < 0.4f) {
+                    radius = _fmaxf(radius, 0.08f * (1.0f - cellSize / 6.0f));
+                }
+
+                // 暗部強調
+                if (cellLuma < 0.3f) {
+                    radius += (0.3f - cellLuma) * 0.15f;
+                }
+
+                // ドットゲイン適用
+                radius *= smallCellBoost * dotGainFactor;
+
+                // アンチエイリアス
+                const float normDist = _sqrtf(normDistSq);
+                float alpha;
+
+                if (!useAA) {
+                    alpha = (normDist <= radius) ? 1.0f : 0.0f;
+                } else {
+                    const float t = _clampf(
+                        (normDist - radius + aaWidthBase) / _fmaxf(aaWidthBase, 0.0001f),
+                        0.0f, 1.0f
+                    );
+                    alpha = 1.0f - (t * t * (1.0f + 0.25f * t));
+                }
+
+                if (alpha > 0.01f) {
+                    const float currentDotLuma = useOriginalColor ? cellLuma : 0.0f;
+
+                    const float dirBonus = (!isCurrentRowOffset && dy != 0) ? 0.3f : 0.0f;
+                    const float rowTypeBonus = (isCurrentRowOffset == isCheckRowOffset) ? 0.2f : 0.0f;
+
+                    const float lumaScore = (1.0f - currentDotLuma) * 5.0f;
+                    const float alphaPower = isCurrentRowOffset ? 2.0f : 2.2f;
+                    float alphaScore = alpha * alpha;
+
+                    if (alphaPower > 2.0f) {
+                        alphaScore *= alpha * 0.2f;
+                    }
+
+                    // 高密度時の暗い部分を強調
+                    float densityMod = 1.0f;
+                    if (isVerySmallCell && currentDotLuma < 0.3f) {
+                        densityMod = 1.0f + (0.3f - currentDotLuma) * 0.5f;
+                    }
+
+                    const float score = lumaScore * densityMod + alphaScore + dirBonus + rowTypeBonus;
+
+                    if (score > bestScore) {
+                        bestScore = score;
+                        bestAlpha = alpha;
+                        bestLuma = currentDotLuma;
+                        bestColor = useOriginalColor ? cellColor : to_float4(0.0f, 0.0f, 0.0f, 1.0f);
+                        hasInfluence = true;
+                    }
+                }
+            }
+        }
+
+        // 最適なドット適用
         if (hasInfluence) {
-            // 計算の最小化
-            float bgLuma = result.x * 0.3f + result.y * 0.59f + result.z * 0.11f;
-            float darknessFactor = 1.0f - bestLuma;
+            const float bgLuma = result.x * 0.3f + result.y * 0.59f + result.z * 0.11f;
+            const float darknessFactor = 1.0f - bestLuma;
 
-            // 高密度時は行タイプによる強化をさらに強める
-            float densityBoost = 1.0f + _fmaxf(0.0f, (8.0f - cellSize) * 0.05f);
-            float rowTypeEnhancement = isCurrentRowOffset ?
-                                     2.0f * densityBoost :
-                                     2.25f * densityBoost;
+            const float densityBoost = 1.0f + _fmaxf(0.0f, (8.0f - cellSize) * 0.05f);
+            const float rowTypeEnhancement = isCurrentRowOffset ?
+                                           2.0f * densityBoost :
+                                           2.25f * densityBoost;
 
-            darknessFactor = _fminf(darknessFactor * rowTypeEnhancement, 1.0f);
+            const float adjustedDarkness = _fminf(darknessFactor * rowTypeEnhancement, 1.0f);
+            float enhancedBlend = bestAlpha + adjustedDarkness * (1.0f - bestAlpha);
 
-            // 強化されたブレンド係数
-            float enhancedBlend = bestAlpha + darknessFactor * (1.0f - bestAlpha);
-
-            // 条件分岐を効率化
             if (!isCurrentRowOffset) {
                 enhancedBlend = _fminf(enhancedBlend * 1.1f, 1.0f);
             }
 
-            // 高密度時はエッジをシャープにするためにブレンドをより強く
-            if (cellSize < 6.0f) {
-                enhancedBlend = _powf(enhancedBlend, 0.8f); // より強いブレンド効果
+            if (isTinyCell) {
+                enhancedBlend = _powf(enhancedBlend, 0.8f);
             }
 
-            // 簡略化されたブレンドロジック
-            float blendFactor;
             if (bestAlpha > 0.7f) {
                 // 高アルファの場合は直接上書き
                 result = bestColor;
             }
             else if (bestLuma < bgLuma || bestAlpha > 0.3f) {
-                // ブレンド係数の計算を簡略化
-                blendFactor = _fmaxf(bestAlpha * 1.5f, enhancedBlend);
-                blendFactor = _fminf(blendFactor, 1.0f);
+                const float blendFactor = _fminf(_fmaxf(bestAlpha * 1.5f, enhancedBlend), 1.0f);
 
-                // 効率的なブレンド
+                // ブレンド処理
                 result.x = _mix(result.x, bestColor.x, blendFactor);
                 result.y = _mix(result.y, bestColor.y, blendFactor);
                 result.z = _mix(result.z, bestColor.z, blendFactor);
             }
-            // else - 影響が低い場合は何もしない
         }
 
-        // 紙の質感処理の最適化
+        // 紙の質感処理
         if (params->paperTexture > 0.01f) {
-            // パラメータのルックアップテーブル化
             float intensityMod, frequencyMod;
-            if (params->paperTextureType == 0) { // Smooth
-                frequencyMod = 0.9f;
-                intensityMod = 0.6f;
-            }
-            else if (params->paperTextureType == 1) { // Light
-                frequencyMod = 0.5f;
-                intensityMod = 1.0f;
-            }
-            else { // Heavy
-                frequencyMod = 0.3f;
-                intensityMod = 1.8f;
+
+            switch(params->paperTextureType) {
+                case 0: // Smooth
+                    frequencyMod = 0.9f;
+                    intensityMod = 0.6f;
+                    break;
+                case 1: // Light
+                    frequencyMod = 0.5f;
+                    intensityMod = 1.0f;
+                    break;
+                default: // Heavy
+                    frequencyMod = 0.3f;
+                    intensityMod = 1.8f;
+                    break;
             }
 
-            // 簡略化されたノイズ計算 (sin/cosの回数削減)
-            float xyTerm = xf * 0.3f * frequencyMod + yf * 0.27f;
-            float yxTerm = yf * 0.13f * frequencyMod + xf * 0.07f;
+            // ノイズ計算
+            const float xyTerm = xf * 0.3f * frequencyMod + yf * 0.27f;
+            const float yxTerm = yf * 0.13f * frequencyMod + xf * 0.07f;
             float baseNoise = _sinf(xyTerm) * _cosf(yxTerm);
 
-            // 特殊効果を条件付きで適用
+            // Heavy用の特殊効果
             if (params->paperTextureType == 2 &&
                 _fabs(_sinf(xf * 1.2f + yf * 1.3f)) > 0.96f) {
                 baseNoise += 0.7f;
             }
 
-            // 効率的なノイズ強度計算
-            float noiseIntensity = params->paperTexture * 0.25f * intensityMod;
-            float noise = (baseNoise * 0.5f + 0.5f) * noiseIntensity;
+            // ノイズ適用
+            const float noiseIntensity = params->paperTexture * 0.25f * intensityMod;
+            const float noise = (baseNoise * 0.5f + 0.5f) * noiseIntensity;
 
-            // 簡略化されたコントラスト計算
-            float noiseEffect = noise - params->paperTexture * 0.05f;
-            noiseEffect *= (noise < 0.0f) ? 1.5f : 1.2f;
+            const float noiseEffect = (noise - params->paperTexture * 0.05f) *
+                                     ((noise < 0.0f) ? 1.5f : 1.2f);
 
-            // インラインのクランプ
-            result.x = result.x + noiseEffect;
-            result.y = result.y + noiseEffect;
-            result.z = result.z + noiseEffect;
-
-            // 効率的なクランプ (0〜1の範囲に)
-            result.x = result.x < 0.0f ? 0.0f : (result.x > 1.0f ? 1.0f : result.x);
-            result.y = result.y < 0.0f ? 0.0f : (result.y > 1.0f ? 1.0f : result.y);
-            result.z = result.z < 0.0f ? 0.0f : (result.z > 1.0f ? 1.0f : result.z);
+            // 色に適用
+            result.x = _clampf(result.x + noiseEffect, 0.0f, 1.0f);
+            result.y = _clampf(result.y + noiseEffect, 0.0f, 1.0f);
+            result.z = _clampf(result.z + noiseEffect, 0.0f, 1.0f);
         }
 
-        // デバッグモードの効率化 - デバッグ時のみ実行
+        // デバッグモード
         if (params->showCellBoundaries == 1) {
-            // セルのグリッドライン描画 (変数の再利用)
-            float gridLineThickness = 1.0f;
-            int currentCellX = (int)(xf / cellSizeX);
-            int currentCellY = (int)(yf / cellRowSpacing);
-            float cellLeft = currentCellX * cellSizeX;
-            float cellTop = currentCellY * cellRowSpacing;
-            float rowOffset = ((currentCellY & 1) != 0) ? cellSizeX * zigzagFactor : 0.0f;
+            const float gridLineThickness = 1.0f;
+            const int currentCellX = (int)(xf / cellSizeX);
+            const int currentCellY = (int)(yf / cellRowSpacing);
+            const float cellLeft = currentCellX * cellSizeX;
+            const float cellTop = currentCellY * cellRowSpacing;
+            const float rowOffset = ((currentCellY & 1) != 0) ? cellSizeX * zigzagFactor : 0.0f;
 
-            // 境界チェックを最適化
-            bool onBoundary = false;
-
-            // 水平方向と垂直方向の境界チェックを一括処理
+            // 境界チェック
             if (_fabs(yf - cellTop) < gridLineThickness ||
                 _fabs(yf - (cellTop + cellSizeY)) < gridLineThickness ||
                 _fabs(xf - (cellLeft + rowOffset)) < gridLineThickness ||
                 _fabs(xf - (cellLeft + rowOffset + cellSizeX)) < gridLineThickness) {
-                onBoundary = true;
-            }
-
-            // 境界線描画を簡略化
-            if (onBoundary) {
                 result = to_float4(0.0f, 1.0f, 0.0f, 1.0f);
             }
             else {
-                // ドット半径表示の最適化
-                float centerX = currentCellX * cellSizeX + rowOffset + cellSizeX * 0.5f;
-                float centerY = currentCellY * cellRowSpacing + cellSizeY * 0.5f;
+                const float centerX = currentCellX * cellSizeX + rowOffset + cellSizeX * 0.5f;
+                const float centerY = currentCellY * cellRowSpacing + cellSizeY * 0.5f;
 
                 if (_fabs(xf - centerX) < 2.0f && _fabs(yf - centerY) < 2.0f) {
                     result = to_float4(0.0f, 0.0f, 1.0f, 1.0f); // 中心点
@@ -531,18 +499,12 @@ __KERNEL__ void CmykKernel(__CONSTANTREF__ HalftoneParams *params, __TEXTURE2D__
         float4 pixelColor = _tex2DVecN(src, pixelUV.x, pixelUV.y, 15);
 
         // デフォルト値として背景色を設定
-        float4 result;
-        if (params->useOriginalBackground == 1) {
-            result = pixelColor;
-        } else {
-            // 配列から float4 を構築
-            result = to_float4(
-                params->paperColor[0],  // R
-                params->paperColor[1],  // G
-                params->paperColor[2],  // B
-                params->paperColor[3]   // A
-            );
-        }
+        float4 result = to_float4(
+            params->paperColor[0],
+            params->paperColor[1],
+            params->paperColor[2],
+            params->paperColor[3]
+        );
 
         // 事前計算
         float xf = (float)x;
@@ -733,12 +695,9 @@ __KERNEL__ void CmykKernel(__CONSTANTREF__ HalftoneParams *params, __TEXTURE2D__
 
         // CMY版の適用（最適化）
         float4 cmyResult;
-        if (params->useOriginalBackground == 1) {
-            cmyResult = pixelColor;
-        } else {
-            // 紙の色の代わりに純粋な白から始める（インク色用）
-            cmyResult = to_float4(1.0f, 1.0f, 1.0f, 1.0f);
-        }
+        // 紙の色の代わりに純粋な白から始める（インク色用）
+        cmyResult = to_float4(1.0f, 1.0f, 1.0f, 1.0f);
+
         float totalMask = 0.0f;
 
         // マスクの合計を先に計算
@@ -888,13 +847,6 @@ function Create()
         INPID_InputControl = "CheckboxControl",
         INP_Default = 0.0,
         INPS_StatusText = "Preserves original colors instead of black and white",
-    })
-
-    InUseOriginalBackground = self:AddInput("Color Background", "UseOriginalBackground", {
-        LINKID_DataType = "Number",
-        INPID_InputControl = "CheckboxControl",
-        INP_Default = 0.0,
-        INPS_StatusText = "Uses original image colors for background instead of white",
     })
 
     InAAStrength = self:AddInput("AA Strength", "AAStrength", {
@@ -1053,7 +1005,6 @@ end
 function Process(req)
     local contrast = InContrast:GetValue(req).Value
     local useOriginalColor = InUseOriginalColor:GetValue(req).Value
-    local useOriginalBackground = InUseOriginalBackground:GetValue(req).Value
     local useCMYKMode = InUseCMYKMode:GetValue(req).Value
     local aaStrength = InAAStrength:GetValue(req).Value
     local screenDensity = InScreenDensity:GetValue(req).Value
@@ -1099,7 +1050,6 @@ function Process(req)
             params.srcSize[0] = out.DataWindow:Width()
             params.srcSize[1] = out.DataWindow:Height()
             params.useOriginalColor = useOriginalColor > 0.5 and 1 or 0
-            params.useOriginalBackground = useOriginalBackground > 0.5 and 1 or 0
             params.useCMYKMode = useCMYKMode > 0.5 and 1 or 0
             params.dotAngle = 0.0
             params.aaStrength = aaStrength
@@ -1130,15 +1080,7 @@ function Process(req)
 end
 
 function NotifyChanged(inp, param, time)
-    if inp == InUseOriginalBackground then
-        -- オリジナル背景を使用する場合は紙の色設定を無効化
-        local useOrigBg = (param.Value > 0.5)
-        InPaperColorRed:SetAttrs({ INPS_Disabled = useOrigBg })
-        InPaperColorGreen:SetAttrs({ INPS_Disabled = useOrigBg })
-        InPaperColorBlue:SetAttrs({ INPS_Disabled = useOrigBg })
-        InPaperColorAlpha:SetAttrs({ INPS_Disabled = useOrigBg })
-        InPaperColorPreset:SetAttrs({ INPS_Disabled = useOrigBg })
-    elseif inp == InPaperColorPreset then
+    if inp == InPaperColorPreset then
         -- 紙の色プリセットが選択された場合
         local presetIndex = math.floor(param.Value + 0.5)
 
