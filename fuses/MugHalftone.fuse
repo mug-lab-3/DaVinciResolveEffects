@@ -1882,6 +1882,8 @@ function NotifyChanged(inp, param, time)
         local useCMYK = param.Value > 0.5
         InRegError:SetAttrs({ IC_Visible = useCMYK })
         InUcrAmount:SetAttrs({ IC_Visible = useCMYK })
+        InBrightnessCutoff:SetAttrs({ IC_Visible = not useCMYK })
+        InMinDotRadius:SetAttrs({ IC_Visible = not useCMYK })
     elseif inp == InPaperColorPreset then
         -- 紙の色プリセットが選択された場合
         local presetIndex = math.floor(param.Value + 0.5)
