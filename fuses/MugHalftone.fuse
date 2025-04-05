@@ -18,7 +18,6 @@ FuRegisterClass("MugHalftone", CT_SourceTool, {
 -- パラメーター構造体
 HalftoneParams = [[
   int srcSize[2];        // ソース画像のサイズ
-  float dotSize;         // ドットのサイズ調整（大きいほど細かいパターン）
   float contrast;        // コントラスト調整（1.0がデフォルト）
   int useOriginalColor;  // 元の色を使用するかどうか（0=白黒、1=カラー）
   int useOriginalBackground; // 背景も元の色にするかどうか（0=紙の色、1=元の色）
@@ -32,8 +31,10 @@ HalftoneParams = [[
   int paperTextureType;  // 紙の種類（0=なめらか、1=わずかな繊維、2=強い繊維）
   float screenDensity;   // スクリーンの密度
   float paperColor[4];   // 紙の色（背景色）[R,G,B,A]
+  int showCellBoundaries; // セル境界を表示（デバッグ用）
 ]]
 
+-- 標準ハーフトーンカーネル
 -- 標準ハーフトーンカーネル
 HalftoneKernel = [[
 __KERNEL__ void HalftoneKernel(__CONSTANTREF__ HalftoneParams *params, __TEXTURE2D__ src, __TEXTURE2D_WRITE__ dst)
@@ -42,8 +43,21 @@ __KERNEL__ void HalftoneKernel(__CONSTANTREF__ HalftoneParams *params, __TEXTURE
 
     if (x < params->srcSize[0] && y < params->srcSize[1])
     {
-        // 基本ドットサイズ設定
-        float cellSize = _fmaxf(1.0f, params->dotSize);
+        // 基本ドットサイズ設定 - Screen Densityを使用して計算
+        float cellSize;
+        cellSize = 1000.0f / params->screenDensity;
+
+        // 六角形パターン用の設定
+        float cellSizeX = cellSize;
+        float cellSizeY = cellSize * 0.866025f; // √3/2 = 0.866025
+
+        // ドットが外接するように行間を計算
+        float maxDotRadius = 0.433f; // 最大ドット半径（黒いエリア）
+        float dotDiameter = maxDotRadius * 2.0f * cellSizeX; // ドットの直径（最大時）
+        float targetDistanceY = dotDiameter; // ドットの中心間の目標距離（外接するため）
+        float cellRowSpacing = targetDistanceY * 0.88f; // 行間隔をドットの直径に設定
+
+        float zigzagFactor = 0.5f;
 
         // 座標正規化
         float xNorm = (float)x / (float)params->srcSize[0];
@@ -64,146 +78,391 @@ __KERNEL__ void HalftoneKernel(__CONSTANTREF__ HalftoneParams *params, __TEXTURE
             );
         }
 
-        // ドット計算用変数
-        float dotMask = 0.0f;
-        float4 dotColor = to_float4(0.0f, 0.0f, 0.0f, 1.0f);
-        bool hasInfluence = false;
-
-        // 45度回転座標系
-        float angle = 45.0f * 0.01745329f;
-        float cosAngle = _cosf(angle);
-        float sinAngle = _sinf(angle);
         float xf = (float)x;
         float yf = (float)y;
-        float rotX = xf * cosAngle - yf * sinAngle;
-        float rotY = xf * sinAngle + yf * cosAngle;
 
-        // セル特定
-        int cellIdX = (int)(rotX / cellSize);
-        int cellIdY = (int)(rotY / cellSize);
+        // セルのグリッド計算 - 行間を縮小して上下に重なるように
+        int cellIdX = (int)(xf / cellSizeX);
+        int cellIdY = (int)(yf / cellRowSpacing); // cellSizeYではなくcellRowSpacingを使用
 
-        // 周囲の検索範囲を対称化して修正
-        for (int dy = -1; dy <= 1; dy++) {
-            for (int dx = -1; dx <= 1; dx++) {
-                int checkX = cellIdX + dx;
-                int checkY = cellIdY + dy;
+        // 現在の行がオフセットされているかをチェック
+        bool isCurrentRowOffset = ((cellIdY % 2) != 0);
 
-                // 奇数行オフセット
-                float offsetX = ((checkY % 2) != 0) ? 0.5f : 0.0f;
+        // 六角形に特化した探索リストを定義（行タイプごとに最適化）
+        // 六角形パターンの方向ベクトル
+        const int hexNeighborsCount = 6;
+        int hexNeighborsEven[6][2] = {
+            {-1, 0}, {1, 0},  // 左右
+            {-1, -1}, {0, -1}, // 左上、右上
+            {-1, 1}, {0, 1}   // 左下、右下
+        };
 
-                // 特殊オフセット計算
-                bool isOddCell = ((checkX + checkY) % 2 != 0);
-                float specialOffsetY = isOddCell ? 0.075f : -0.075f;
+        int hexNeighborsOdd[6][2] = {
+            {-1, 0}, {1, 0},  // 左右
+            {0, -1}, {1, -1}, // 左上、右上
+            {0, 1}, {1, 1}    // 左下、右下
+        };
 
-                // 市松模様補正
-                if ((checkY % 2) != 0 && (checkX % 2) == 0) {
-                    specialOffsetY += 0.075f;
-                } else if ((checkY % 2) == 0 && (checkX % 2) != 0) {
-                    specialOffsetY -= 0.075f;
-                }
+        // bestAlpha, bestLuma, bestColor, bestScore は従来通り
+        float bestAlpha = 0.0f;
+        float bestLuma = 1.0f;
+        float4 bestColor = result;
+        bool hasInfluence = false;
+        float bestScore = -1.0f;
 
-                // セル中心計算
-                float cellCenterX = (checkX + offsetX) * cellSize;
-                float cellCenterY = checkY * cellSize + cellSize * 0.5f + specialOffsetY * cellSize;
+        // 中心セルを最初にチェック - これが最も重要
+        {
+            // 中心セルの計算
+            float rowOffsetX = isCurrentRowOffset ? cellSizeX * zigzagFactor : 0.0f;
+            float cellCenterX = cellIdX * cellSizeX + rowOffsetX + cellSizeX * 0.5f;
+            float cellCenterY = cellIdY * cellRowSpacing + cellSizeY * 0.5f;
 
-                // 距離計算
-                float distX = rotX - cellCenterX;
-                float distY = rotY - cellCenterY;
-                float dist = _sqrtf(distX*distX + distY*distY);
+            // 距離計算
+            float distX = xf - cellCenterX;
+            float distY = yf - cellCenterY;
+            float distXNorm = distX / cellSizeX;
+            float distYNorm = distY / cellSizeY;
+            float normDistSq = distXNorm*distXNorm + distYNorm*distYNorm;
 
-                // 早期脱出: 距離が大きすぎる場合
-                if (dist > cellSize * 0.8f) continue;
+            if (normDistSq <= 0.75f) { // 中心セルの影響範囲は少し広めに
+                float centerUVx = cellCenterX / (float)params->srcSize[0];
+                float centerUVy = cellCenterY / (float)params->srcSize[1];
 
-                // 画像上の逆変換座標
-                float invX = cellCenterX * cosAngle + cellCenterY * sinAngle;
-                float invY = -cellCenterX * sinAngle + cellCenterY * cosAngle;
-                float centerUVx = invX * (1.0f / (float)params->srcSize[0]);
-                float centerUVy = invY * (1.0f / (float)params->srcSize[1]);
-
-                // 有効範囲チェック
                 if (centerUVx >= 0.0f && centerUVx <= 1.0f && centerUVy >= 0.0f && centerUVy <= 1.0f) {
                     float4 cellColor = _tex2DVecN(src, centerUVx, centerUVy, 15);
-
-                    // 輝度計算
                     float cellLuma = cellColor.x * 0.3f + cellColor.y * 0.59f + cellColor.z * 0.11f;
                     cellLuma = _clampf((cellLuma - 0.5f) * params->contrast + 0.5f, 0.0f, 1.0f);
 
-                    // ドット半径計算
-                    float radius = 0.45f * (1.0f - cellLuma);
+                    // ドット半径計算 - 標準的な方法
+                    float radius = maxDotRadius * (1.0f - cellLuma);
                     radius = _fmaxf(radius, 0.01f);
 
-                    // 暗部補正
+                    // 通常の調整を適用
                     if (cellLuma < 0.3f) {
-                        radius += (0.3f - cellLuma) * 0.1f;
+                        radius += (0.3f - cellLuma) * 0.15f;
                     }
-
-                    // ドットゲイン適用
+                    if (cellSize < 12.0f) {
+                        radius *= (1.0f + (12.0f - cellSize) * 0.03f);
+                    }
                     if (params->dotGain > 0.0f) {
-                        radius *= (1.0f + params->dotGain * 0.2f);
+                        radius *= (1.0f + params->dotGain * 0.3f);
                     }
 
                     // アンチエイリアス処理
-                    float normDist = dist / cellSize;
-                    float aaWidth = 0.7f / cellSize * params->aaStrength;
-                    float t = _clampf((normDist - radius + aaWidth) / _fmaxf(aaWidth, 0.0001f), 0.0f, 1.0f);
-                    float alpha = 1.0f - (t * t * (3.0f - 2.0f * t));
+                    float normDist = _sqrtf(normDistSq);
+                    float alpha;
 
-                    // 影響度が高い場合のみ更新
-                    if (alpha > 0.01f && alpha > dotMask) {
-                        dotMask = alpha;
-                        dotColor = params->useOriginalColor == 1 ? cellColor : to_float4(0.0f, 0.0f, 0.0f, 1.0f);
+                    if (params->aaStrength <= 0.001f) {
+                        alpha = (normDist <= radius) ? 1.0f : 0.0f;
+                    } else {
+                        float aaWidth = _fmaxf(0.5f / cellSizeX * params->aaStrength, 0.005f);
+                        float t = _clampf((normDist - radius + aaWidth) / _fmaxf(aaWidth, 0.0001f), 0.0f, 1.0f);
+                        alpha = 1.0f - (t * t * (3.0f - 2.0f * t));
+                    }
+
+                    // 中心セル評価
+                    if (alpha > 0.01f) {
+                        float currentDotLuma = params->useOriginalColor == 1 ?
+                                            (cellColor.x * 0.3f + cellColor.y * 0.59f + cellColor.z * 0.11f) : 0.0f;
+
+                        // 中心セルには特別なボーナス
+                        float centrality = 1.2f;
+                        float lumaScore = (1.0f - currentDotLuma) * 5.0f;
+                        float alphaScore = _powf(alpha, 2.0f) * centrality;
+                        float score = lumaScore + alphaScore;
+
+                        bestScore = score;
+                        bestAlpha = alpha;
+                        bestLuma = currentDotLuma;
+                        bestColor = params->useOriginalColor == 1 ? cellColor : to_float4(0.0f, 0.0f, 0.0f, 1.0f);
                         hasInfluence = true;
                     }
                 }
             }
         }
 
-        // ドット適用
-        if (hasInfluence) {
-            if (dotMask > 0.5f) {
-                // 中心部分処理
-                if (params->useOriginalColor == 1) {
-                    // 輝度比較（暗い場合のみ適用）
-                    float resultLuma = result.x * 0.3f + result.y * 0.59f + result.z * 0.11f;
-                    float dotLuma = dotColor.x * 0.3f + dotColor.y * 0.59f + dotColor.z * 0.11f;
-                    if (dotLuma < resultLuma) {
-                        result = dotColor;
-                    }
-                } else {
-                    // 黒ドットは常に適用
-                    result = dotColor;
-                }
-            } else {
-                // エッジ部分処理
-                float blendFactor = dotMask * 2.0f;
-                float4 blendedColor;
-                blendedColor.x = _mix(result.x, dotColor.x, blendFactor);
-                blendedColor.y = _mix(result.y, dotColor.y, blendFactor);
-                blendedColor.z = _mix(result.z, dotColor.z, blendFactor);
+        // 次に、六角形パターンの周辺セルをチェック - 行タイプに応じた最適なパターン
+        for (int i = 0; i < hexNeighborsCount; i++) {
+            // 行タイプに応じて正しい探索パターンを選択
+            int dx = isCurrentRowOffset ? hexNeighborsOdd[i][0] : hexNeighborsEven[i][0];
+            int dy = isCurrentRowOffset ? hexNeighborsOdd[i][1] : hexNeighborsEven[i][1];
 
-                // 輝度比較（暗くなる場合のみ適用）
-                float resultLuma = result.x * 0.3f + result.y * 0.59f + result.z * 0.11f;
-                float blendedLuma = blendedColor.x * 0.3f + blendedColor.y * 0.59f + blendedColor.z * 0.11f;
-                if (blendedLuma < resultLuma) {
-                    result = blendedColor;
+            int checkX = cellIdX + dx;
+            int checkY = cellIdY + dy;
+
+            // 行に応じたオフセット計算 - オフセットあり(奇数)行は左にずらす
+            bool isCheckRowOffset = ((checkY % 2) != 0);
+            float rowOffsetX = isCheckRowOffset ? cellSizeX * zigzagFactor : 0.0f;
+
+            // セル中心計算 - 六角形パターンに合わせた正確な位置
+            float cellCenterX = checkX * cellSizeX + rowOffsetX + cellSizeX * 0.5f;
+            float cellCenterY = checkY * cellRowSpacing + cellSizeY * 0.5f;
+
+            // 距離計算 - 行タイプに応じた調整
+            float distX = xf - cellCenterX;
+            float distY = yf - cellCenterY;
+
+            // 楕円形状にするための正規化距離
+            float distXNorm = distX / cellSizeX;
+            float distYNorm = distY / cellSizeY;
+            float normDistSq = distXNorm*distXNorm + distYNorm*distYNorm;
+
+            // 距離閾値 - 行によって少し異なる値を使用
+            float distThreshold = isCurrentRowOffset == isCheckRowOffset ? 0.625f : 0.645f;
+
+            // 特に上下方向のセルの場合は閾値を調整（六角形の特性に合わせる）
+            if (abs(dy) > 0) {
+                distThreshold *= 1.05f;  // 垂直方向の接続を強化
+            }
+
+            // 早期脱出 - 閾値以上の距離の場合はスキップ
+            if (normDistSq > distThreshold) continue;
+
+            // テクスチャ座標計算
+            float centerUVx = cellCenterX / (float)params->srcSize[0];
+            float centerUVy = cellCenterY / (float)params->srcSize[1];
+
+            // 有効範囲チェック
+            if (centerUVx >= 0.0f && centerUVx <= 1.0f && centerUVy >= 0.0f && centerUVy <= 1.0f) {
+                float4 cellColor = _tex2DVecN(src, centerUVx, centerUVy, 15);
+
+                // 輝度計算
+                float cellLuma = cellColor.x * 0.3f + cellColor.y * 0.59f + cellColor.z * 0.11f;
+                cellLuma = _clampf((cellLuma - 0.5f) * params->contrast + 0.5f, 0.0f, 1.0f);
+
+                // ドット半径計算 - 外接するように調整
+                float radius = maxDotRadius * (1.0f - cellLuma);
+                radius = _fmaxf(radius, 0.01f);
+
+                // 通常の調整
+                if (cellLuma < 0.3f) {
+                    radius += (0.3f - cellLuma) * 0.15f;
+                }
+                if (cellSize < 12.0f) {
+                    radius *= (1.0f + (12.0f - cellSize) * 0.03f);
+                }
+                if (params->dotGain > 0.0f) {
+                    radius *= (1.0f + params->dotGain * 0.3f);
+                }
+
+                // アンチエイリアス処理
+                float normDist = _sqrtf(normDistSq);
+                float alpha;
+
+                if (params->aaStrength <= 0.001f) {
+                    alpha = (normDist <= radius) ? 1.0f : 0.0f;
+                } else {
+                    float aaWidth = _fmaxf(0.5f / cellSizeX * params->aaStrength, 0.005f);
+                    float t = _clampf((normDist - radius + aaWidth) / _fmaxf(aaWidth, 0.0001f), 0.0f, 1.0f);
+                    alpha = 1.0f - (t * t * (3.0f - 2.0f * t));
+                }
+
+                if (alpha > 0.01f) {
+                    // ドットの輝度を計算
+                    float currentDotLuma;
+                    if (params->useOriginalColor == 1) {
+                        currentDotLuma = cellColor.x * 0.3f + cellColor.y * 0.59f + cellColor.z * 0.11f;
+                    } else {
+                        currentDotLuma = 0.0f;
+                    }
+
+                    // 行タイプ特性と方向を考慮したスコア計算
+                    float lumaDiffWeight = 5.0f;
+
+                    // 周辺セルの方向性に基づいた重み付け - 特に非オフセット行の垂直方向を強化
+                    float dirBonus = 0.0f;
+                    if (!isCurrentRowOffset && abs(dy) > 0) {
+                        dirBonus = 0.3f;  // 垂直方向への接続を強化
+                    }
+
+                    // 同じ行タイプの場合はさらにボーナス
+                    float rowTypeBonus = (isCurrentRowOffset == isCheckRowOffset) ? 0.2f : 0.0f;
+
+                    // 輝度差のスコア（暗いほど大きな正の値）
+                    float lumaScore = (1.0f - currentDotLuma) * lumaDiffWeight;
+
+                    // アルファベースのスコア
+                    float alphaPower = isCurrentRowOffset ? 2.0f : 2.2f; // 非オフセット行はアルファ影響強化
+                    float alphaScore = _powf(alpha, alphaPower);
+
+                    // 総合スコア
+                    float score = lumaScore + alphaScore + dirBonus + rowTypeBonus;
+
+                    // スコアが高い場合は更新
+                    if (score > bestScore) {
+                        bestScore = score;
+                        bestAlpha = alpha;
+                        bestLuma = currentDotLuma;
+                        bestColor = params->useOriginalColor == 1 ? cellColor : to_float4(0.0f, 0.0f, 0.0f, 1.0f);
+                        hasInfluence = true;
+                    }
                 }
             }
         }
 
-        // 紙の質感適用（簡略化）
+        // 最適なドットを直接適用（すでに最良のものを選んでいる）
+        if (hasInfluence) {
+            // 既存背景の輝度を計算
+            float bgLuma = result.x * 0.3f + result.y * 0.59f + result.z * 0.11f;
+
+            // 暗いドットほど強い影響度を持つよう調整 - 行タイプごとに最適化
+            float darknessFactor = 1.0f - bestLuma;
+
+            // 非オフセット行はより強い影響が必要
+            float rowTypeEnhancement = isCurrentRowOffset ? 2.0f : 2.25f;
+            darknessFactor = _fminf(darknessFactor * rowTypeEnhancement, 1.0f);
+
+            // 強化されたブレンド係数
+            float enhancedBlend = bestAlpha + darknessFactor * (1.0f - bestAlpha);
+
+            // 非オフセット行はブレンドをさらに強化
+            if (!isCurrentRowOffset) {
+                enhancedBlend = _fminf(enhancedBlend * 1.1f, 1.0f);
+            }
+
+            // 常に暗いドットを優先
+            if (bestAlpha > 0.7f) {
+                // 中心部分は完全に上書き
+                result = bestColor;
+            }
+            else if (bestLuma < bgLuma || bestAlpha > 0.3f) {
+                // エッジ部分は暗さとアルファを考慮してブレンド
+                float blendFactor = _fmaxf(bestAlpha * 1.5f, enhancedBlend);
+                blendFactor = _fminf(blendFactor, 1.0f); // 最大1に制限
+
+                float4 blendedColor;
+                blendedColor.x = _mix(result.x, bestColor.x, blendFactor);
+                blendedColor.y = _mix(result.y, bestColor.y, blendFactor);
+                blendedColor.z = _mix(result.z, bestColor.z, blendFactor);
+
+                result = blendedColor;
+            }
+        }
+
+        // 紙の質感適用
         if (params->paperTexture > 0.0f) {
-            float noise = _sinf(xf * 0.1f + yf * 0.3f) * _cosf(xf * 0.05f);
-            noise = (noise * 0.5f + 0.5f) * params->paperTexture * 0.1f;
-            result.x = _clampf(result.x + noise, 0.0f, 1.0f);
-            result.y = _clampf(result.y + noise, 0.0f, 1.0f);
-            result.z = _clampf(result.z + noise, 0.0f, 1.0f);
+            float noise = 0.0f;
+            float intensityMod = 1.0f;
+            float frequencyMod = 1.0f;
+
+            // 紙のタイプに応じたパラメータ設定
+            if (params->paperTextureType == 0) { // Smooth
+                frequencyMod = 0.9f;
+                intensityMod = 0.6f;
+            }
+            else if (params->paperTextureType == 1) { // Light
+                frequencyMod = 0.5f;
+                intensityMod = 1.0f;
+            }
+            else { // Heavy
+                frequencyMod = 0.3f;
+                intensityMod = 1.8f;
+            }
+
+            // 共通の効率的なノイズ計算
+            float baseNoise = _sinf(xf * 0.3f * frequencyMod + yf * 0.27f) *
+                             _cosf(yf * 0.13f * frequencyMod + xf * 0.07f);
+
+            // Heavy Texture用に追加の粒状感
+            if (params->paperTextureType == 2 &&
+                _fabs(_sinf(xf * 1.2f + yf * 1.3f)) > 0.96f) {
+                baseNoise += 0.7f;
+            }
+
+            noise = (baseNoise * 0.5f + 0.5f) * params->paperTexture * 0.25f * intensityMod;
+
+            // コントラスト調整
+            float noiseEffect = noise - params->paperTexture * 0.05f;
+            noiseEffect *= (noise < 0.0f) ? 1.5f : 1.2f;
+
+            // 色に適用
+            result.x = _clampf(result.x + noiseEffect, 0.0f, 1.0f);
+            result.y = _clampf(result.y + noiseEffect, 0.0f, 1.0f);
+            result.z = _clampf(result.z + noiseEffect, 0.0f, 1.0f);
+        }
+
+        // セル境界線の描画（デバッグ用）- 行間縮小した六角形パターンに対応
+        if (params->showCellBoundaries == 1) {
+            // セルのグリッドライン描画
+            float gridLineThickness = 1.0f;
+
+            // 現在のピクセルが属するセルの座標 - 行間縮小対応
+            int currentCellX = (int)(xf / cellSizeX);
+            int currentCellY = (int)(yf / cellRowSpacing); // cellRowSpacingを使用
+
+            // 現在のセルの左上隅の座標 - 行間縮小対応
+            float cellLeft = currentCellX * cellSizeX;
+            float cellTop = currentCellY * cellRowSpacing; // cellRowSpacingを使用
+
+            // 現在の行に応じたオフセット
+            float rowOffset = ((currentCellY % 2) != 0) ? cellSizeX * zigzagFactor : 0.0f;
+
+            // セルの境界線かどうかをチェック
+            bool onBoundary = false;
+
+            // 水平方向の境界 - セルの実際の高さ（cellSizeY）を使用
+            if (_fabs(yf - cellTop) < gridLineThickness ||
+                _fabs(yf - (cellTop + cellSizeY)) < gridLineThickness) {
+                onBoundary = true;
+            }
+
+            // 垂直方向の境界
+            if (_fabs(xf - (cellLeft + rowOffset)) < gridLineThickness ||
+                _fabs(xf - (cellLeft + rowOffset + cellSizeX)) < gridLineThickness) {
+                onBoundary = true;
+            }
+
+            // 境界線を緑色で描画
+            if (onBoundary) {
+                // 元の色と緑色をブレンド（半透明な境界線）
+                result = to_float4(0.0f, 1.0f, 0.0f, 1.0f);
+            }
+
+            // 最大ドットサイズを赤い点線で表示（オプション）
+            for (int dy = -1; dy <= 1; dy++) {
+                for (int dx = -1; dx <= 1; dx++) {
+                    // 対角セルをスキップ（効率化）
+                    if (abs(dx) + abs(dy) == 2) continue;
+
+                    int checkX = currentCellX + dx;
+                    int checkY = currentCellY + dy;
+
+                    float checkRowOffsetX = ((checkY % 2) != 0) ? cellSizeX * zigzagFactor : 0.0f;
+                    float cellCenterX = checkX * cellSizeX + checkRowOffsetX + cellSizeX * 0.5f;
+                    float cellCenterY = checkY * cellRowSpacing + cellSizeY * 0.5f; // cellRowSpacingを使用
+
+                    // 最大ドットサイズの範囲を示す赤い円
+                    float distX = xf - cellCenterX;
+                    float distY = yf - cellCenterY;
+                    float distXNorm = distX / cellSizeX;
+                    float distYNorm = distY / cellSizeY;
+                    float normDistSq = distXNorm*distXNorm + distYNorm*distYNorm;
+                    float normDist = _sqrtf(normDistSq);
+
+                    // 最大ドット半径の0.433に近い位置を赤色で示す（点線風に）
+                    float maxRadius = 0.433f; // 最大ドット半径
+                    if (_fabs(normDist - maxRadius) < 0.01f) {
+                        // 点線パターン
+                        if ((int)(xf * 0.5f + yf * 0.5f) % 4 < 2) {
+                            result = to_float4(1.0f, 0.0f, 0.0f, 1.0f);
+                        }
+                    }
+                }
+            }
+
+            // セルの中心点を青い点で表示（オプション）
+            float centerX = currentCellX * cellSizeX + rowOffset + cellSizeX * 0.5f;
+            float centerY = currentCellY * cellRowSpacing + cellSizeY * 0.5f;
+
+            if (_fabs(xf - centerX) < 2.0f && _fabs(yf - centerY) < 2.0f) {
+                result = to_float4(0.0f, 0.0f, 1.0f, 1.0f); // 青色でセル中心を示す
+            }
         }
 
         _tex2DVec4Write(dst, x, y, result);
     }
 }
 ]]
-
 
 -- CMYKモード処理用のカーネル
 -- 最適化されたCMYKモード処理用カーネル
@@ -238,6 +497,7 @@ __KERNEL__ void CmykKernel(__CONSTANTREF__ HalftoneParams *params, __TEXTURE2D__
                 params->paperColor[3]   // A
             );
         }
+
 
         // 事前計算
         float xf = (float)x;
@@ -555,17 +815,7 @@ function Create()
         INPID_InputControl = "CheckboxControl",
         INP_Integer = true,
         INP_Default = 0.0,
-        INP_DoNotifyChanged = true,
         INPS_StatusText = "Enables CMYK-style halftone separation",
-    })
-
-    InDotSize = self:AddInput("Dot Size", "DotSize", {
-        LINKID_DataType = "Number",
-        INPID_InputControl = "SliderControl",
-        INP_Default = 15.0,
-        INP_MinAllowed = 1.0,
-        INP_MaxAllowed = 500.0,
-        INPS_StatusText = "Controls the size of halftone dots in standard mode",
     })
 
     InScreenDensity = self:AddInput("Screen Density", "ScreenDensity", {
@@ -739,6 +989,15 @@ function Create()
     })
     self:EndControlNest()
 
+
+    InShowCellBoundaries = self:AddInput("Show Cell Boundaries", "ShowCellBoundaries", {
+        LINKID_DataType = "Number",
+        INPID_InputControl = "CheckboxControl",
+        INP_Integer = true,
+        INP_Default = 0.0,
+        INPS_StatusText = "Debug: Show cell boundaries with green lines",
+    })
+
     InImage = self:AddInput("Input Image", "Image", {
         LINKID_DataType = "Image",
         LINK_Main = 1,
@@ -747,7 +1006,6 @@ function Create()
 end
 
 function Process(req)
-    local dotSize = InDotSize:GetValue(req).Value
     local contrast = InContrast:GetValue(req).Value
     local useOriginalColor = InUseOriginalColor:GetValue(req).Value
     local useOriginalBackground = InUseOriginalBackground:GetValue(req).Value
@@ -765,6 +1023,7 @@ function Process(req)
         InPaperColorBlue:GetValue(req).Value,
         InPaperColorAlpha:GetValue(req).Value,
     }
+
 
 
     local img = InImage:GetValue(req)
@@ -791,7 +1050,6 @@ function Process(req)
 
             -- 基本パラメータ設定
             params.contrast = contrast
-            params.dotSize = dotSize
             params.screenDensity = screenDensity
             params.srcSize[0] = out.DataWindow:Width()
             params.srcSize[1] = out.DataWindow:Height()
@@ -809,6 +1067,7 @@ function Process(req)
             params.paperColor[1] = paperColor[2] -- G
             params.paperColor[2] = paperColor[3] -- B
             params.paperColor[3] = paperColor[4] -- A
+            params.showCellBoundaries = InShowCellBoundaries:GetValue(req).Value > 0.5 and 1 or 0
 
             node:SetParamBlock(params)
 
@@ -826,20 +1085,7 @@ function Process(req)
 end
 
 function NotifyChanged(inp, param, time)
-    if inp == InUseCMYKMode then
-        -- CMYK モードが有効な場合、Dot Size を無効化
-        local cmykMode = (param.Value > 0.5)
-        -- Halftone Mode
-        InDotSize:SetAttrs({
-            INPS_Disabled = cmykMode,
-            IC_Visible = not cmykMode,
-        })
-        -- CYMMK Mode
-        InScreenDensity:SetAttrs({
-            INPS_Disabled = not cmykMode,
-            IC_Visible = cmykMode,
-        })
-    elseif inp == InUseOriginalBackground then
+    if inp == InUseOriginalBackground then
         -- オリジナル背景を使用する場合は紙の色設定を無効化
         local useOrigBg = (param.Value > 0.5)
         InPaperColorRed:SetAttrs({ INPS_Disabled = useOrigBg })
