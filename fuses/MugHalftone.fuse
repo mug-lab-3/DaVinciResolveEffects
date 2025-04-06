@@ -12,7 +12,7 @@ FuRegisterClass("MugHalftone", CT_Tool, {
     REGS_IconID            = "Icons.Tools.Icons.Halftone",
     REG_Source_GlobalCtrls = true,
     REG_Source_SizeCtrls   = true,
-    REG_Version            = 1.11,
+    REG_Version            = 1.21,
 })
 
 -- パラメーター構造体
@@ -43,19 +43,25 @@ __KERNEL__ void HalftoneKernel(__CONSTANTREF__ HalftoneParams *params, __TEXTURE
 {
     DEFINE_KERNEL_ITERATORS_XY(x, y);
 
-    // 六角形パターンの方向ベクトル（定数）
+    // 六角形パターンの方向ベクトル（定数）- 1次元配列に変更
     // 偶数行用の隣接セル相対位置
-    const int hexNeighborsEven[6][2] = {
-        {-1, 0}, {1, 0},   // 左右
-        {-1, -1}, {0, -1}, // 左上、右上
-        {-1, 1}, {0, 1}    // 左下、右下
+    const int hexNeighborsEven[12] = {
+        -1, 0,   // 左 [0,1]
+        1, 0,    // 右 [2,3]
+        -1, -1,  // 左上 [4,5]
+        0, -1,   // 右上 [6,7]
+        -1, 1,   // 左下 [8,9]
+        0, 1     // 右下 [10,11]
     };
 
     // 奇数行用の隣接セル相対位置
-    const int hexNeighborsOdd[6][2] = {
-        {-1, 0}, {1, 0},  // 左右
-        {0, -1}, {1, -1}, // 左上、右上
-        {0, 1}, {1, 1}    // 左下、右下
+    const int hexNeighborsOdd[12] = {
+        -1, 0,   // 左 [0,1]
+        1, 0,    // 右 [2,3]
+        0, -1,   // 左上 [4,5]
+        1, -1,   // 右上 [6,7]
+        0, 1,    // 左下 [8,9]
+        1, 1     // 右下 [10,11]
     };
 
     if (x < params->srcSize[0] && y < params->srcSize[1])
@@ -456,14 +462,16 @@ __KERNEL__ void HalftoneKernel(__CONSTANTREF__ HalftoneParams *params, __TEXTURE
         // 隣接セルの処理ラベル
         ProcessNeighbors:
 
-        // 隣接セルの参照テーブル
-        const int (*hexNeighbors)[2] = isCurrentRowOffset ? hexNeighborsOdd : hexNeighborsEven;
+        // 隣接セルを処理するためにインデックス計算を修正
+        const int *hexNeighbors = isCurrentRowOffset ? hexNeighborsOdd : hexNeighborsEven;
 
         // 隣接セル処理
         #pragma unroll
         for (int i = 0; i < 6; i++) {
-            const int dx = hexNeighbors[i][0];
-            const int dy = hexNeighbors[i][1];
+            // 1次元配列からインデックス計算
+            const int idx = i * 2;
+            const int dx = hexNeighbors[idx];
+            const int dy = hexNeighbors[idx+1];
 
             const int checkX = cellIdX + dx;
             const int checkY = cellIdY + dy;
@@ -891,6 +899,7 @@ __KERNEL__ void HalftoneKernel(__CONSTANTREF__ HalftoneParams *params, __TEXTURE
 ]]
 
 -- CMYKモード処理用のカーネル
+-- CMYKモード処理用のカーネル
 CmykKernel = [[
 __KERNEL__ void CmykKernel(__CONSTANTREF__ HalftoneParams *params, __TEXTURE2D__ src, __TEXTURE2D_WRITE__ dst)
 {
@@ -936,15 +945,35 @@ __KERNEL__ void CmykKernel(__CONSTANTREF__ HalftoneParams *params, __TEXTURE2D__
         const float subPixelStep = 1.0f / (float)sqrtSampleCount;
 
         // 各チャンネル（CMYK）ごとに処理
-        float angles[4] = {18.4f, 71.6f, 0.0f, 45.0f}; // C、M、Y、Kの角度
-        float3 colors[3] = {
-            to_float3(0.0f, 0.85f, 0.85f), // シアン（より濃いめ）
-            to_float3(0.85f, 0.0f, 0.85f), // マゼンタ（より濃いめ）
-            to_float3(0.85f, 0.85f, 0.0f)  // イエロー（より濃いめ）
-        };
+        // 1次元配列を使用（角度）
+        float angles[4];
+        angles[0] = 18.4f;  // C
+        angles[1] = 71.6f;  // M
+        angles[2] = 0.0f;   // Y
+        angles[3] = 45.0f;  // K
+
+        // 1次元配列を使用（色）
+        float colors[9];
+        // シアン
+        colors[0] = 0.0f;   // R
+        colors[1] = 0.85f;  // G
+        colors[2] = 0.85f;  // B
+        // マゼンタ
+        colors[3] = 0.85f;  // R
+        colors[4] = 0.0f;   // G
+        colors[5] = 0.85f;  // B
+        // イエロー
+        colors[6] = 0.85f;  // R
+        colors[7] = 0.85f;  // G
+        colors[8] = 0.0f;   // B
 
         // サイズ係数を計算 - モアレ対策として各チャンネルの線数を微調整
-        float densityFactors[4] = {1.0f, 0.97f, 0.95f, 1.0f}; // 黄色は調整
+        float densityFactors[4];
+        densityFactors[0] = 1.0f;
+        densityFactors[1] = 0.97f;
+        densityFactors[2] = 0.95f;
+        densityFactors[3] = 1.0f;
+
         float cellSizes[4];
         for (int i = 0; i < 4; i++) {
             cellSizes[i] = cellSize * densityFactors[i];
@@ -953,29 +982,31 @@ __KERNEL__ void CmykKernel(__CONSTANTREF__ HalftoneParams *params, __TEXTURE2D__
         }
 
         // 基本オフセットとレジストレーションエラー
-        float2 offsets[4];
-        for (int i = 0; i < 4; i++) {
-            offsets[i] = to_float2(0.0f, 0.0f);
+        float offsets[8];  // x,y座標を交互に格納
+        for (int i = 0; i < 8; i++) {
+            offsets[i] = 0.0f;
         }
-        offsets[1].x = cellSizes[1] * 0.25f;
-        offsets[2].y = cellSizes[2] * 0.25f;
-        offsets[3].x = cellSizes[3] * 0.125f;
-        offsets[3].y = cellSizes[3] * 0.125f;
+
+        // インデックス計算を修正
+        offsets[2] = cellSizes[1] * 0.25f;  // マゼンタ X
+        offsets[5] = cellSizes[2] * 0.25f;  // イエロー Y
+        offsets[6] = cellSizes[3] * 0.125f; // 黒 X
+        offsets[7] = cellSizes[3] * 0.125f; // 黒 Y
 
         // レジストレーションエラーを計算（最適化）
         if (params->regError > 0.01f) {
             float regScale = params->regError * cellSize * 0.1f;
-            offsets[0].x += regScale * 0.53f;
-            offsets[0].y += regScale * 0.23f;
-            offsets[1].x -= regScale * 0.33f;
-            offsets[1].y += regScale * 0.41f;
-            offsets[2].x += regScale * 0.17f;
-            offsets[2].y -= regScale * 0.37f;
+            offsets[0] += regScale * 0.53f;  // C x
+            offsets[1] += regScale * 0.23f;  // C y
+            offsets[2] -= regScale * 0.33f;  // M x
+            offsets[3] += regScale * 0.41f;  // M y
+            offsets[4] += regScale * 0.17f;  // Y x
+            offsets[5] -= regScale * 0.37f;  // Y y
         }
 
         // 各チャンネルの影響度
         float channelMask[4] = {0.0f, 0.0f, 0.0f, 0.0f};
-        float4 channelColors[4];
+        float channelColors[16];  // 4チャンネル x RGBA
         bool hasChannelInfluence[4] = {false, false, false, false};
 
         // K版用の特別探索範囲設定
@@ -994,8 +1025,8 @@ __KERNEL__ void CmykKernel(__CONSTANTREF__ HalftoneParams *params, __TEXTURE2D__
             float sinAngle = _sinf(angle);
 
             // 回転とオフセットを適用
-            float rotX = xf * cosAngle - yf * sinAngle + offsets[channel].x;
-            float rotY = xf * sinAngle + yf * cosAngle + offsets[channel].y;
+            float rotX = xf * cosAngle - yf * sinAngle + offsets[channel*2];     // channel*2 はX座標
+            float rotY = xf * sinAngle + yf * cosAngle + offsets[channel*2+1];   // channel*2+1 はY座標
 
             // 最も近いセルの中心を見つける
             int cellIdX = (int)(rotX / cellSizes[channel]);
@@ -1069,8 +1100,8 @@ __KERNEL__ void CmykKernel(__CONSTANTREF__ HalftoneParams *params, __TEXTURE2D__
                     if (dist > searchRadius) continue;
 
                     // セル中心の画像上の座標に変換
-                    float invX = cellCenterX * cosAngle + cellCenterY * sinAngle - offsets[channel].x;
-                    float invY = -cellCenterX * sinAngle + cellCenterY * cosAngle - offsets[channel].y;
+                    float invX = cellCenterX * cosAngle + cellCenterY * sinAngle - offsets[channel*2];
+                    float invY = -cellCenterX * sinAngle + cellCenterY * cosAngle - offsets[channel*2+1];
 
                     // 正規化座標
                     float centerUVx = invX * (1.0f / (float)params->srcSize[0]);
@@ -1324,18 +1355,29 @@ __KERNEL__ void CmykKernel(__CONSTANTREF__ HalftoneParams *params, __TEXTURE2D__
                                 // 色の設定（処理を統一化）
                                 if (channel < 3) {
                                     if (params->useOriginalColor == 1) {
-                                        // 元の色を基に、該当チャンネルだけ削除
-                                        channelColors[channel] = cellColor;
-                                        if (channel == 0) channelColors[channel].x = 0.0f; // 紙の色に関係なく0に
-                                        else if (channel == 1) channelColors[channel].y = 0.0f; // 紙の色に関係なく0に
-                                        else channelColors[channel].z = 0.0f; // 紙の色に関係なく0に
+                                        // 元の色を基に、該当チャンネルだけ削除 - 1次元配列の修正
+                                        channelColors[channel*4+0] = cellColor.x;
+                                        channelColors[channel*4+1] = cellColor.y;
+                                        channelColors[channel*4+2] = cellColor.z;
+                                        channelColors[channel*4+3] = cellColor.w;
+
+                                        if (channel == 0) channelColors[channel*4+0] = 0.0f; // 紙の色に関係なく0に
+                                        else if (channel == 1) channelColors[channel*4+1] = 0.0f; // 紙の色に関係なく0に
+                                        else channelColors[channel*4+2] = 0.0f; // 紙の色に関係なく0に
                                     } else {
-                                        // プロセスカラーも紙の色に影響されない固定値
-                                        channelColors[channel] = to_float4(colors[channel].x, colors[channel].y, colors[channel].z, 1.0f);
+                                        // プロセスカラーも紙の色に影響されない固定値 - 1次元配列の修正
+                                        int colorIdx = channel * 3; // R,G,B の3要素
+                                        channelColors[channel*4+0] = colors[colorIdx+0]; // R
+                                        channelColors[channel*4+1] = colors[colorIdx+1]; // G
+                                        channelColors[channel*4+2] = colors[colorIdx+2]; // B
+                                        channelColors[channel*4+3] = 1.0f; // A
                                     }
                                 } else {
                                     // K版は常に純粋な黒（紙の色に関係なく）
-                                    channelColors[channel] = to_float4(0.0f, 0.0f, 0.0f, 1.0f);
+                                    channelColors[channel*4+0] = 0.0f; // R
+                                    channelColors[channel*4+1] = 0.0f; // G
+                                    channelColors[channel*4+2] = 0.0f; // B
+                                    channelColors[channel*4+3] = 1.0f; // A
                                 }
                             }
                         }
@@ -1379,21 +1421,21 @@ __KERNEL__ void CmykKernel(__CONSTANTREF__ HalftoneParams *params, __TEXTURE2D__
                 // 完全な黒塗りケースを優先（大きなドット）
                 if (factor > 0.95f) {
                     // 純粋なチャンネルカラーで上書き（ブレンドせず）
-                    if (i == 0) cmyResult.x = channelColors[i].x;
-                    else if (i == 1) cmyResult.y = channelColors[i].y;
-                    else cmyResult.z = channelColors[i].z;
+                    if (i == 0) cmyResult.x = channelColors[i*4+0];
+                    else if (i == 1) cmyResult.y = channelColors[i*4+1];
+                    else cmyResult.z = channelColors[i*4+2];
                 }
                 else if (factor > 0.5f) {
                     // 中心部は最小値で合成（よりダークに）
-                    cmyResult.x = _fminf(cmyResult.x, channelColors[i].x);
-                    cmyResult.y = _fminf(cmyResult.y, channelColors[i].y);
-                    cmyResult.z = _fminf(cmyResult.z, channelColors[i].z);
+                    cmyResult.x = _fminf(cmyResult.x, channelColors[i*4+0]);
+                    cmyResult.y = _fminf(cmyResult.y, channelColors[i*4+1]);
+                    cmyResult.z = _fminf(cmyResult.z, channelColors[i*4+2]);
                 } else {
                     // エッジ部分はブレンド
                     float blendFactor = factor * 2.5f;
-                    cmyResult.x = _mix(cmyResult.x, _fminf(cmyResult.x, channelColors[i].x), blendFactor);
-                    cmyResult.y = _mix(cmyResult.y, _fminf(cmyResult.y, channelColors[i].y), blendFactor);
-                    cmyResult.z = _mix(cmyResult.z, _fminf(cmyResult.z, channelColors[i].z), blendFactor);
+                    cmyResult.x = _mix(cmyResult.x, _fminf(cmyResult.x, channelColors[i*4+0]), blendFactor);
+                    cmyResult.y = _mix(cmyResult.y, _fminf(cmyResult.y, channelColors[i*4+1]), blendFactor);
+                    cmyResult.z = _mix(cmyResult.z, _fminf(cmyResult.z, channelColors[i*4+2]), blendFactor);
                 }
             }
         }
