@@ -1545,7 +1545,7 @@ function Create()
         INPID_InputControl = "SliderControl",
         INP_Default = 0.05,
         INP_MinAllowed = 0.0,
-        INP_MaxAllowed = 0.2,
+        INP_MaxAllowed = 1.0,
         INPS_StatusText = "Dots smaller than this radius are not drawn",
     })
 
