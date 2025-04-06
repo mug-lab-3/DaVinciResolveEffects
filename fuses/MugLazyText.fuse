@@ -848,7 +848,6 @@ function Create()
 
     self:EndControlNest()
 
-
     InImage = self:AddInput("Input", "Input", {
         LINKID_DataType = "Image",
         LINK_Main       = 1,
@@ -1978,11 +1977,11 @@ function NotifyChanged(inp, param, time)
                 length = length + #sourceText.Unicode[i]
             end
             for i = 1, #InHighlight do
-                InHighlight[i].Range.Low:SetAttrs({
+                InHighlight[i].Range.High:SetAttrs({
                     --     INP_MaxAllowed = length,
                     INP_MaxScale = length
                 })
-                InHighlight[i].Range.High:SetAttrs({
+                InHighlight[i].Range.Low:SetAttrs({
                     --     INP_MaxAllowed = length,
                     INP_MaxScale = length
                 })
@@ -2176,4 +2175,6 @@ function NotifyChanged(inp, param, time)
             end
         end
     end
+
+    return true
 end
