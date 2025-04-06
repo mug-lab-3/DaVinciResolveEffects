@@ -1,13 +1,18 @@
+--[[--
+Mug Halftone
+--]] --
+
+--******************************************************************************************************
 FuRegisterClass("MugHalftone", CT_Tool, {
     REGS_Category          = "Fuses\\Mug",
     REGS_OpIconString      = "MHT",
     REGS_OpDescription     = "Mug Halftone",
-    REGS_HelpTopic         = "https://x.com/MugLab3",      --This can be a URL
+    REGS_HelpTopic         = "https://x.com/MugLab3",
     REGS_URL               = "https://www.youtube.com/@MugLabVideoEditing",
-    REGS_IconID            = "Icons.Tools.Icons.Halftone", -- This can be Inline as an array of Values
+    REGS_IconID            = "Icons.Tools.Icons.Halftone",
     REG_Source_GlobalCtrls = true,
     REG_Source_SizeCtrls   = true,
-    REG_Version            = 1.1,
+    REG_Version            = 1.11,
 })
 
 -- パラメーター構造体
@@ -19,7 +24,7 @@ HalftoneParams = [[
   float dotAngle;        // ドットの角度（CMYK モードでのみ使用）
   float aaStrength;      // アンチエイリアス強度（0.0=無効、1.0=強い）
   int useSubSamplingAA;  // サブサンプリングAAの使用（0=無効、1=有効）
-  int subSampleCount;    // サブサンプル数（1=無効、2x2=4、3x3=9）
+  int subSampleCount;    // サブサンプル数（4=2x2、9=3x3、16=4x4、64=8x8、256=16x16）
   float dotGain;         // ドットゲイン効果の強さ（0.0-1.0）
   float regError;        // 色版ずれの程度（0.0-1.0）
   float ucrAmount;       // UCR/GCR適用量（0.0-1.0）
@@ -32,7 +37,7 @@ HalftoneParams = [[
   float minDotRadius;    // 最小ドット半径（これより小さいドットは描画しない）
 ]]
 
--- 標準ハーフトーンカーネル（サブサンプリングAA対応版）
+-- 標準ハーフトーンカーネル
 HalftoneKernel = [[
 __KERNEL__ void HalftoneKernel(__CONSTANTREF__ HalftoneParams *params, __TEXTURE2D__ src, __TEXTURE2D_WRITE__ dst)
 {
@@ -1530,9 +1535,7 @@ function Create()
         INPS_StatusText = "Adjusts the contrast of the halftone pattern",
     })
 
-
     self:BeginControlNest("Dot", "Dot", true);
-
     InDotGain = self:AddInput("Dot Gain", "DotGain", {
         LINKID_DataType = "Number",
         INPID_InputControl = "SliderControl",
@@ -1675,7 +1678,7 @@ function Create()
     InPaperTexture = self:AddInput("Paper Texture", "PaperTexture", {
         LINKID_DataType = "Number",
         INPID_InputControl = "SliderControl",
-        INP_Default = 0.1,
+        INP_Default = 0.0,
         INP_MinAllowed = 0.0,
         INP_MaxAllowed = 1.0,
         INPS_StatusText = "Adds simulated paper texture to the output",
@@ -1871,7 +1874,6 @@ function Process(req)
             params.paperColor[3] = paperColor[4] -- A
 
             node:SetParamBlock(params)
-
             node:AddSampler("RowSampler", TEX_FILTER_MODE_LINEAR, TEX_ADDRESS_MODE_CLAMP, TEX_NORMALIZED_COORDS_TRUE)
             node:AddInput("src", img)
             node:AddOutput("dst", out)
