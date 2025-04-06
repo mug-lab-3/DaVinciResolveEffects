@@ -7,7 +7,7 @@ FuRegisterClass("MugHalftone", CT_SourceTool, {
     REGS_IconID            = "Icons.Tools.Icons.pImageEmitter", -- This can be Inline as an array of Values
     REG_Source_GlobalCtrls = true,
     REG_Source_SizeCtrls   = true,
-    REG_Version            = 1.0,
+    REG_Version            = 1.01,
 })
 
 -- パラメーター構造体
@@ -61,6 +61,9 @@ __KERNEL__ void HalftoneKernel(__CONSTANTREF__ HalftoneParams *params, __TEXTURE
 
         // ドット半径の基準定数 - Gain=0でセルいっぱい、Gain=-0.5で半分、Gain=1でセルの2倍
         const float MAX_CELL_RADIUS = 0.433f;
+
+        // 大きなドットの判定閾値
+        const float LARGE_DOT_THRESHOLD = 0.45f;
 
         // 基本ドットサイズ設定
         const float cellSize = 1000.0f / params->screenDensity;
@@ -260,7 +263,7 @@ __KERNEL__ void HalftoneKernel(__CONSTANTREF__ HalftoneParams *params, __TEXTURE
                     }
 
                     // 大きなドットかどうかをチェック
-                    const bool isLargeDot = radius > 0.35f;
+                    const bool isLargeDot = radius > LARGE_DOT_THRESHOLD;
 
                     // 完全に刷新したAA処理
                     float alpha = 0.0f;
@@ -362,13 +365,16 @@ __KERNEL__ void HalftoneKernel(__CONSTANTREF__ HalftoneParams *params, __TEXTURE
                             // AAなしの場合または大きなドットの場合は単純な閾値処理
                             alpha = (normDist <= radius) ? 1.0f : 0.0f;
                         } else {
-                            // 新しい適応型AA幅計算
+                            // ドットサイズに応じたAA幅の滑らかな調整
                             float aaWidth = aaWidthBase;
 
-                            // 大きなドットの場合はAAの幅を狭める
-                            if (radius > 0.3f && radius <= 0.35f) {
-                                // 中間サイズのドットではAAを弱める
-                                aaWidth *= (0.35f - radius) * 3.33f; // 0.3→0.35で1→0に変化
+                            if (radius > 0.25f && radius <= LARGE_DOT_THRESHOLD) {
+                                // 0.25からLARGE_DOT_THRESHOLDの間で滑らかに変化するスケールファクター
+                                float t = _clampf((radius - 0.25f) / (LARGE_DOT_THRESHOLD - 0.25f), 0.0f, 1.0f);
+                                // スムーズステップ関数で遷移
+                                float smoothFactor = 1.0f - (t * t * (3.0f - 2.0f * t));
+                                // 最低でも0.15の係数を維持して急激なAA消失を防止
+                                aaWidth *= _fmaxf(0.15f, smoothFactor);
                             }
 
                             // 超高密度時は幅を拡張
@@ -384,8 +390,11 @@ __KERNEL__ void HalftoneKernel(__CONSTANTREF__ HalftoneParams *params, __TEXTURE
                                 alpha = 1.0f;
                             }
                             else if (edgeDist < aaWidth) {
-                                // エッジ部分 - 密度に応じて最適なカーブを選択
+                                // エッジ部分 - ドットサイズに応じて連続的に変化する曲線を選択
                                 const float t = edgeDist / aaWidth;
+
+                                // サイズに応じた連続的なブレンド係数
+                                float blendToSharper = _clampf((radius - 0.2f) * 3.33f, 0.0f, 1.0f);
 
                                 if (isUltraSmallCell) {
                                     // 超高密度用 - cosカーブ（非常に滑らか）
@@ -395,13 +404,11 @@ __KERNEL__ void HalftoneKernel(__CONSTANTREF__ HalftoneParams *params, __TEXTURE
                                     // 高密度用 - smoothstep
                                     alpha = 1.0f - (t * t * (3.0f - 2.0f * t));
                                 }
-                                else if (radius > 0.3f) {
-                                    // 大きめのドット用 - より急峻なカーブ
-                                    alpha = 1.0f - (t * t * t);
-                                }
                                 else {
-                                    // 標準密度用の3次曲線 - 少しシャープ
-                                    alpha = 1.0f - (t * t * (1.0f + 0.25f * t));
+                                    // 標準〜大きめのドット用のブレンドカーブ
+                                    float smoothCurve = 1.0f - (t * t * (3.0f - 2.0f * t));
+                                    float sharpCurve = 1.0f - (t * t * t);
+                                    alpha = _mix(smoothCurve, sharpCurve, blendToSharper);
                                 }
 
                                 // 超高密度時はAAをわずかに強化
@@ -566,7 +573,7 @@ __KERNEL__ void HalftoneKernel(__CONSTANTREF__ HalftoneParams *params, __TEXTURE
                 }
 
                 // 大きなドットかどうかをチェック
-                const bool isLargeDot = radius > 0.35f;
+                const bool isLargeDot = radius > LARGE_DOT_THRESHOLD;
 
                 // 完全に刷新したAA処理
                 float alpha = 0.0f;
@@ -668,13 +675,16 @@ __KERNEL__ void HalftoneKernel(__CONSTANTREF__ HalftoneParams *params, __TEXTURE
                         // AAなしの場合または大きなドットの場合は単純な閾値処理
                         alpha = (normDist <= radius) ? 1.0f : 0.0f;
                     } else {
-                        // 新しい適応型AA幅計算
+                        // ドットサイズに応じたAA幅の滑らかな調整
                         float aaWidth = aaWidthBase;
 
-                        // 大きなドットの場合はAAの幅を狭める
-                        if (radius > 0.3f && radius <= 0.35f) {
-                            // 中間サイズのドットではAAを弱める
-                            aaWidth *= (0.35f - radius) * 3.33f; // 0.3→0.35で1→0に変化
+                        if (radius > 0.25f && radius <= LARGE_DOT_THRESHOLD) {
+                            // 0.25からLARGE_DOT_THRESHOLDの間で滑らかに変化するスケールファクター
+                            float t = _clampf((radius - 0.25f) / (LARGE_DOT_THRESHOLD - 0.25f), 0.0f, 1.0f);
+                            // スムーズステップ関数で遷移
+                            float smoothFactor = 1.0f - (t * t * (3.0f - 2.0f * t));
+                            // 最低でも0.15の係数を維持して急激なAA消失を防止
+                            aaWidth *= _fmaxf(0.15f, smoothFactor);
                         }
 
                         // 超高密度時は幅を拡張
@@ -690,8 +700,11 @@ __KERNEL__ void HalftoneKernel(__CONSTANTREF__ HalftoneParams *params, __TEXTURE
                             alpha = 1.0f;
                         }
                         else if (edgeDist < aaWidth) {
-                            // エッジ部分 - 密度に応じて最適なカーブを選択
+                            // エッジ部分 - ドットサイズに応じて連続的に変化する曲線を選択
                             const float t = edgeDist / aaWidth;
+
+                            // サイズに応じた連続的なブレンド係数
+                            float blendToSharper = _clampf((radius - 0.2f) * 3.33f, 0.0f, 1.0f);
 
                             if (isUltraSmallCell) {
                                 // 超高密度用 - cosカーブ（非常に滑らか）
@@ -701,13 +714,11 @@ __KERNEL__ void HalftoneKernel(__CONSTANTREF__ HalftoneParams *params, __TEXTURE
                                 // 高密度用 - smoothstep
                                 alpha = 1.0f - (t * t * (3.0f - 2.0f * t));
                             }
-                            else if (radius > 0.3f) {
-                                // 大きめのドット用 - より急峻なカーブ
-                                alpha = 1.0f - (t * t * t);
-                            }
                             else {
-                                // 標準密度用の3次曲線 - 少しシャープ
-                                alpha = 1.0f - (t * t * (1.0f + 0.25f * t));
+                                // 標準〜大きめのドット用のブレンドカーブ
+                                float smoothCurve = 1.0f - (t * t * (3.0f - 2.0f * t));
+                                float sharpCurve = 1.0f - (t * t * t);
+                                alpha = _mix(smoothCurve, sharpCurve, blendToSharper);
                             }
 
                             // 超高密度時はAAをわずかに強化
@@ -768,7 +779,7 @@ __KERNEL__ void HalftoneKernel(__CONSTANTREF__ HalftoneParams *params, __TEXTURE
             const float darknessFactor = 1.0f - bestLuma;
 
             // 大きなドットかどうかチェック
-            const bool isLargeDot = bestRadius > 0.35f;
+            const bool isLargeDot = bestRadius > LARGE_DOT_THRESHOLD;
 
             if (isLargeDot && bestAlpha > 0.8f && darknessFactor > 0.7f) {
                 // 暗くて大きなドットは完全に上書き（ブレンドせず）
