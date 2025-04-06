@@ -90,4 +90,6 @@ function NotifyChanged(inp, param, time)
             print("Invalid value " .. param.Value)
         end
     end
+
+    return true
 end
