@@ -188,7 +188,111 @@ RenderParams = [[
 ]]
 
 -- 単純なドット描画カーネル
+-- 関数分割されたドット描画カーネル
 RenderDotsKernel = [[
+// セル情報を取得する関数
+__DEVICE__ float4 GetCellInfo(
+    __TEXTURE2D__ cell_info1,
+    __TEXTURE2D__ cell_info2,
+    __TEXTURE2D__ cell_info3,
+    __TEXTURE2D__ cell_info4,
+    float cellU,
+    float cellV)
+{
+    // セル情報を取得
+    float4 cellInfo1 = _tex2DVecN(cell_info1, cellU, cellV, 15);
+    float4 cellInfo2 = _tex2DVecN(cell_info2, cellU, cellV, 15);
+    float4 cellInfo3 = _tex2DVecN(cell_info3, cellU, cellV, 15);
+    float4 cellInfo4 = _tex2DVecN(cell_info4, cellU, cellV, 15);
+
+    // 必要な情報を構造体にまとめて返却
+    float4 result;
+    result.x = cellInfo2.z > 0.5f;    // 有効フラグ
+    result.y = cellInfo2.x;           // セル輝度値
+    result.z = cellInfo4.y;           // 実効ドット半径
+    result.w = cellInfo3.w;           // アルファ値
+
+    return result;
+}
+
+// ドットの色を取得する関数
+__DEVICE__ float4 GetDotColor(
+    __CONSTANTREF__ RenderParams *params,
+    __TEXTURE2D__ cell_info3,
+    float cellU,
+    float cellV)
+{
+    if (params->useOriginalColor > 0) {
+        // オリジナルカラーモード
+        return _tex2DVecN(cell_info3, cellU, cellV, 15);
+    } else {
+        // 単色モード
+        return to_float4(
+            params->dotColor[0],
+            params->dotColor[1],
+            params->dotColor[2],
+            params->dotColor[3]
+        );
+    }
+}
+
+// ピクセルがドット内にあるかチェックする関数
+__DEVICE__ bool IsPointInDot(
+    float2 pixelPos,
+    float2 cellCenter,
+    float cellPixelRadius)
+{
+    // ピクセルからセル中心までの距離
+    float distToCenter = length(pixelPos - cellCenter);
+
+    // ピクセルがドット内にあるかチェック
+    return (distToCenter <= cellPixelRadius);
+}
+
+// ドットを描画するべきかどうかを判断し、最適なドットを選択する関数
+__DEVICE__ void CheckAndUpdateBestDot(
+    float2 pixelPos,
+    float2 cellCenter,
+    float cellPixelRadius,
+    float cellLuma,
+    float4 dotColor,
+    bool* foundDot,
+    float* bestDistance,
+    float* bestLuma,
+    float4* bestDotColor)
+{
+    // ピクセルからセル中心までの距離
+    const float distToCenter = length(pixelPos - cellCenter);
+
+    // ピクセルがドット内にあり、より優先度の高いドットである場合
+    if (distToCenter <= cellPixelRadius) {
+        // より暗いドット（セル輝度が低い）を優先、または同輝度なら中心に近いドットを優先
+        if (!(*foundDot) || cellLuma < (*bestLuma) ||
+            (cellLuma == (*bestLuma) && distToCenter < (*bestDistance))) {
+
+            *foundDot = true;
+            *bestDistance = distToCenter;
+            *bestLuma = cellLuma;
+            *bestDotColor = dotColor;
+        }
+    }
+}
+
+// セルの中心座標を計算する関数
+__DEVICE__ float2 CalculateCellCenter(
+    int cellIndexX,
+    float cellPitchX,
+    float rowOffsetX,
+    int rowIndex,
+    float rowSpacing,
+    float cellPitchY)
+{
+    float cellCenterX = (cellIndexX * cellPitchX) + rowOffsetX + (cellPitchX * 0.5f);
+    float cellCenterY = (rowIndex * rowSpacing) + (cellPitchY * 0.5f);
+
+    return to_float2(cellCenterX, cellCenterY);
+}
+
 __KERNEL__ void RenderDotsKernel(
     __CONSTANTREF__ RenderParams *params,
     __TEXTURE2D__ cell_info1,
@@ -206,8 +310,15 @@ __KERNEL__ void RenderDotsKernel(
     // 現在のピクセル位置
     const float2 pixelPos = to_float2(x, y);
 
+    // セルの間隔と行間隔
+    const float cellPitchX = params->cellPitch[0];
+    const float rowSpacing = params->rowSpacing;
+
+    // ピクセル座標からセルの行インデックスを計算
+    const int baseRowIndex = (int)(y / rowSpacing);
+
     // 紙の色を設定（デフォルトは背景色）
-    float4 paperColor = to_float4(
+    const float4 paperColor = to_float4(
         params->paperColor[0],
         params->paperColor[1],
         params->paperColor[2],
@@ -216,18 +327,11 @@ __KERNEL__ void RenderDotsKernel(
 
     float4 result = paperColor;  // デフォルトで紙の色
 
-    // セルの間隔と行間隔
-    const float cellPitchX = params->cellPitch[0];
-    const float rowSpacing = params->rowSpacing;
-
     // 周辺セル探索のための変数
-    float bestDistance = 1e10f;  // 最小距離
-    float bestLuma = 1.0f;       // 最小輝度値
-    bool foundDot = false;       // ドットが見つかったか
-    float4 bestDotColor = paperColor;  // 最適なドットの色
-
-    // ピクセル座標からセルの行インデックスを計算
-    const int baseRowIndex = (int)(y / rowSpacing);
+    float bestDistance = 1e10f;
+    float bestLuma = 1.0f;
+    bool foundDot = false;
+    float4 bestDotColor = paperColor;
 
     // 周辺行を探索（現在の行と上下1行ずつ）
     for (int rowCheck = -1; rowCheck <= 1; rowCheck++) {
@@ -255,64 +359,45 @@ __KERNEL__ void RenderDotsKernel(
             if (cellIndexX < 0 || cellIndexX >= params->cellGridSize[0])
                 continue;
 
-            // セルの中心座標を計算（CellInfoKernelと一致するように修正）
-            const float cellCenterX = (cellIndexX * cellPitchX) + rowOffsetX + (cellPitchX * 0.5f);
-            const float cellCenterY = (rowIndex * rowSpacing) + (params->cellPitch[1] * 0.5f);
+            // セルの中心座標を計算（関数を使用）
+            const float2 cellCenter = CalculateCellCenter(
+                cellIndexX,
+                cellPitchX,
+                rowOffsetX,
+                rowIndex,
+                rowSpacing,
+                params->cellPitch[1]
+            );
 
             // セルグリッドでのUV座標を計算
             const float cellU = (float)cellIndexX / (float)params->cellGridSize[0];
             const float cellV = (float)rowIndex / (float)params->cellGridSize[1];
 
-            // セル情報を取得
-            float4 cellInfo1 = _tex2DVecN(cell_info1, cellU, cellV, 15);
-            float4 cellInfo2 = _tex2DVecN(cell_info2, cellU, cellV, 15);
-            float4 cellInfo3 = _tex2DVecN(cell_info3, cellU, cellV, 15);
-            float4 cellInfo4 = _tex2DVecN(cell_info4, cellU, cellV, 15);
-
-            // セルの有効フラグを確認
-            bool isActive = cellInfo2.z > 0.5f;
+            // セル情報を取得（関数を使用）
+            float4 cellInfo = GetCellInfo(cell_info1, cell_info2, cell_info3, cell_info4, cellU, cellV);
+            bool isActive = cellInfo.x > 0.5f;
+            float cellLuma = cellInfo.y;
+            float effectiveRadius = cellInfo.z;
 
             if (isActive) {
-                // セル中心座標
-                const float2 cellCenter = to_float2(cellCenterX, cellCenterY);
-
-                // ピクセルからセル中心までの距離
-                const float distToCenter = length(pixelPos - cellCenter);
-
-                // ドットの実効半径（ゲイン適用後）を取得
-                const float effectiveRadius = cellInfo4.y;
-
                 // セル半径をピクセル単位に変換
                 const float cellPixelRadius = cellPitchX * 0.5f * (effectiveRadius / params->maxCellRadius);
 
-                // ピクセルがドット内にあるかチェック
-                if (distToCenter <= cellPixelRadius) {
-                    // セルの輝度値を取得
-                    const float cellLuma = cellInfo2.x;
+                // ドットの色を取得（関数を使用）
+                float4 dotColor = GetDotColor(params, cell_info3, cellU, cellV);
 
-                    // より暗いドット（セル輝度が低い）を優先、または同輝度なら中心に近いドットを優先
-                    if (!foundDot || cellLuma < bestLuma ||
-                        (cellLuma == bestLuma && distToCenter < bestDistance)) {
-
-                        foundDot = true;
-                        bestDistance = distToCenter;
-                        bestLuma = cellLuma;
-
-                        // ドットの色を決定
-                        if (params->useOriginalColor > 0) {
-                            // オリジナルカラーモード
-                            bestDotColor = cellInfo3;
-                        } else {
-                            // 単色モード
-                            bestDotColor = to_float4(
-                                params->dotColor[0],
-                                params->dotColor[1],
-                                params->dotColor[2],
-                                params->dotColor[3]
-                            );
-                        }
-                    }
-                }
+                // ドット判定と最適なドット選択（関数を使用）
+                CheckAndUpdateBestDot(
+                    pixelPos,
+                    cellCenter,
+                    cellPixelRadius,
+                    cellLuma,
+                    dotColor,
+                    &foundDot,
+                    &bestDistance,
+                    &bestLuma,
+                    &bestDotColor
+                );
             }
         }
     }
