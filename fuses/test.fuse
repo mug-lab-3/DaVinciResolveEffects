@@ -5,67 +5,65 @@ Mug Halftone
 --******************************************************************************************************
 FuRegisterClass("MugHalftone2", CT_Tool, {
     REGS_Category          = "Fuses\\Mug",
-    REGS_OpIconString      = "MHT2",
-    REGS_OpDescription     = "Mug Halftone2",
+    REGS_OpIconString      = "MSH",
+    REGS_OpDescription     = "Mug Simple Halftone",
     REGS_HelpTopic         = "https://x.com/MugLab3",
     REGS_URL               = "https://www.youtube.com/@MugLabVideoEditing",
-    REGS_IconID            = "Icons.Tools.Icons.Halftone2",
+    REGS_IconID            = "Icons.Tools.Icons.SimpleHalftone",
     REG_Source_GlobalCtrls = true,
     REG_Source_SizeCtrls   = true,
-    REG_Version            = 1.21,
+    REG_Version            = 1.00,
 })
 
 -- セル情報計算用パラメータ構造体
 CellInfoParams = [[
-  int srcSize[2];        // ソース画像のサイズ
-  int dstSize[2];        // 出力サイズ(cell数)
-  float contrast;        // コントラスト調整
-  float screenDensity;   // スクリーンの密度
-  float dotGain;         // ドットゲイン効果
+  int srcSize[2];         // ソース画像のサイズ // TEX_NORMALIZED_COORDS_FALSE
+  int dstSize[2];         // 出力サイズ(cell数)
+  int cellPitch[2];       // セルの間隔
+  float contrast;         // コントラスト調整
+  float dotGain;          // ドットゲイン効果
   float brightnessCutoff; // 明るさの閾値
-  float minDotRadius;    // 最小ドット半径
-  int useOriginalColor;  // 元の色を使用するかどうか
-  float cellPitch[2];    // セルの間隔
-  float rowSpacing;      // 行間隔
-  float zigzagFactor;    // 行オフセットファクター
-  float maxCellRadius;   // 最大セル半径
+  float minDotRadius;     // 最小ドット半径
+  int useOriginalColor;   // 元の色を使用するかどうか
+  float maxCellRadius;    // 最大セル半径
 ]]
 
 -- セル情報計算カーネル
 -- 中間バッファのフォーマット:
 -- float4 cellInfo1:
---   x: セルIDX - グリッド座標系でのX位置 (整数値)
---   y: セルIDY - グリッド座標系でのY位置 (整数値)
---   z: cellCenterX テクスチャ座標系 (0.0-1.0) - ピクセル座標のX位置を正規化
---   w: cellCenterY テクスチャ座標系 (0.0-1.0) - ピクセル座標のY位置を正規化
+--   x: セルIDX - グリッド座標系でのX位置 (整数値: 0 - dstSize[0]-1)
+--   y: セルIDY - グリッド座標系でのY位置 (整数値: 0 - dstSize[1]-1)
+--   z: セル中心位置X - ピクセル座標系でのX位置 (整数値: 0 - srcSize[0]-1)
+--   w: セル中心位置Y - ピクセル座標系でのY位置 (整数値: 0 - srcSize[1]-1)
 --
 -- float4 cellInfo2:
---   x: セル輝度値 (0.0-1.0) - セル中心のピクセルの輝度
---   y: 行オフセットフラグ (0.0=偶数行, 1.0=奇数行) - セルの行タイプ
---   z: 有効フラグ (0.0=無効, 1.0=有効) - このセルが描画すべきドットを持つか
---   w: 予約済み (常に1.0) - 将来拡張用
+--   x: セル輝度値 (0.0-1.0)
+--   y: ドット半径 - 半径ドット数 (整数値: 0 - maxCellRadius)
+--   z: 行オフセットフラグ - このセルの行はオフセットするか (整数値: 0=通常行, 1=オフセット行)
+--   w: 予約済み - 将来拡張用 (常に1.0)
 --
 -- float4 cellInfo3:
---   x: 元の色R成分 - オリジナルカラーモード用
---   y: 元の色G成分 - オリジナルカラーモード用
---   z: 元の色B成分 - オリジナルカラーモード用
---   w: 元の色Aチャンネル - 透明度
+--   x: 元の色R成分 - オリジナルカラーモード用 (0.0 - 1.0)
+--   y: 元の色G成分 - オリジナルカラーモード用 (0.0 - 1.0)
+--   z: 元の色B成分 - オリジナルカラーモード用 (0.0 - 1.0)
+--   w: 元の色Aチャンネル - 透明度 (0.0 - 1.0)
 --
--- float4 cellInfo4:
---   x: 元のドット半径 (ゲイン適用前) - 基本ドットサイズ
---   y: 実効ドット半径 (ゲイン適用後) - レンダリングに使うサイズ
---   z: 最小半径による切り捨て前のサイズ - 分析用
---   w: 予約済み (常に1.0) - 将来拡張用
 --
 -- ※レンダリングカーネルでは、各ピクセルが属するセルとその周辺セルの情報を参照して描画
 CellInfoKernel = [[
+// 定数定義
+#define LUMA_R 0.3f
+#define LUMA_G 0.59f
+#define LUMA_B 0.11f
+#define SAMPLING_STEP_THRESHOLD 12  // この値以上の半径でステップを増やす
+#define SAMPLING_STEP_LARGE 2       // 大きな半径での間引き率
+
 __KERNEL__ void CellInfoKernel(
     __CONSTANTREF__ CellInfoParams *params,
     __TEXTURE2D__ src,
     __TEXTURE2D_WRITE__ dst_info1,
     __TEXTURE2D_WRITE__ dst_info2,
-    __TEXTURE2D_WRITE__ dst_info3,
-    __TEXTURE2D_WRITE__ dst_info4)
+    __TEXTURE2D_WRITE__ dst_info3)
 {
     DEFINE_KERNEL_ITERATORS_XY(x, y);
 
@@ -73,224 +71,305 @@ __KERNEL__ void CellInfoKernel(
     if (x >= params->dstSize[0] || y >= params->dstSize[1])
         return;
 
-    // 定数の事前計算
-    const float2 srcSize = to_float2(params->srcSize[0], params->srcSize[1]);
-    const float2 dstSize = to_float2(params->dstSize[0], params->dstSize[1]);
-    const float2 sizeRatio = srcSize / dstSize;
-    const float contrast = (float)params->contrast;
-
-    const float MAX_CELL_RADIUS = params->maxCellRadius;
+    // セルの間隔と行間隔をベクトルとして定義
     const float2 cellPitch = to_float2(params->cellPitch[0], params->cellPitch[1]);
-    const float rowSpacing = params->rowSpacing;
-    const float zigzagFactor = params->zigzagFactor;
+    const float halfPitchX = cellPitch.x * 0.5f;
 
-    // セルのグリッド座標
-    const int cellIdX = x;
-    const int cellIdY = y;
+    // 行オフセットの計算（奇数行は横にオフセット）
+    const bool isOddRow = ((y & 1) != 0);  // yが奇数かどうか
+    const float rowOffset = isOddRow ? -halfPitchX : 0.0f;
 
-    // セルタイプの判定（奇数行か偶数行か）
-    const bool isCurrentRowOffset = ((cellIdY & 1) != 0);
-    const float rowOffsetX = isCurrentRowOffset ? cellPitch.x * zigzagFactor : 0.0f;
+    // セルの中心位置をピクセル座標で計算
+    const float cellCenterX = (x * cellPitch.x) + halfPitchX + rowOffset;
+    const float cellCenterY = (y * cellPitch.y) + cellPitch.y * 0.5f;
+    const float2 cellCenter = to_float2(cellCenterX, cellCenterY);
 
-    // セルの実座標を計算（ピクセル座標系）
-    const float cellCenterX = (cellIdX * cellPitch.x) + rowOffsetX + cellPitch.x * 0.5f;
-    const float cellCenterY = cellIdY * rowSpacing + cellPitch.y * 0.5f;
-
-    // セル中心のUV座標を計算（テクスチャ座標系）
-    const float2 centerUv = to_float2(
-        cellCenterX / srcSize.x,
-        cellCenterY / srcSize.y
+    // dst_info1: セル位置情報を格納
+    float4 cellInfo1 = to_float4(
+        (float)x,             // セルIDX
+        (float)y,             // セルIDY
+        cellCenterX,          // セル中心X位置（ピクセル座標）
+        cellCenterY           // セル中心Y位置（ピクセル座標）
     );
 
-    // セル中心のピクセル色を取得
-    float4 cellColor = _tex2DVecN(src, centerUv.x, centerUv.y, 15);
+    // セルの周辺範囲を定義して平均輝度を計算
+    const int samplingRadius = (int)(halfPitchX);
+    const float radiusSquared = (float)(samplingRadius * samplingRadius);
 
-    // 輝度計算
-    float rawLuma = cellColor.x * 0.3f + cellColor.y * 0.59f + cellColor.z * 0.11f;
-
-    // コントラスト調整
-    float cellLuma = _clampf(
-        ((rawLuma - 0.5f) * contrast) + 0.5f,
-        0.0f,
-        1.0f
-    );
-
-    // 最小半径による切り捨て前のサイズを保存
-    float originalRadius = MAX_CELL_RADIUS * (1.0f - cellLuma);
-
-    // ドット半径計算
-    float radius = originalRadius;
-
-    // 最小半径に切り上げ
-    radius = _fmaxf(radius, 0.01f);
-
-    // 暗部強調（オプション）
-    if (cellLuma < 0.3f) {
-        radius += (0.3f - cellLuma) * 0.15f;
+    // サンプリングステップの動的調整
+    int sampleStep = 1;
+    if (samplingRadius > SAMPLING_STEP_THRESHOLD) {
+        sampleStep = SAMPLING_STEP_LARGE;
     }
 
+    float totalLuma = 0.0f;
+    int sampleCount = 0;
+    float4 avgColor = to_float4(0.0f, 0.0f, 0.0f, 0.0f);
+
+    // ループ範囲の計算（境界チェック）
+    const int minX = _fmaxf(0, (int)(cellCenterX - samplingRadius));
+    const int maxX = _fminf(params->srcSize[0] - 1, (int)(cellCenterX + samplingRadius));
+    const int minY = _fmaxf(0, (int)(cellCenterY - samplingRadius));
+    const int maxY = _fminf(params->srcSize[1] - 1, (int)(cellCenterY + samplingRadius));
+
+    // セル範囲内のピクセルをサンプリング - 円形サンプリング（サンプリングステップあり）
+    for (int pixelY = minY; pixelY <= maxY; pixelY += sampleStep) {
+        const float dy = pixelY - cellCenterY;
+        const float dySquared = dy * dy;
+
+        for (int pixelX = minX; pixelX <= maxX; pixelX += sampleStep) {
+            const float dx = pixelX - cellCenterX;
+
+            // 円形範囲内のみをサンプリング
+            if (dx*dx + dySquared <= radiusSquared) {
+                // ピクセル値を取得
+                const float4 color = _tex2DVecN(src, pixelX, pixelY, 15);
+
+                // 輝度計算
+                const float luma = color.x * LUMA_R + color.y * LUMA_G + color.z * LUMA_B;
+
+                // サンプリングステップの補正
+                float sampleWeight = (float)(sampleStep * sampleStep);
+                totalLuma += luma * sampleWeight;
+                sampleCount += sampleStep * sampleStep;
+                avgColor.x += color.x * sampleWeight;
+                avgColor.y += color.y * sampleWeight;
+                avgColor.z += color.z * sampleWeight;
+                avgColor.w += color.w * sampleWeight;
+            }
+        }
+    }
+
+    // サンプル数が0の場合の高速パス
+    if (sampleCount == 0) {
+        _tex2DVec4Write(dst_info1, x, y, cellInfo1);
+        _tex2DVec4Write(dst_info2, x, y, to_float4(0.5f, 0.0f, (float)isOddRow, 1.0f));
+        _tex2DVec4Write(dst_info3, x, y, to_float4(0.0f, 0.0f, 0.0f, 1.0f));
+        return;
+    }
+
+    // 平均輝度と色の計算
+    const float invSampleCount = 1.0f / (float)sampleCount;
+    float avgLuma = totalLuma * invSampleCount;
+    avgColor *= invSampleCount;
+
+    // コントラスト調整
+    avgLuma = 0.5f + (avgLuma - 0.5f) * params->contrast;
+    avgLuma = _saturatef(avgLuma);  // 0.0-1.0に制限
+
+    // 輝度を反転（暗い部分ほど大きなドットに）
+    float inverseLuma = 1.0f - avgLuma;
+
     // ドットゲイン適用
-    float effectiveRadius = radius * (1.0f + params->dotGain);
-    effectiveRadius = _clampf(effectiveRadius, 0.0f, MAX_CELL_RADIUS * 1.2f);
+    inverseLuma = _saturatef(inverseLuma + params->dotGain);
 
-    // 有効フラグの計算
-    // 明るさ閾値または最小半径以下のドットは無効
-    const bool isActive = (cellLuma <= params->brightnessCutoff) && (radius >= params->minDotRadius);
+    // 明るさのカットオフと最小ドット半径を一括処理
+    float dotRadius = 0.0f;
+    if (avgLuma <= params->brightnessCutoff && inverseLuma >= params->minDotRadius) {
+        dotRadius = inverseLuma * params->maxCellRadius;
+    }
 
-    // セル情報を中間バッファに書き込む
-    float4 cellInfo1 = to_float4(
-        (float)cellIdX,           // グリッド座標X (整数)
-        (float)cellIdY,           // グリッド座標Y (整数)
-        centerUv.x,               // 中心UV座標X (0.0-1.0)
-        centerUv.y                // 中心UV座標Y (0.0-1.0)
-    );
-
+    // dst_info2: ドット情報を格納
     float4 cellInfo2 = to_float4(
-        cellLuma,                 // セル輝度値 (0.0-1.0)
-        isCurrentRowOffset ? 1.0f : 0.0f,  // 行オフセットフラグ (0=偶数行, 1=奇数行)
-        isActive ? 1.0f : 0.0f,   // 有効フラグ (0=無効, 1=有効)
-        1.0f                      // 予約領域 (常に1.0)
+        avgLuma,              // セル輝度値
+        dotRadius,            // ドット半径
+        (float)isOddRow,      // 行オフセットフラグ
+        1.0f                  // 予約済み (常に1.0)
     );
 
-    float4 cellInfo3 = to_float4(
-        cellColor.x,              // 元の色R成分
-        cellColor.y,              // 元の色G成分
-        cellColor.z,              // 元の色B成分
-        cellColor.w               // 元の色Aチャンネル（透明度）
-    );
+    // dst_info3: 元の色情報を格納
+    float4 cellInfo3 = avgColor;
 
-    float4 cellInfo4 = to_float4(
-        radius,                   // 元のドット半径 (ゲイン適用前)
-        effectiveRadius,          // 実効ドット半径 (ゲイン適用後)
-        originalRadius,           // 最小半径による切り捨て前のサイズ
-        1.0f                      // 予約済み - 将来拡張用
-    );
-
+    // 結果を書き込み
     _tex2DVec4Write(dst_info1, x, y, cellInfo1);
     _tex2DVec4Write(dst_info2, x, y, cellInfo2);
     _tex2DVec4Write(dst_info3, x, y, cellInfo3);
-    _tex2DVec4Write(dst_info4, x, y, cellInfo4);
 }
 ]]
 
 -- レンダリングパラメータ構造体
 RenderParams = [[
   int srcSize[2];         // 入力画像のサイズ
-  int cellGridSize[2];    // セルグリッドのサイズ [width, height]
+  int cellGridNum[2];    // セルグリッド数 [X, Y]
   float paperColor[4];    // 紙の色（背景色）[R,G,B,A]
   float dotColor[4];      // ドットの色（前景色）[R,G,B,A]
   int useOriginalColor;   // 元の色を使用するかどうか
-  float screenDensity;    // スクリーンの密度
   float cellPitch[2];     // セルの間隔
-  float rowSpacing;       // 行間隔
-  float zigzagFactor;     // 行オフセットファクター
-  float maxCellRadius;    // 最大セル半径
 ]]
 
--- 単純なドット描画カーネル
--- 関数分割されたドット描画カーネル
 RenderDotsKernel = [[
-// セル情報を取得する関数
-__DEVICE__ float4 GetCellInfo(
+// 定数定義
+#define DOT_RADIUS_THRESHOLD 0.1f
+#define BOUNDING_BOX_MARGIN 1.0f
+#define HIGH_DENSITY_THRESHOLD 100.0f  // この値以上の密度は高密度と判断
+#define MIN_CHECK_RADIUS 1.5f  // 最小チェック半径
+
+// セルのドットチェック
+__DEVICE__ bool checkCellDot(
+    const float2 cellPos,
+    const float2 pixelPos,
+    const float2 cellGridNum,
     __TEXTURE2D__ cell_info1,
     __TEXTURE2D__ cell_info2,
     __TEXTURE2D__ cell_info3,
-    __TEXTURE2D__ cell_info4,
-    float cellU,
-    float cellV)
+    const float4 dotColor,
+    const int useOriginalColor,
+    float4 *outputColor)
 {
-    // セル情報を取得
-    float4 cellInfo1 = _tex2DVecN(cell_info1, cellU, cellV, 15);
-    float4 cellInfo2 = _tex2DVecN(cell_info2, cellU, cellV, 15);
-    float4 cellInfo3 = _tex2DVecN(cell_info3, cellU, cellV, 15);
-    float4 cellInfo4 = _tex2DVecN(cell_info4, cellU, cellV, 15);
+    // セルグリッド範囲内かチェック
+    if (cellPos.x >= 0.0f && cellPos.x < cellGridNum.x &&
+        cellPos.y >= 0.0f && cellPos.y < cellGridNum.y) {
 
-    // 必要な情報を構造体にまとめて返却
-    float4 result;
-    result.x = cellInfo2.z > 0.5f;    // 有効フラグ
-    result.y = cellInfo2.x;           // セル輝度値
-    result.z = cellInfo4.y;           // 実効ドット半径
-    result.w = cellInfo3.w;           // アルファ値
+        // セルのテクスチャ座標を計算
+        const float2 cellUV = (cellPos + to_float2(0.5f, 0.5f)) / cellGridNum;
 
-    return result;
-}
+        // まずドット半径を取得（高速チェック用）
+        const float4 cellInfo2Data = _tex2DVecN(cell_info2, cellUV.x, cellUV.y, 15);
+        const float dotRadius = cellInfo2Data.y;
 
-// ドットの色を取得する関数
-__DEVICE__ float4 GetDotColor(
-    __CONSTANTREF__ RenderParams *params,
-    __TEXTURE2D__ cell_info3,
-    float cellU,
-    float cellV)
-{
-    if (params->useOriginalColor > 0) {
-        // オリジナルカラーモード
-        return _tex2DVecN(cell_info3, cellU, cellV, 15);
-    } else {
-        // 単色モード
-        return to_float4(
-            params->dotColor[0],
-            params->dotColor[1],
-            params->dotColor[2],
-            params->dotColor[3]
-        );
-    }
-}
+        // ドット半径が有効かつある程度大きい場合のみ計算
+        if (dotRadius > DOT_RADIUS_THRESHOLD) {
+            // セルの中心座標を取得
+            const float4 cellInfo1Data = _tex2DVecN(cell_info1, cellUV.x, cellUV.y, 15);
+            const float2 cellCenter = to_float2(cellInfo1Data.z, cellInfo1Data.w);
 
-// ピクセルがドット内にあるかチェックする関数
-__DEVICE__ bool IsPointInDot(
-    float2 pixelPos,
-    float2 cellCenter,
-    float cellPixelRadius)
-{
-    // ピクセルからセル中心までの距離
-    float distToCenter = length(pixelPos - cellCenter);
+            // バウンディングボックスチェック（高速な事前判定）
+            const float bbSize = dotRadius + BOUNDING_BOX_MARGIN;
+            if (fabs(pixelPos.x - cellCenter.x) > bbSize || fabs(pixelPos.y - cellCenter.y) > bbSize) {
+                return false; // バウンディングボックス外ならすぐに失敗判定
+            }
 
-    // ピクセルがドット内にあるかチェック
-    return (distToCenter <= cellPixelRadius);
-}
+            // より正確な円形の距離計算（バウンディングボックスを通過した場合のみ実行）
+            const float2 diff = pixelPos - cellCenter;
+            const float distSq = diff.x * diff.x + diff.y * diff.y;
 
-// ドットを描画するべきかどうかを判断し、最適なドットを選択する関数
-__DEVICE__ void CheckAndUpdateBestDot(
-    float2 pixelPos,
-    float2 cellCenter,
-    float cellPixelRadius,
-    float cellLuma,
-    float4 dotColor,
-    bool* foundDot,
-    float* bestDistance,
-    float* bestLuma,
-    float4* bestDotColor)
-{
-    // ピクセルからセル中心までの距離
-    const float distToCenter = length(pixelPos - cellCenter);
-
-    // ピクセルがドット内にあり、より優先度の高いドットである場合
-    if (distToCenter <= cellPixelRadius) {
-        // より暗いドット（セル輝度が低い）を優先、または同輝度なら中心に近いドットを優先
-        if (!(*foundDot) || cellLuma < (*bestLuma) ||
-            (cellLuma == (*bestLuma) && distToCenter < (*bestDistance))) {
-
-            *foundDot = true;
-            *bestDistance = distToCenter;
-            *bestLuma = cellLuma;
-            *bestDotColor = dotColor;
+            // ドット内に入っているかチェック
+            if (distSq <= dotRadius * dotRadius) {
+                // オリジナルカラーモードかチェック
+                if (useOriginalColor > 0) {
+                    // 元の色を使用
+                    *outputColor = _tex2DVecN(cell_info3, cellUV.x, cellUV.y, 15);
+                } else {
+                    // 指定されたドット色を使用
+                    *outputColor = dotColor;
+                }
+                return true; // ドット内に入っている
+            }
         }
     }
+    return false; // ドット内に入っていない
 }
 
-// セルの中心座標を計算する関数
-__DEVICE__ float2 CalculateCellCenter(
-    int cellIndexX,
-    float cellPitchX,
-    float rowOffsetX,
-    int rowIndex,
-    float rowSpacing,
-    float cellPitchY)
+// 隣接セルのオフセット定義
+__DEVICE__ void getNeighborOffsets(const bool isOddRow, float2 neighborOffsets[6])
 {
-    float cellCenterX = (cellIndexX * cellPitchX) + rowOffsetX + (cellPitchX * 0.5f);
-    float cellCenterY = (rowIndex * rowSpacing) + (cellPitchY * 0.5f);
+    if (isOddRow) {
+        // 奇数行の隣接6セル
+        neighborOffsets[0] = to_float2(-1.0f, -1.0f); // 上左
+        neighborOffsets[1] = to_float2( 0.0f, -1.0f); // 上右
+        neighborOffsets[2] = to_float2( 1.0f,  0.0f); // 右
+        neighborOffsets[3] = to_float2( 0.0f,  1.0f); // 下右
+        neighborOffsets[4] = to_float2(-1.0f,  1.0f); // 下左
+        neighborOffsets[5] = to_float2(-1.0f,  0.0f); // 左
+    } else {
+        // 偶数行の隣接6セル
+        neighborOffsets[0] = to_float2( 0.0f, -1.0f); // 上左
+        neighborOffsets[1] = to_float2( 1.0f, -1.0f); // 上右
+        neighborOffsets[2] = to_float2( 1.0f,  0.0f); // 右
+        neighborOffsets[3] = to_float2( 1.0f,  1.0f); // 下右
+        neighborOffsets[4] = to_float2( 0.0f,  1.0f); // 下左
+        neighborOffsets[5] = to_float2(-1.0f,  0.0f); // 左
+    }
+}
 
-    return to_float2(cellCenterX, cellCenterY);
+// 高密度モード用の処理関数
+__DEVICE__ bool processHighDensityCells(
+    const float2 mainCellPos,
+    const float2 pixelPos,
+    const float2 relPos,
+    const float2 cellPitch,
+    const bool isOddRow,
+    const float2 cellGridNum,
+    __TEXTURE2D__ cell_info1,
+    __TEXTURE2D__ cell_info2,
+    __TEXTURE2D__ cell_info3,
+    const float4 dotColor,
+    const int useOriginalColor,
+    float4 *outputColor)
+{
+    // 隣接するセルのオフセット定義
+    float2 neighborOffsets[6];
+    getNeighborOffsets(isOddRow, neighborOffsets);
+
+    // 最も近い隣接セルのみをチェック（最大2個）
+    int checkIndices[2] = {-1, -1};
+    int checkCount = 0;
+
+    // X軸の相対位置で左右のセルを判断
+    if (fabs(relPos.x) > cellPitch.x * 0.25f) {
+        if (relPos.x > 0) {
+            checkIndices[checkCount++] = 2; // 右
+        } else {
+            checkIndices[checkCount++] = 5; // 左
+        }
+    }
+
+    // Y軸の相対位置で上下のセルを判断
+    if (fabs(relPos.y) > cellPitch.y * 0.25f) {
+        if (relPos.y > 0) {
+            checkIndices[checkCount++] = isOddRow ? 3 : 4; // 下方向
+        } else {
+            checkIndices[checkCount++] = isOddRow ? 0 : 1; // 上方向
+        }
+
+        // 制限: 最大2セルまでしかチェックしない
+        if (checkCount > 2) checkCount = 2;
+    }
+
+    // 選択した隣接セルのみをチェック
+    for (int i = 0; i < checkCount; i++) {
+        if (checkIndices[i] < 0) continue;
+
+        const int index = checkIndices[i];
+        const float2 cellPos = mainCellPos + neighborOffsets[index];
+
+        if (checkCellDot(cellPos, pixelPos, cellGridNum, cell_info1, cell_info2, cell_info3,
+                         dotColor, useOriginalColor, outputColor)) {
+            return true; // ドットが見つかった
+        }
+    }
+
+    return false; // どのドットにも該当しなかった
+}
+
+// 通常密度モード用の処理関数
+__DEVICE__ bool processNormalDensityCells(
+    const float2 mainCellPos,
+    const bool isOddRow,
+    const float2 pixelPos,
+    const float2 cellGridNum,
+    __TEXTURE2D__ cell_info1,
+    __TEXTURE2D__ cell_info2,
+    __TEXTURE2D__ cell_info3,
+    const float4 dotColor,
+    const int useOriginalColor,
+    float4 *outputColor)
+{
+    // 隣接するセルのオフセット定義
+    float2 neighborOffsets[6];
+    getNeighborOffsets(isOddRow, neighborOffsets);
+
+    // 全隣接セルをチェック
+    for (int i = 0; i < 6; i++) {
+        const float2 cellPos = mainCellPos + neighborOffsets[i];
+
+        if (checkCellDot(cellPos, pixelPos, cellGridNum, cell_info1, cell_info2, cell_info3,
+                         dotColor, useOriginalColor, outputColor)) {
+            return true; // ドットが見つかった
+        }
+    }
+
+    return false; // どのドットにも該当しなかった
 }
 
 __KERNEL__ void RenderDotsKernel(
@@ -298,7 +377,6 @@ __KERNEL__ void RenderDotsKernel(
     __TEXTURE2D__ cell_info1,
     __TEXTURE2D__ cell_info2,
     __TEXTURE2D__ cell_info3,
-    __TEXTURE2D__ cell_info4,
     __TEXTURE2D_WRITE__ dst)
 {
     DEFINE_KERNEL_ITERATORS_XY(x, y);
@@ -307,17 +385,7 @@ __KERNEL__ void RenderDotsKernel(
     if (x >= params->srcSize[0] || y >= params->srcSize[1])
         return;
 
-    // 現在のピクセル位置
-    const float2 pixelPos = to_float2(x, y);
-
-    // セルの間隔と行間隔
-    const float cellPitchX = params->cellPitch[0];
-    const float rowSpacing = params->rowSpacing;
-
-    // ピクセル座標からセルの行インデックスを計算
-    const int baseRowIndex = (int)(y / rowSpacing);
-
-    // 紙の色を設定（デフォルトは背景色）
+    // 背景色（紙の色）をデフォルトに設定
     const float4 paperColor = to_float4(
         params->paperColor[0],
         params->paperColor[1],
@@ -325,109 +393,96 @@ __KERNEL__ void RenderDotsKernel(
         params->paperColor[3]
     );
 
-    float4 result = paperColor;  // デフォルトで紙の色
+    // ドットの色をベクトル型で事前に準備
+    const float4 dotColor = to_float4(
+        params->dotColor[0],
+        params->dotColor[1],
+        params->dotColor[2],
+        params->dotColor[3]
+    );
 
-    // 周辺セル探索のための変数
-    float bestDistance = 1e10f;
-    float bestLuma = 1.0f;
+    float4 outputColor = paperColor;
+
+    // 現在のピクセル位置をベクトルとして定義
+    const float2 pixelPos = to_float2((float)x, (float)y);
+
+    // セルの間隔
+    const float2 cellPitch = to_float2(params->cellPitch[0], params->cellPitch[1]);
+
+    // 高密度チェック - セルが小さいかどうかを判断
+    const float avgCellSize = (cellPitch.x + cellPitch.y) * 0.5f;
+    const bool isHighDensity = avgCellSize < MIN_CHECK_RADIUS;
+
+    // このピクセルが属する行の情報
+    const int baseRowY = (int)(y / cellPitch.y);
+    const bool isOddRow = ((baseRowY & 1) != 0);
+
+    // メインセル（このピクセルが最も近いセル）の計算
+    float adjustedX = pixelPos.x;
+    if (isOddRow) {
+        adjustedX += cellPitch.x * 0.5f; // オフセット行の調整
+    }
+    const int mainCellX = (int)_floorf(adjustedX / cellPitch.x);
+    const int mainCellY = baseRowY;
+
+    // グリッド内のセル位置ベクトル
+    const float2 mainCellPos = to_float2((float)mainCellX, (float)mainCellY);
+    const float2 cellGridNum = to_float2(
+        (float)params->cellGridNum[0],
+        (float)params->cellGridNum[1]
+    );
+
+    // まず中央のセルだけをチェック（最も可能性が高い）
+    if (checkCellDot(mainCellPos, pixelPos, cellGridNum, cell_info1, cell_info2, cell_info3,
+                     dotColor, params->useOriginalColor, &outputColor)) {
+        _tex2DVec4Write(dst, x, y, outputColor);
+        return;
+    }
+
+    // セルの中心位置を計算（相対位置の計算用）
+    const float2 cellCenter = to_float2(
+        mainCellX * cellPitch.x + (isOddRow ? cellPitch.x * 0.5f : 0.0f) + cellPitch.x * 0.5f,
+        mainCellY * cellPitch.y + cellPitch.y * 0.5f
+    );
+
+    // ピクセルのセル内相対位置
+    const float2 relPos = pixelPos - cellCenter;
+
+    // 密度に応じた処理関数を呼び出し
     bool foundDot = false;
-    float4 bestDotColor = paperColor;
 
-    // 周辺行を探索（現在の行と上下1行ずつ）
-    for (int rowCheck = -1; rowCheck <= 1; rowCheck++) {
-        const int rowIndex = baseRowIndex + rowCheck;
-
-        // 範囲チェック
-        if (rowIndex < 0 || rowIndex >= params->cellGridSize[1])
-            continue;
-
-        // 奇数行か偶数行かの判定
-        const bool isOddRow = ((rowIndex & 1) != 0);
-
-        // 行オフセットを適用
-        const float rowOffsetX = isOddRow ? cellPitchX * params->zigzagFactor : 0.0f;
-        const float adjustedX = x - rowOffsetX;
-
-        // この行での基準列インデックスを計算
-        const int baseCellX = (int)((adjustedX) / cellPitchX);
-
-        // 周辺列を探索（現在の列と左右1列ずつ）
-        for (int colOffset = -1; colOffset <= 1; colOffset++) {
-            const int cellIndexX = baseCellX + colOffset;
-
-            // 範囲チェック
-            if (cellIndexX < 0 || cellIndexX >= params->cellGridSize[0])
-                continue;
-
-            // セルの中心座標を計算（関数を使用）
-            const float2 cellCenter = CalculateCellCenter(
-                cellIndexX,
-                cellPitchX,
-                rowOffsetX,
-                rowIndex,
-                rowSpacing,
-                params->cellPitch[1]
-            );
-
-            // セルグリッドでのUV座標を計算
-            const float cellU = (float)cellIndexX / (float)params->cellGridSize[0];
-            const float cellV = (float)rowIndex / (float)params->cellGridSize[1];
-
-            // セル情報を取得（関数を使用）
-            float4 cellInfo = GetCellInfo(cell_info1, cell_info2, cell_info3, cell_info4, cellU, cellV);
-            bool isActive = cellInfo.x > 0.5f;
-            float cellLuma = cellInfo.y;
-            float effectiveRadius = cellInfo.z;
-
-            if (isActive) {
-                // セル半径をピクセル単位に変換
-                const float cellPixelRadius = cellPitchX * 0.5f * (effectiveRadius / params->maxCellRadius);
-
-                // ドットの色を取得（関数を使用）
-                float4 dotColor = GetDotColor(params, cell_info3, cellU, cellV);
-
-                // ドット判定と最適なドット選択（関数を使用）
-                CheckAndUpdateBestDot(
-                    pixelPos,
-                    cellCenter,
-                    cellPixelRadius,
-                    cellLuma,
-                    dotColor,
-                    &foundDot,
-                    &bestDistance,
-                    &bestLuma,
-                    &bestDotColor
-                );
-            }
-        }
+    if (isHighDensity) {
+        // 高密度モード - 最適化された隣接セルチェック
+        foundDot = processHighDensityCells(
+            mainCellPos, pixelPos, relPos, cellPitch, isOddRow, cellGridNum,
+            cell_info1, cell_info2, cell_info3, dotColor, params->useOriginalColor, &outputColor
+        );
+    } else {
+        // 通常密度モード - すべての隣接セルをチェック
+        foundDot = processNormalDensityCells(
+            mainCellPos, isOddRow, pixelPos, cellGridNum,
+            cell_info1, cell_info2, cell_info3, dotColor, params->useOriginalColor, &outputColor
+        );
     }
 
-    // ドットが見つかった場合は、そのドットの色を使用
     if (foundDot) {
-        result = bestDotColor;
+        _tex2DVec4Write(dst, x, y, outputColor);
+        return;
     }
 
-    _tex2DVec4Write(dst, x, y, result);
+    // どのドットにも入っていない場合は背景色を出力
+    _tex2DVec4Write(dst, x, y, outputColor);
 }
 ]]
 
 function Create()
     local groupID = 0
 
-    InUseCMYKMode = self:AddInput("CMYK Mode", "UseCMYKMode", {
-        LINKID_DataType = "Number",
-        INPID_InputControl = "CheckboxControl",
-        INP_Integer = true,
-        INP_Default = 0.0,
-        INP_DoNotifyChanged = true,
-        INPS_StatusText = "Enables CMYK-style halftone separation",
-    })
-
     InScreenDensity = self:AddInput("Screen Density", "ScreenDensity", {
         LINKID_DataType = "Number",
         INPID_InputControl = "SliderControl",
         INP_Default = 50.0,
-        INP_MinAllowed = 0.001,
+        INP_MinAllowed = 1,
         INP_MaxAllowed = 600.0,
         INPID_PreviewControl = "RangeControl",
         INP_Integer = false,
@@ -447,7 +502,7 @@ function Create()
     InDotGain = self:AddInput("Dot Gain", "DotGain", {
         LINKID_DataType = "Number",
         INPID_InputControl = "SliderControl",
-        INP_Default = 0.08,
+        INP_Default = 0.00,
         INP_MinAllowed = -0.5,
         INP_MaxAllowed = 0.5,
         INPS_StatusText = "Simulates ink spread on paper",
@@ -550,59 +605,7 @@ function Create()
     })
     self:EndControlNest()
 
-    self:BeginControlNest("Anti-aliasing", "AntiAliasing", true);
-    InAAStrength = self:AddInput("AA Strength", "AAStrength", {
-        LINKID_DataType = "Number",
-        INPID_InputControl = "SliderControl",
-        INP_Default = 0.0,
-        INP_MinAllowed = 0.0,
-        INP_MaxAllowed = 5.0,
-        INPS_StatusText = "Controls the strength of anti-aliasing on dot edges",
-    })
-
-    InUseSubSamplingAA = self:AddInput("Use Subsampling AA", "UseSubSamplingAA", {
-        LINKID_DataType = "Number",
-        INPID_InputControl = "CheckboxControl",
-        INP_Integer = true,
-        INP_Default = 1,
-        INPS_StatusText = "Enable subsampling anti-aliasing for high-quality edges",
-    })
-
-    InSubSampleCount = self:AddInput("Subsample Count", "SubSampleCount", {
-        LINKID_DataType = "Number",
-        INPID_InputControl = "ComboControl",
-        INP_Integer = true,
-        INP_Default = 0,
-        { CCS_AddString = "4 samples (2x2)" },
-        { CCS_AddString = "9 samples (3x3)" },
-        { CCS_AddString = "16 samples (4x4)" },
-        { CCS_AddString = "64 samples (8x8)" },
-        { CCS_AddString = "256 samples (16x16)" },
-        INPS_StatusText = "Number of subsamples for high-quality AA",
-    })
-    self:EndControlNest()
-
     self:BeginControlNest("Paper", "Paper", true);
-    InPaperTexture = self:AddInput("Paper Texture", "PaperTexture", {
-        LINKID_DataType = "Number",
-        INPID_InputControl = "SliderControl",
-        INP_Default = 0.0,
-        INP_MinAllowed = 0.0,
-        INP_MaxAllowed = 1.0,
-        INPS_StatusText = "Adds simulated paper texture to the output",
-    })
-
-    InPaperType = self:AddInput("Paper Type", "PaperType", {
-        LINKID_DataType = "Number",
-        INPID_InputControl = "ComboControl",
-        INP_Default = 0,
-        INP_Integer = true,
-        { CCS_AddString = "Smooth" },
-        { CCS_AddString = "Light Texture" },
-        { CCS_AddString = "Heavy Texture" },
-        INPS_StatusText = "Selects the type of paper texture pattern",
-    })
-
     InPaperColorPreset = self:AddInput("Paper Color Preset", "PaperColorPreset", {
         LINKID_DataType = "Number",
         INPID_InputControl = "ComboControl",
@@ -695,6 +698,13 @@ function Create()
 end
 
 function Process(req)
+    -- 入力画像が無い場合は何もしない
+    local img = InImage:GetValue(req)
+    if img == nil then
+        OutImage:Set(req, nil)
+        return
+    end
+
     -- 入力パラメータの取得
     local contrast = InContrast:GetValue(req).Value
     local screenDensity = InScreenDensity:GetValue(req).Value
@@ -715,134 +725,115 @@ function Process(req)
         InDotColorAlpha:GetValue(req).Value,
     }
 
-    local img = InImage:GetValue(req)
-    local out = nil
-
     local width = img.DataWindow:Width()
     local height = img.DataWindow:Height()
 
     -- セル情報バッファサイズの計算
+    -- 定数の修正
     local SIN60 = 0.866025 -- √3/2
-    local MAX_CELL_RADIUS = 0.433
-    local cellBasePitch = 1000.0 / screenDensity
+    local cellBasePitch = math.floor(math.max(3.0, width / screenDensity))
     local cellPitchX = cellBasePitch
-    local cellPitchY = cellBasePitch * SIN60
-    local rowSpacing = MAX_CELL_RADIUS * 2.0 * cellPitchX * 0.88
+    local cellPitchY = math.floor(math.max(3.0, cellBasePitch * SIN60))
+    local MAX_CELL_RADIUS = (cellBasePitch * 0.5) * 1.5
 
     -- セルの配列サイズを計算
-    local cellGridWidth = math.ceil(width / cellPitchX) + 2
-    local cellGridHeight = math.ceil(height / rowSpacing) + 2
+    local cellGridNumX = math.ceil(width / cellPitchX) + 3
+    local cellGridNumY = math.ceil(height / cellPitchY) + 2
 
     -- セル情報用の中間バッファを作成
     local cellInfo1 = Image({
-        IMG_Width = cellGridWidth,
-        IMG_Height = cellGridHeight,
+        IMG_Width = cellGridNumX,
+        IMG_Height = cellGridNumY,
         IMG_Depth = 8,
     })
 
     local cellInfo2 = Image({
-        IMG_Width = cellGridWidth,
-        IMG_Height = cellGridHeight,
+        IMG_Width = cellGridNumX,
+        IMG_Height = cellGridNumY,
         IMG_Depth = 8,
     })
 
     local cellInfo3 = Image({
-        IMG_Width = cellGridWidth,
-        IMG_Height = cellGridHeight,
+        IMG_Width = cellGridNumX,
+        IMG_Height = cellGridNumY,
         IMG_Depth = 8,
     })
 
-    local cellInfo4 = Image({
-        IMG_Width = cellGridWidth,
-        IMG_Height = cellGridHeight,
-        IMG_Depth = 8,
-    })
+    local out = Image({ IMG_Like = img })
 
-    if img then
-        out = Image({ IMG_Like = img })
+    -- ステップ1: セル情報計算カーネル実行
+    local cellInfoNode = DVIPComputeNode(req, "CellInfoKernel", CellInfoKernel, "CellInfoParams", CellInfoParams)
 
-        -- ステップ1: セル情報計算カーネル実行
-        local cellInfoNode = DVIPComputeNode(req, "CellInfoKernel", CellInfoKernel, "CellInfoParams", CellInfoParams)
+    if cellInfoNode then
+        -- パラメータをカーネルに設定
+        local params = cellInfoNode:GetParamBlock(CellInfoParams)
+        params.srcSize[0] = width
+        params.srcSize[1] = height
+        params.dstSize[0] = cellGridNumX
+        params.dstSize[1] = cellGridNumY
+        params.cellPitch[0] = cellPitchX
+        params.cellPitch[1] = cellPitchY
+        params.contrast = contrast
+        params.dotGain = dotGain
+        params.brightnessCutoff = brightnessCutoff
+        params.minDotRadius = minDotRadius
+        params.useOriginalColor = useOriginalColor > 0.5 and 1 or 0
 
-        if cellInfoNode then
-            -- パラメータをカーネルに設定
-            local params = cellInfoNode:GetParamBlock(CellInfoParams)
-            params.srcSize[0] = width
-            params.srcSize[1] = height
-            params.dstSize[0] = cellGridWidth
-            params.dstSize[1] = cellGridHeight
-            params.contrast = contrast
-            params.screenDensity = screenDensity
-            params.dotGain = dotGain
-            params.brightnessCutoff = brightnessCutoff
-            params.minDotRadius = minDotRadius
-            params.useOriginalColor = useOriginalColor > 0.5 and 1 or 0
-            params.cellPitch[0] = cellPitchX
-            params.cellPitch[1] = cellPitchY
-            params.rowSpacing = rowSpacing
-            params.zigzagFactor = 0.5
-            params.maxCellRadius = MAX_CELL_RADIUS
+        params.maxCellRadius = MAX_CELL_RADIUS
 
-            cellInfoNode:SetParamBlock(params)
-            cellInfoNode:AddSampler("RowSampler", TEX_FILTER_MODE_POINT, TEX_ADDRESS_MODE_CLAMP,
-                TEX_NORMALIZED_COORDS_TRUE)
-            cellInfoNode:AddInput("src", img)
-            cellInfoNode:AddOutput("dst_info1", cellInfo1)
-            cellInfoNode:AddOutput("dst_info2", cellInfo2)
-            cellInfoNode:AddOutput("dst_info3", cellInfo3)
-            cellInfoNode:AddOutput("dst_info4", cellInfo4) -- 追加: 出力接続
+        cellInfoNode:SetParamBlock(params)
+        cellInfoNode:AddSampler("RowSampler", TEX_FILTER_MODE_POINT, TEX_ADDRESS_MODE_CLAMP,
+            TEX_NORMALIZED_COORDS_FALSE)
+        cellInfoNode:AddInput("src", img)
+        cellInfoNode:AddOutput("dst_info1", cellInfo1)
+        cellInfoNode:AddOutput("dst_info2", cellInfo2)
+        cellInfoNode:AddOutput("dst_info3", cellInfo3)
 
-            local success = cellInfoNode:RunSession(req)
-            if not success then
-                -- エラーがあれば元の画像を返却
-                OutImage:Set(req, img)
-                return
-            end
+        local success = cellInfoNode:RunSession(req)
+        if not success then
+            -- エラーがあれば元の画像を返却
+            OutImage:Set(req, img)
+            return
         end
+    end
 
-        -- ステップ2: ドット描画カーネル実行
-        local renderNode = DVIPComputeNode(req, "RenderDotsKernel", RenderDotsKernel, "RenderParams", RenderParams)
+    -- ステップ2: ドット描画カーネル実行
+    local renderNode = DVIPComputeNode(req, "RenderDotsKernel", RenderDotsKernel, "RenderParams", RenderParams)
 
-        if renderNode then
-            -- パラメータをカーネルに設定
-            local params = renderNode:GetParamBlock(RenderParams)
-            params.srcSize[0] = width
-            params.srcSize[1] = height
-            params.paperColor[0] = paperColor[1]
-            params.paperColor[1] = paperColor[2]
-            params.paperColor[2] = paperColor[3]
-            params.paperColor[3] = paperColor[4]
-            params.cellGridSize[0] = cellGridWidth
-            params.cellGridSize[1] = cellGridHeight
-            params.dotColor[0] = dotColor[1]
-            params.dotColor[1] = dotColor[2]
-            params.dotColor[2] = dotColor[3]
-            params.dotColor[3] = dotColor[4]
-            params.useOriginalColor = useOriginalColor > 0.5 and 1 or 0
-            params.screenDensity = screenDensity
-            params.cellPitch[0] = cellPitchX
-            params.cellPitch[1] = cellPitchY
-            params.rowSpacing = rowSpacing
-            params.zigzagFactor = 0.5
-            params.maxCellRadius = MAX_CELL_RADIUS
+    if renderNode then
+        -- パラメータをカーネルに設定
+        local params = renderNode:GetParamBlock(RenderParams)
+        params.srcSize[0] = width
+        params.srcSize[1] = height
+        params.paperColor[0] = paperColor[1]
+        params.paperColor[1] = paperColor[2]
+        params.paperColor[2] = paperColor[3]
+        params.paperColor[3] = paperColor[4]
+        params.cellGridNum[0] = cellGridNumX
+        params.cellGridNum[1] = cellGridNumY
+        params.dotColor[0] = dotColor[1]
+        params.dotColor[1] = dotColor[2]
+        params.dotColor[2] = dotColor[3]
+        params.dotColor[3] = dotColor[4]
+        params.useOriginalColor = useOriginalColor > 0.5 and 1 or 0
+        params.cellPitch[0] = cellPitchX
+        params.cellPitch[1] = cellPitchY
 
-            renderNode:SetParamBlock(params)
-            renderNode:AddSampler("RowSampler", TEX_FILTER_MODE_POINT, TEX_ADDRESS_MODE_CLAMP,
-                TEX_NORMALIZED_COORDS_TRUE)
-            renderNode:AddInput("cell_info1", cellInfo1)
-            renderNode:AddInput("cell_info2", cellInfo2)
-            renderNode:AddInput("cell_info3", cellInfo3)
-            renderNode:AddInput("cell_info4", cellInfo4) -- 追加: 入力接続
-            renderNode:AddOutput("dst", out)
+        renderNode:SetParamBlock(params)
+        renderNode:AddSampler("RowSampler", TEX_FILTER_MODE_POINT, TEX_ADDRESS_MODE_CLAMP,
+            TEX_NORMALIZED_COORDS_TRUE)
+        --  renderNode:AddSampler("CellCenterSampler", TEX_FILTER_MODE_POINT, TEX_ADDRESS_MODE_CLAMP,
+        --      TEX_NORMALIZED_COORDS_FALSE)
+        renderNode:AddInput("cell_info1", cellInfo1)
+        renderNode:AddInput("cell_info2", cellInfo2)
+        renderNode:AddInput("cell_info3", cellInfo3)
+        renderNode:AddOutput("dst", out)
 
-            local success = renderNode:RunSession(req)
-            if not success then
-                -- エラーがあれば元の画像を返却
-                OutImage:Set(req, img)
-                return
-            end
-        else
-            out = img
+        local success = renderNode:RunSession(req)
+        if not success then
+            -- エラーがあれば元の画像を返却
+            OutImage:Set(req, img)
+            return
         end
     else
         out = img
@@ -857,14 +848,7 @@ function Process(req)
 end
 
 function NotifyChanged(inp, param, time)
-    if inp == InUseCMYKMode then
-        -- Show/hide CMYK-specific controls based on CMYK mode
-        local useCMYK = param.Value > 0.5
-        InRegError:SetAttrs({ IC_Visible = useCMYK })
-        InUcrAmount:SetAttrs({ IC_Visible = useCMYK })
-        InBrightnessCutoff:SetAttrs({ IC_Visible = not useCMYK })
-        InMinDotRadius:SetAttrs({ IC_Visible = not useCMYK })
-    elseif inp == InPaperColorPreset then
+    if inp == InPaperColorPreset then
         -- 紙の色プリセットが選択された場合
         local presetIndex = math.floor(param.Value + 0.5)
 
