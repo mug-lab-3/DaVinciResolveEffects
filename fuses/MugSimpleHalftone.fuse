@@ -549,24 +549,6 @@ function Create()
         INPS_StatusText = "Dots smaller than this radius are not drawn",
     })
 
-    InRegError = self:AddInput("Registration Error", "RegError", {
-        LINKID_DataType = "Number",
-        INPID_InputControl = "SliderControl",
-        INP_Default = 0.5,
-        INP_MinAllowed = 0.0,
-        INP_MaxAllowed = 1.0,
-        INPS_StatusText = "Simulates misalignment between color plates",
-    })
-
-    InUcrAmount = self:AddInput("UCR Amount", "UcrAmount", {
-        LINKID_DataType = "Number",
-        INPID_InputControl = "SliderControl",
-        INP_Default = 0.0,
-        INP_MinAllowed = 0.0,
-        INP_MaxAllowed = 1.0,
-        INPS_StatusText = "Controls Under Color Removal in CMYK mode",
-    })
-
     InUseOriginalColor = self:AddInput("Use Original Color", "UseOriginalColor", {
         LINKID_DataType = "Number",
         INPID_InputControl = "CheckboxControl",
