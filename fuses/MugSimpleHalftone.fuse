@@ -504,7 +504,7 @@ function Create()
     InScreenDensity = self:AddInput("Screen Density", "ScreenDensity", {
         LINKID_DataType = "Number",
         INPID_InputControl = "SliderControl",
-        INP_Default = 50.0,
+        INP_Default = 150.0,
         INP_MinAllowed = 1,
         INP_MaxAllowed = 600.0,
         INPID_PreviewControl = "RangeControl",
