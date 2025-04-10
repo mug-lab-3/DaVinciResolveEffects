@@ -3,7 +3,7 @@ Mug Halftone
 --]] --
 
 --******************************************************************************************************
-FuRegisterClass("MugHalftone2", CT_Tool, {
+FuRegisterClass("MugSimpleHalftone", CT_Tool, {
     REGS_Category          = "Fuses\\Mug",
     REGS_OpIconString      = "MSH",
     REGS_OpDescription     = "Mug Simple Halftone",
@@ -76,13 +76,16 @@ __KERNEL__ void CellInfoKernel(
     const float2 cellPitch = to_float2(cellPitchX, cellPitchY);
     const float halfPitchX = cellPitchX * 0.5f;
 
+    // 半セル分Y位置をオフセット（固定値として半セル分）
+    const float yOffset = cellPitchY * 0.5f;
+
     // 行オフセットの計算（奇数行は横にオフセット）
     const int isOddRow = (y % 2 != 0) ? 1 : 0;
     const float rowOffset = (isOddRow != 0) ? -halfPitchX : 0.0f;
 
     // セルの中心位置をピクセル座標で計算
     const float cellCenterX = ((float)x * cellPitchX) + halfPitchX + rowOffset;
-    const float cellCenterY = ((float)y * cellPitchY) + cellPitchY * 0.5f;
+    const float cellCenterY = ((float)y * cellPitchY) + (cellPitchY * 0.5f) - yOffset;
 
     // dst_info1: セル位置情報を格納
     const float4 cellInfo1 = {
@@ -241,17 +244,17 @@ __DEVICE__ bool checkCellDot(
         const float4 cellInfo1Data = _tex2DVecN(cell_info1, cellUV.x, cellUV.y, 15);
         const float2 cellCenter = to_float2(cellInfo1Data.z, cellInfo1Data.w);
 
-        // バウンディングボックスチェック - 最適化バージョン
+        // バウンディングボックスチェック
         const float bbSize = dotRadius + BOUNDING_BOX_MARGIN;
-        const float absDiffX = _fabs(pixelPos.x - cellCenter.x);
-        const float absDiffY = _fabs(pixelPos.y - cellCenter.y);
+        const float2 diff = pixelPos - cellCenter;
+        const float2 absDiff = to_float2(_fabs(diff.x), _fabs(diff.y));
 
-        if (absDiffX > bbSize || absDiffY > bbSize) {
+        if (absDiff.x > bbSize || absDiff.y > bbSize) {
             return false; // バウンディングボックス外ならすぐに失敗判定
         }
 
-        // より正確な円形の距離計算
-        const float distSq = absDiffX * absDiffX + absDiffY * absDiffY;
+        // より正確な円形の距離計算 - 既に計算したdiffを再利用
+        const float distSq = diff.x * diff.x + diff.y * diff.y;
         const float radiusSq = dotRadius * dotRadius;
 
         // ドット内に入っているかチェック
@@ -292,13 +295,13 @@ __DEVICE__ void getNeighborOffsets(const int isOddRow, float2 neighborOffsets[6]
     }
 }
 
-// 高密度モード用の処理関数 - Intel GPU互換性向上
+// 高密度モード用の処理関数
 __DEVICE__ bool processHighDensityCells(
     const float2 mainCellPos,
     const float2 pixelPos,
     const float2 relPos,
     const float2 cellPitch,
-    const int isOddRow, // boolではなくintで受け取る
+    const int isOddRow,
     const float2 cellGridNum,
     __TEXTURE2D__ cell_info1,
     __TEXTURE2D__ cell_info2,
@@ -315,14 +318,15 @@ __DEVICE__ bool processHighDensityCells(
     int checkIndices[2] = {-1, -1};
     int checkCount = 0;
 
-    // X軸の相対位置で左右のセルを判断 - _fabs使用して明示的に
-    const float relPosX = relPos.x;
-    const float relPosY = relPos.y;
-    const float cellThresholdX = cellPitch.x * 0.25f;
-    const float cellThresholdY = cellPitch.y * 0.25f;
+    // 閾値を定義
+    const float2 cellThreshold = cellPitch * 0.25f;
 
-    if (_fabs(relPosX) > cellThresholdX) {
-        if (relPosX > 0.0f) {
+    // 相対位置の絶対値を計算
+    const float2 absRelPos = to_float2(_fabs(relPos.x), _fabs(relPos.y));
+
+    // X軸の相対位置で左右のセルを判断
+    if (absRelPos.x > cellThreshold.x) {
+        if (relPos.x > 0.0f) {
             checkIndices[checkCount++] = 2; // 右
         } else {
             checkIndices[checkCount++] = 5; // 左
@@ -330,8 +334,8 @@ __DEVICE__ bool processHighDensityCells(
     }
 
     // Y軸の相対位置で上下のセルを判断
-    if (_fabs(relPosY) > cellThresholdY) {
-        if (relPosY > 0.0f) {
+    if (absRelPos.y > cellThreshold.y) {
+        if (relPos.y > 0.0f) {
             checkIndices[checkCount++] = isOddRow ? 3 : 4; // 下方向
         } else {
             checkIndices[checkCount++] = isOddRow ? 0 : 1; // 上方向
@@ -344,6 +348,9 @@ __DEVICE__ bool processHighDensityCells(
     // 選択した隣接セルのみをチェック
     for (int i = 0; i < checkCount; i++) {
         const int index = checkIndices[i];
+        if (index < 0) continue;
+
+        // 隣接セルの位置を計算
         const float2 cellPos = mainCellPos + neighborOffsets[index];
 
         if (checkCellDot(cellPos, pixelPos, cellGridNum, cell_info1, cell_info2, cell_info3,
@@ -398,50 +405,51 @@ __KERNEL__ void RenderDotsKernel(
     if (x >= params->srcSize[0] || y >= params->srcSize[1])
         return;
 
-    // 背景色（紙の色）をデフォルトに設定
-    const float4 paperColor = to_float4(
+    // 背景色（紙の色）
+    const float4 paperColor = {
         params->paperColor[0],
         params->paperColor[1],
         params->paperColor[2],
         params->paperColor[3]
-    );
+    };
 
-    // ドットの色をベクトル型で事前に準備
-    const float4 dotColor = to_float4(
+    // ドットの色
+    const float4 dotColor = {
         params->dotColor[0],
         params->dotColor[1],
         params->dotColor[2],
         params->dotColor[3]
-    );
+    };
 
     float4 outputColor = paperColor;
 
     // 現在のピクセル位置をベクトルとして定義
     const float2 pixelPos = to_float2((float)x, (float)y);
 
-    // セルの間隔 - 明示的な型変換
-    const float cellPitchX = params->cellPitch[0];
-    const float cellPitchY = params->cellPitch[1];
-    const float2 cellPitch = to_float2(cellPitchX, cellPitchY);
+    // セルの間隔
+    const float2 cellPitch = to_float2(params->cellPitch[0], params->cellPitch[1]);
 
-    // 高密度チェック - セルが小さいかどうかを判断
-    const float avgCellSize = (cellPitchX + cellPitchY) * 0.5f;
+    // 半セル分Y位置をオフセット（固定値として半セル分）
+    const float yOffset = cellPitch.y * 0.5f;
+
+    // 高密度チェック
+    const float avgCellSize = (cellPitch.x + cellPitch.y) * 0.5f;
     const int isHighDensity = avgCellSize < MIN_CHECK_RADIUS ? 1 : 0;
 
     // このピクセルが属する行の情報
-    const int baseRowY = (int)(y / cellPitchY);
+    const int baseRowY = (int)((pixelPos.y + yOffset) / cellPitch.y);
     const int isOddRow = (baseRowY % 2 != 0) ? 1 : 0;
 
-    // メインセル（このピクセルが最も近いセル）の計算
+    // メインセルの計算
     float adjustedX = pixelPos.x;
-    if (isOddRow != 0) { // int比較に変更
-        adjustedX += cellPitchX * 0.5f; // オフセット行の調整
+    if (isOddRow != 0) {
+        adjustedX += cellPitch.x * 0.5f; // オフセット行の調整
     }
-    const int mainCellX = (int)_floorf(adjustedX / cellPitchX);
+    const int mainCellX = (int)_floorf(adjustedX / cellPitch.x);
     const int mainCellY = baseRowY;
-
-    // グリッド内のセル位置ベクトル
     const float2 mainCellPos = to_float2((float)mainCellX, (float)mainCellY);
+
+    // グリッド情報
     const float2 cellGridNum = to_float2(
         (float)params->cellGridNum[0],
         (float)params->cellGridNum[1]
@@ -454,11 +462,11 @@ __KERNEL__ void RenderDotsKernel(
         return;
     }
 
-    // セルの中心位置を計算（相対位置の計算用）
-    const float cellCenterX = (float)mainCellX * cellPitchX +
-                             (isOddRow != 0 ? cellPitchX * 0.5f : 0.0f) + cellPitchX * 0.5f;
-    const float cellCenterY = (float)mainCellY * cellPitchY + cellPitchY * 0.5f;
-    const float2 cellCenter = to_float2(cellCenterX, cellCenterY);
+    // セルの中心位置をfloat2演算で計算
+    const float2 cellCenter = to_float2(
+        mainCellX * cellPitch.x + (isOddRow != 0 ? cellPitch.x * 0.5f : 0.0f) + cellPitch.x * 0.5f,
+        mainCellY * cellPitch.y + cellPitch.y * 0.5f
+    );
 
     // ピクセルのセル内相対位置
     const float2 relPos = pixelPos - cellCenter;
@@ -480,7 +488,7 @@ __KERNEL__ void RenderDotsKernel(
         ) ? 1 : 0;
     }
 
-    if (foundDot != 0) { // int比較に変更
+    if (foundDot != 0) {
         _tex2DVec4Write(dst, x, y, outputColor);
         return;
     }
