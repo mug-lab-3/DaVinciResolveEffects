@@ -12,7 +12,7 @@ FuRegisterClass("MugSimpleHalftone", CT_Tool, {
     REGS_IconID            = "Icons.Tools.Icons.SimpleHalftone",
     REG_Source_GlobalCtrls = true,
     REG_Source_SizeCtrls   = true,
-    REG_Version            = 1.00,
+    REG_Version            = 1.10,
 })
 
 -- セル情報計算用パラメータ構造体
@@ -26,6 +26,7 @@ CellInfoParams = [[
   float minDotRadius;     // 最小ドット半径
   int useOriginalColor;   // 元の色を使用するかどうか
   float maxCellRadius;    // 最大セル半径
+  float clipRadius;       // クリッピング半径
 ]]
 
 -- セル情報計算カーネル
@@ -177,15 +178,16 @@ __KERNEL__ void CellInfoKernel(
     // 明るさのカットオフと最小ドット半径を一括処理
     float dotRadius = 0.0f;
     if (avgLuma <= params->brightnessCutoff && inverseLuma >= params->minDotRadius) {
-        dotRadius = inverseLuma * params->maxCellRadius;
+        const float maxRadius = params->maxCellRadius;
+        dotRadius = _fminf(inverseLuma * maxRadius, maxRadius * params->clipRadius);
     }
 
     // dst_info2: ドット情報を格納
     const float4 cellInfo2 = {
-        avgLuma,        // セル輝度値
-        dotRadius,      // ドット半径
+        avgLuma,         // セル輝度値
+        dotRadius,       // ドット半径
         (float)isOddRow, // 行オフセットフラグ
-        1.0f            // 予約済み
+        1.0f             // 予約済み
     };
 
     // 結果を書き込み
@@ -197,12 +199,13 @@ __KERNEL__ void CellInfoKernel(
 
 -- レンダリングパラメータ構造体
 RenderParams = [[
-  int srcSize[2];         // 入力画像のサイズ
-  int cellGridNum[2];    // セルグリッド数 [X, Y]
-  float paperColor[4];    // 紙の色（背景色）[R,G,B,A]
-  float dotColor[4];      // ドットの色（前景色）[R,G,B,A]
-  int useOriginalColor;   // 元の色を使用するかどうか
-  float cellPitch[2];     // セルの間隔
+  int srcSize[2];       // 入力画像のサイズ
+  int cellGridNum[2];   // セルグリッド数 [X, Y]
+  float paperColor[4];  // 紙の色（背景色）[R,G,B,A]
+  float dotColor[4];    // ドットの色（前景色）[R,G,B,A]
+  int useOriginalColor; // 元の色を使用するかどうか
+  float cellPitch[2];   // セルの間隔
+  int blendWithInput;   // 入力画像とブレンドするかどうか
 ]]
 
 RenderDotsKernel = [[
@@ -218,11 +221,7 @@ __DEVICE__ bool checkCellDot(
     const float2 pixelPos,
     const float2 cellGridNum,
     __TEXTURE2D__ cell_info1,
-    __TEXTURE2D__ cell_info2,
-    __TEXTURE2D__ cell_info3,
-    const float4 dotColor,
-    const int useOriginalColor,
-    float4 *outputColor)
+    __TEXTURE2D__ cell_info2)
 {
     // セルグリッド範囲内かチェック
     if (cellPos.x >= 0.0f && cellPos.x < cellGridNum.x &&
@@ -259,14 +258,6 @@ __DEVICE__ bool checkCellDot(
 
         // ドット内に入っているかチェック
         if (distSq <= radiusSq) {
-            // オリジナルカラーモードかチェック
-            if (useOriginalColor > 0) {
-                // 元の色を使用
-                *outputColor = _tex2DVecN(cell_info3, cellUV.x, cellUV.y, 15);
-            } else {
-                // 指定されたドット色を使用
-                *outputColor = dotColor;
-            }
             return true; // ドット内に入っている
         }
     }
@@ -304,11 +295,7 @@ __DEVICE__ bool processHighDensityCells(
     const int isOddRow,
     const float2 cellGridNum,
     __TEXTURE2D__ cell_info1,
-    __TEXTURE2D__ cell_info2,
-    __TEXTURE2D__ cell_info3,
-    const float4 dotColor,
-    const int useOriginalColor,
-    float4 *outputColor)
+    __TEXTURE2D__ cell_info2)
 {
     // 隣接するセルのオフセット定義
     float2 neighborOffsets[6];
@@ -353,8 +340,7 @@ __DEVICE__ bool processHighDensityCells(
         // 隣接セルの位置を計算
         const float2 cellPos = mainCellPos + neighborOffsets[index];
 
-        if (checkCellDot(cellPos, pixelPos, cellGridNum, cell_info1, cell_info2, cell_info3,
-                         dotColor, useOriginalColor, outputColor)) {
+        if (checkCellDot(cellPos, pixelPos, cellGridNum, cell_info1, cell_info2)) {
             return true; // ドットが見つかった
         }
     }
@@ -369,11 +355,7 @@ __DEVICE__ bool processNormalDensityCells(
     const float2 pixelPos,
     const float2 cellGridNum,
     __TEXTURE2D__ cell_info1,
-    __TEXTURE2D__ cell_info2,
-    __TEXTURE2D__ cell_info3,
-    const float4 dotColor,
-    const int useOriginalColor,
-    float4 *outputColor)
+    __TEXTURE2D__ cell_info2)
 {
     // 隣接するセルのオフセット定義
     float2 neighborOffsets[6];
@@ -383,8 +365,7 @@ __DEVICE__ bool processNormalDensityCells(
     for (int i = 0; i < 6; i++) {
         const float2 cellPos = mainCellPos + neighborOffsets[i];
 
-        if (checkCellDot(cellPos, pixelPos, cellGridNum, cell_info1, cell_info2, cell_info3,
-                         dotColor, useOriginalColor, outputColor)) {
+        if (checkCellDot(cellPos, pixelPos, cellGridNum, cell_info1, cell_info2)) {
             return true; // ドットが見つかった
         }
     }
@@ -392,11 +373,31 @@ __DEVICE__ bool processNormalDensityCells(
     return false; // どのドットにも該当しなかった
 }
 
+__DEVICE__ float4 blendWithSource(
+    const float4 srcColor,
+    const float4 dotColor,
+    int isBlendWithSource)
+{
+    if (isBlendWithSource == 0) {
+        return dotColor; // ブレンドしない場合はドット色をそのまま返す
+    }
+
+    // 入力画像とドット色をブレンド
+    const float blendFactor = dotColor.w;
+    return to_float4(
+        srcColor.x * (1.0f - blendFactor) + dotColor.x * blendFactor,
+        srcColor.y * (1.0f - blendFactor) + dotColor.y * blendFactor,
+        srcColor.z * (1.0f - blendFactor) + dotColor.z * blendFactor,
+        _fmaxf(srcColor.w, dotColor.w) // アルファは大きい方を採用
+    );
+}
+
 __KERNEL__ void RenderDotsKernel(
     __CONSTANTREF__ RenderParams *params,
     __TEXTURE2D__ cell_info1,
     __TEXTURE2D__ cell_info2,
     __TEXTURE2D__ cell_info3,
+    __TEXTURE2D__ src_img,
     __TEXTURE2D_WRITE__ dst)
 {
     DEFINE_KERNEL_ITERATORS_XY(x, y);
@@ -405,23 +406,6 @@ __KERNEL__ void RenderDotsKernel(
     if (x >= params->srcSize[0] || y >= params->srcSize[1])
         return;
 
-    // 背景色（紙の色）
-    const float4 paperColor = {
-        params->paperColor[0],
-        params->paperColor[1],
-        params->paperColor[2],
-        params->paperColor[3]
-    };
-
-    // ドットの色
-    const float4 dotColor = {
-        params->dotColor[0],
-        params->dotColor[1],
-        params->dotColor[2],
-        params->dotColor[3]
-    };
-
-    float4 outputColor = paperColor;
 
     // 現在のピクセル位置をベクトルとして定義
     const float2 pixelPos = to_float2((float)x, (float)y);
@@ -455,10 +439,45 @@ __KERNEL__ void RenderDotsKernel(
         (float)params->cellGridNum[1]
     );
 
+    // 背景色（紙の色）
+    const float4 paperColor = {
+        params->paperColor[0],
+        params->paperColor[1],
+        params->paperColor[2],
+        params->paperColor[3]
+    };
+
+    // ドットの色
+    float4 dotColor = {
+        params->dotColor[0],
+        params->dotColor[1],
+        params->dotColor[2],
+        params->dotColor[3]
+    };
+    if (params->useOriginalColor != 0) {
+        const float2 cellUV = (mainCellPos + to_float2(0.5f, 0.5f)) / cellGridNum;
+        dotColor = _tex2DVecN(cell_info3, cellUV.x, cellUV.y, 15);
+    }
+
+    float4 inputColor = paperColor;
+
+    // 元の色を使用するかどうか
+    const int blendWithInput = params->blendWithInput > 0 ? 1 : 0;
+    if (blendWithInput != 0) {
+        // 入力画像のピクセル値を取得
+        inputColor = _tex2DVecN(
+            src_img,
+            (float)x / (float)params->srcSize[0],
+            (float)y / (float)params->srcSize[1],
+            15
+        );
+    }
+
+    float4 outputColor = paperColor;
+
     // まず中央のセルだけをチェック（最も可能性が高い）
-    if (checkCellDot(mainCellPos, pixelPos, cellGridNum, cell_info1, cell_info2, cell_info3,
-                     dotColor, params->useOriginalColor, &outputColor)) {
-        _tex2DVec4Write(dst, x, y, outputColor);
+    if (checkCellDot(mainCellPos, pixelPos, cellGridNum, cell_info1, cell_info2)) {
+        _tex2DVec4Write(dst, x, y, blendWithSource(inputColor , dotColor, blendWithInput));
         return;
     }
 
@@ -478,23 +497,28 @@ __KERNEL__ void RenderDotsKernel(
         // 高密度モード - 最適化された隣接セルチェック
         foundDot = processHighDensityCells(
             mainCellPos, pixelPos, relPos, cellPitch, isOddRow, cellGridNum,
-            cell_info1, cell_info2, cell_info3, dotColor, params->useOriginalColor, &outputColor
+            cell_info1, cell_info2
         ) ? 1 : 0;
     } else {
         // 通常密度モード - すべての隣接セルをチェック
         foundDot = processNormalDensityCells(
             mainCellPos, isOddRow, pixelPos, cellGridNum,
-            cell_info1, cell_info2, cell_info3, dotColor, params->useOriginalColor, &outputColor
+            cell_info1, cell_info2
         ) ? 1 : 0;
     }
 
+    // ドットが見つかった場合
     if (foundDot != 0) {
-        _tex2DVec4Write(dst, x, y, outputColor);
+        _tex2DVec4Write(dst, x, y, blendWithSource(inputColor , dotColor, blendWithInput));
         return;
     }
 
-    // どのドットにも入っていない場合は背景色を出力
-    _tex2DVec4Write(dst, x, y, paperColor);
+    // ドットが見つからなかった場合
+    if (blendWithInput != 0) {
+        _tex2DVec4Write(dst, x, y, inputColor);
+    } else {
+        _tex2DVec4Write(dst, x, y, paperColor);
+    }
 }
 ]]
 
@@ -506,7 +530,7 @@ function Create()
         INPID_InputControl = "SliderControl",
         INP_Default = 150.0,
         INP_MinAllowed = 1,
-        INP_MaxAllowed = 600.0,
+        INP_MaxAllowed = 1000.0,
         INPID_PreviewControl = "RangeControl",
         INP_Integer = false,
         INPS_StatusText = "Controls the density of the halftone pattern in CMYK mode",
@@ -540,13 +564,22 @@ function Create()
         INPS_StatusText = "Brightness threshold above which dots are not drawn",
     })
 
-    InMinDotRadius = self:AddInput("Minimum Dot Radius", "MinDotRadius", {
+    InCutoffDotRadius = self:AddInput("Cutoff Dot Radius", "MinDotRadius", {
         LINKID_DataType = "Number",
         INPID_InputControl = "SliderControl",
         INP_Default = 0.05,
         INP_MinAllowed = 0.0,
         INP_MaxAllowed = 1.0,
         INPS_StatusText = "Dots smaller than this radius are not drawn",
+    })
+
+    InClipDotRadius = self:AddInput("Clip Dot Radius", "ClipDotRadius", {
+        LINKID_DataType = "Number",
+        INPID_InputControl = "SliderControl",
+        INP_Default = 1.0,
+        INP_MinAllowed = 0.0,
+        INP_MaxAllowed = 1.0,
+        INPS_StatusText = "Controls the maximum size of dots in the halftone pattern",
     })
 
     InUseOriginalColor = self:AddInput("Use Original Color", "UseOriginalColor", {
@@ -611,6 +644,14 @@ function Create()
     self:EndControlNest()
 
     self:BeginControlNest("Paper", "Paper", true);
+
+    InBlendWithInput = self:AddInput("Blend With Input", "BlendWithInput", {
+        LINKID_DataType = "Number",
+        INPID_InputControl = "CheckboxControl",
+        INP_Default = 0.0,
+        INPS_StatusText = "Blend dots over the input image instead of using paper color",
+    })
+
     InPaperColorPreset = self:AddInput("Paper Color Preset", "PaperColorPreset", {
         LINKID_DataType = "Number",
         INPID_InputControl = "ComboControl",
@@ -716,7 +757,9 @@ function Process(req)
     local dotGain = InDotGain:GetValue(req).Value
     local useOriginalColor = InUseOriginalColor:GetValue(req).Value
     local brightnessCutoff = InBrightnessCutoff:GetValue(req).Value
-    local minDotRadius = InMinDotRadius:GetValue(req).Value
+    local cutoffDotRadius = InCutoffDotRadius:GetValue(req).Value
+    local maxDotRadius = InClipDotRadius:GetValue(req).Value
+    local blendWithInput = InBlendWithInput:GetValue(req).Value
     local paperColor = {
         InPaperColorRed:GetValue(req).Value,
         InPaperColorGreen:GetValue(req).Value,
@@ -781,10 +824,10 @@ function Process(req)
         params.contrast = contrast
         params.dotGain = dotGain
         params.brightnessCutoff = brightnessCutoff
-        params.minDotRadius = minDotRadius
+        params.minDotRadius = cutoffDotRadius
         params.useOriginalColor = useOriginalColor > 0.5 and 1 or 0
-
         params.maxCellRadius = MAX_CELL_RADIUS
+        params.clipRadius = maxDotRadius
 
         cellInfoNode:SetParamBlock(params)
         cellInfoNode:AddSampler("RowSampler", TEX_FILTER_MODE_POINT, TEX_ADDRESS_MODE_CLAMP,
@@ -810,6 +853,7 @@ function Process(req)
         local params = renderNode:GetParamBlock(RenderParams)
         params.srcSize[0] = width
         params.srcSize[1] = height
+        params.blendWithInput = blendWithInput > 0.5 and 1 or 0
         params.paperColor[0] = paperColor[1]
         params.paperColor[1] = paperColor[2]
         params.paperColor[2] = paperColor[3]
@@ -832,6 +876,7 @@ function Process(req)
         renderNode:AddInput("cell_info1", cellInfo1)
         renderNode:AddInput("cell_info2", cellInfo2)
         renderNode:AddInput("cell_info3", cellInfo3)
+        renderNode:AddInput("src_img", img)
         renderNode:AddOutput("dst", out)
 
         local success = renderNode:RunSession(req)
