@@ -1,0 +1,116 @@
+{
+	Tools = ordered() {
+		FlyingArrow = GroupOperator {
+			CtrlWZoom = false,
+			NameSet = true,
+			Outputs = {
+				Output1 = InstanceOutput {
+					SourceOp = "Transform1",
+					Source = "Output",
+				}
+			},
+			ViewInfo = GroupInfo {
+				Pos = { 238.365, 18.3864 },
+				Flags = {
+					Expanded = true,
+					AllowPan = false,
+					AutoSnap = true,
+					RemoveRouters = true
+				},
+				Size = { 367.937, 69.1288, 183.969, 24.2424 },
+				Direction = "Horizontal",
+				PipeStyle = "Direct",
+				Scale = 1,
+				Offset = { -271.031, -22.6288 }
+			},
+			Tools = ordered() {
+				Transform1 = Transform {
+					Inputs = {
+						Center = Input {
+							SourceOp = "Vector1",
+							Source = "Position",
+						},
+						Size = Input { Value = 0.849723200866237, },
+						Angle = Input {
+							Value = 0.456402062154193,
+							Expression = "(Vector1:GetValue(\"Distance\", time-1)  - Vector1:GetValue(\"Distance\", time)) * 1000 * -1",
+						},
+						Input = Input {
+							SourceOp = "Background1",
+							Source = "Output",
+						}
+					},
+					ViewInfo = OperatorInfo { Pos = { 392, 34.0303 } },
+				},
+				Background1 = Background {
+					Inputs = {
+						GlobalOut = Input { Value = 719, },
+						Width = Input { Value = 1920, },
+						Height = Input { Value = 1080, },
+						UseFrameFormatSettings = Input { Value = 1, },
+						["Gamut.SLogVersion"] = Input { Value = FuID { "SLog2" }, },
+						EffectMask = Input {
+							SourceOp = "Polygon1",
+							Source = "Mask",
+						}
+					},
+					ViewInfo = OperatorInfo { Pos = { 267.333, 32.2121 } },
+				},
+				Polygon1 = PolylineMask {
+					DrawMode = "InsertAndModify",
+					DrawMode2 = "InsertAndModify",
+					Inputs = {
+						Filter = Input { Value = FuID { "Fast Gaussian" }, },
+						MaskWidth = Input { Value = 1920, },
+						MaskHeight = Input { Value = 1080, },
+						PixelAspect = Input { Value = { 1, 1 }, },
+						UseFrameFormatSettings = Input { Value = 1, },
+						ClippingMode = Input { Value = FuID { "None" }, },
+						Center = Input { Value = { 0.756, 0.5 }, },
+						Size = Input { Value = 2.754, },
+						ZRotation = Input { Value = -40.3, },
+						Polyline = Input {
+							Value = Polyline {
+								Closed = true,
+								Points = {
+									{ Linear = true, X = -0.150943819232908, Y = -0.234676719208334, LX = -0.00108415440765945, LY = 0.00226029704954664, RX = 0.0444995981629493, RY = 0.0674584964765876 },
+									{ Linear = true, X = -0.0174450247440605, Y = -0.0323012297785718, LX = -0.0444995981629493, LY = -0.0674584964765876, RX = 0.000354814521119184, RY = -0.00531783118793673 },
+									{ Linear = true, X = -0.016380581180703, Y = -0.048254723342382, LX = -0.000354814521119184, LY = 0.00531783118793673, RX = 0.00546019372690099, RY = 0.016084907780794 },
+									{ Linear = true, X = 0, Y = -0, LX = -0.00546019372690099, LY = -0.016084907780794, RX = -0.00979681135753877, RY = -0.00704371958260746 },
+									{ Linear = true, X = -0.0293904340726163, Y = -0.0211311587478224, LX = 0.00979681135753877, LY = 0.00704371958260746, RX = 0.00289764870185915, RY = -0.00146305996070316 },
+									{ Linear = true, X = -0.0206974879670389, Y = -0.0255203386299319, LX = -0.00289764870185915, LY = 0.00146305996070316, RX = -0.0444995981629493, RY = -0.0674584964765876 },
+									{ Linear = true, X = -0.154196282455887, Y = -0.227895828059695, LX = 0.0444995981629493, LY = 0.0674584964765876, RX = 0.00108415440765945, RY = -0.00226029704954664 }
+								}
+							},
+						},
+						Polyline2 = Input {
+							Value = Polyline {
+							},
+							Disabled = true,
+						}
+					},
+					ViewInfo = OperatorInfo { Pos = { 142, 29.7879 } },
+				}
+			},
+		},
+		Vector1 = Vector {
+			CtrlWZoom = false,
+			Inputs = {
+				Distance = Input {
+					SourceOp = "Shake1",
+					Source = "X",
+				},
+				Angle = Input { Value = 90, }
+			},
+		},
+		Shake1 = Shake {
+			Faster = true,
+			Inputs = {
+				Smoothness = Input { Value = 11.23, },
+				XMinimum = Input { Value = -0.2, },
+				XMaximum = Input { Value = 0.2, }
+			},
+		}
+	},
+	ActiveTool = "FlyingArrow"
+}
