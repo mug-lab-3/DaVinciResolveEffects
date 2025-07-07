@@ -193,6 +193,11 @@
 					Source = "LabelBackground",
 					Name = "Background",
 				},
+				Input38 = InstanceInput {
+					SourceOp = "TransparentSwitch",
+					Source = "EnableTransparency",
+					Page = "Controls",
+				},
 				Input20 = InstanceInput {
 					SourceOp = "Params",
 					Source = "EnableGrayout",
@@ -225,14 +230,13 @@
 				}
 			},
 			ViewInfo = GroupInfo {
-				Pos = { 969.771, 148.983 },
+				Pos = { 327.555, 50.7105 },
 				Flags = {
-					Expanded = true,
 					AllowPan = false,
 					AutoSnap = true,
 					RemoveRouters = true
 				},
-				Size = { 713.333, 328.28, 356.667, 24.2424 },
+				Size = { 904.724, 351.422, 356.667, 24.2424 },
 				Direction = "Horizontal",
 				PipeStyle = "Direct",
 				Scale = 1,
@@ -247,7 +251,8 @@
 							Source = "Output",
 						}
 					},
-					ViewInfo = PipeRouterInfo { Pos = { -112.332, 269.031 } },
+					ViewInfo = PipeRouterInfo { Pos = { -112.332, 287.03 } },
+					Colors = { TileColor = { R = 0.372549019607843, G = 0.6, B = 0.125490196078431 }, }
 				},
 				FinalMerge = Merge {
 					CtrlWShown = false,
@@ -258,7 +263,7 @@
 							Source = "Value",
 						},
 						Background = Input {
-							SourceOp = "PipeRouter1",
+							SourceOp = "Instance_Switch1",
 							Source = "Output",
 						},
 						Foreground = Input {
@@ -267,7 +272,7 @@
 						},
 						PerformDepthMerge = Input { Value = 0, }
 					},
-					ViewInfo = OperatorInfo { Pos = { 293, 271.455 } },
+					ViewInfo = OperatorInfo { Pos = { 385.396, 287.74 } },
 				},
 				AnimCurves7 = LUTLookup {
 					CtrlWZoom = false,
@@ -287,11 +292,11 @@
 						ClipLow = Input { Value = 1, },
 						ClipHigh = Input { Value = 1, },
 						TimeScale = Input {
-							Value = 339.388888888889,
+							Value = 1842.16666666667,
 							Expression = "1.0 / ((AnimTime * comp:GetPrefs(\"Comp.FrameFormat.Rate\")) / (comp.RenderEnd - comp.RenderStart))",
 						},
 						TimeOffset = Input {
-							Value = 0.996889834670159,
+							Value = 0.999427003226877,
 							Expression = "1.0 - (((AnimTime * comp:GetPrefs(\"Comp.FrameFormat.Rate\")) + 1) / (comp.RenderEnd - comp.RenderStart))",
 						},
 						AnimTime = Input {
@@ -335,7 +340,7 @@
 							Source = "Output",
 						}
 					},
-					ViewInfo = OperatorInfo { Pos = { 35.667, 216.969 } },
+					ViewInfo = OperatorInfo { Pos = { -52.0145, 251.253 } },
 				},
 				AnimCurves5 = LUTLookup {
 					CtrlWZoom = false,
@@ -345,7 +350,7 @@
 							Expression = "iif(Params.EnableBackgroundAnimation == 1, \"Duration\", \"Custom\" )",
 						},
 						Input = Input {
-							Value = 6109,
+							Value = 33159,
 							Expression = "comp.RenderEnd",
 						},
 						Curve = Input { Value = FuID { "Easing" }, },
@@ -361,11 +366,11 @@
 						ClipLow = Input { Value = 1, },
 						ClipHigh = Input { Value = 1, },
 						TimeScale = Input {
-							Value = 254.541666666667,
+							Value = 1381.625,
 							Expression = "1.0 / ((AnimTime * comp:GetPrefs(\"Comp.FrameFormat.Rate\")) / (comp.RenderEnd - comp.RenderStart))",
 						},
 						TimeOffset = Input {
-							Value = 0.00392862989032575,
+							Value = 0.000723785397629603,
 							Expression = "(AnimStartTime * comp:GetPrefs(\"Comp.FrameFormat.Rate\")) / (comp.RenderEnd - comp.RenderStart)",
 						},
 						AnimTime = Input {
@@ -443,7 +448,7 @@
 							Source = "Output",
 						}
 					},
-					ViewInfo = OperatorInfo { Pos = { 146.334, 218.181 } },
+					ViewInfo = OperatorInfo { Pos = { 69.0234, 250.751 } },
 				},
 				AnimCurves6 = LUTLookup {
 					CtrlWZoom = false,
@@ -453,7 +458,7 @@
 							Expression = "iif(Params.EnableBackgroundAnimation == 1, \"Duration\", \"Custom\" )",
 						},
 						Input = Input {
-							Value = 6109,
+							Value = 33159,
 							Expression = "comp.RenderEnd",
 						},
 						Curve = Input { Value = FuID { "Easing" }, },
@@ -471,11 +476,11 @@
 						ClipLow = Input { Value = 1, },
 						ClipHigh = Input { Value = 1, },
 						TimeScale = Input {
-							Value = 254.541666666667,
+							Value = 1381.625,
 							Expression = "1.0 / ((AnimTime * comp:GetPrefs(\"Comp.FrameFormat.Rate\")) / (comp.RenderEnd - comp.RenderStart))",
 						},
 						TimeOffset = Input {
-							Value = 0.00392862989032575,
+							Value = 0.000723785397629603,
 							Expression = "(AnimStartTime * comp:GetPrefs(\"Comp.FrameFormat.Rate\")) / (comp.RenderEnd - comp.RenderStart)",
 						},
 						AnimTime = Input {
@@ -535,8 +540,8 @@
 							Source = "Output",
 						}
 					},
-					ViewInfo = OperatorInfo { Pos = { 146.334, 184.575 } },
-					Colors = { TileColor = { R = 0.572549019607843, G = 0.572549019607843, B = 0.572549019607843 }, }
+					ViewInfo = OperatorInfo { Pos = { 67.1378, 196.574 } },
+					Colors = { TileColor = { R = 0.372549019607843, G = 0.6, B = 0.125490196078431 }, }
 				},
 				DummyInput = Transform {
 					CtrlWShown = false,
@@ -815,13 +820,13 @@
 							LINKS_Name = "LabelDestination",
 						},
 						LabelBorder = {
-							LINKID_DataType = "Number",
-							INP_Passive = true,
+							INPID_InputControl = "LabelControl",
+							LBLC_NestLevel = 1,
 							LBLC_DropDownButton = true,
 							ICS_ControlPage = "Controls",
 							LBLC_NumInputs = 3,
-							LBLC_NestLevel = 1,
-							INPID_InputControl = "LabelControl",
+							INP_Passive = true,
+							LINKID_DataType = "Number",
 							LINKS_Name = "LabelBorder",
 						},
 						LabelAnimation = {
@@ -873,7 +878,7 @@
 							LBLC_NestLevel = 1,
 							LBLC_DropDownButton = true,
 							INPID_InputControl = "LabelControl",
-							LBLC_NumInputs = 3,
+							LBLC_NumInputs = 4,
 							INP_Passive = true,
 							LINKID_DataType = "Number",
 							LINKS_Name = "LabelBackground",
@@ -901,6 +906,7 @@
 					Colors = { TileColor = { R = 0.572549019607843, G = 0.572549019607843, B = 0.572549019607843 }, }
 				},
 				ZoomMerge = Merge {
+					CtrlWShown = false,
 					NameSet = true,
 					Inputs = {
 						Blend = Input {
@@ -908,7 +914,7 @@
 							Source = "Value",
 						},
 						Background = Input {
-							SourceOp = "BackgroundSwitch",
+							SourceOp = "TransparentSwitch",
 							Source = "Output",
 						},
 						Foreground = Input {
@@ -917,7 +923,7 @@
 						},
 						PerformDepthMerge = Input { Value = 0, }
 					},
-					ViewInfo = OperatorInfo { Pos = { 293, 139.454 } },
+					ViewInfo = OperatorInfo { Pos = { 382.567, 152.311 } },
 				},
 				BorderMerge = Merge {
 					CtrlWShown = false,
@@ -1320,8 +1326,8 @@
 					NameSet = true,
 					Inputs = {
 						Filter = Input { Value = FuID { "Fast Gaussian" }, },
-						MaskWidth = Input { Value = 3830, },
-						MaskHeight = Input { Value = 2076, },
+						MaskWidth = Input { Value = 3840, },
+						MaskHeight = Input { Value = 2160, },
 						PixelAspect = Input { Value = { 1, 1 }, },
 						UseFrameFormatSettings = Input { Value = 1, },
 						ClippingMode = Input { Value = FuID { "None" }, },
@@ -1340,9 +1346,9 @@
 							SourceOp = "Border",
 							Source = "Mask",
 						},
-						GlobalOut = Input { Value = 443, },
-						Width = Input { Value = 3830, },
-						Height = Input { Value = 2076, },
+						GlobalOut = Input { Value = 33159, },
+						Width = Input { Value = 3840, },
+						Height = Input { Value = 2160, },
 						UseFrameFormatSettings = Input { Value = 1, },
 						["Gamut.SLogVersion"] = Input { Value = FuID { "SLog2" }, },
 						TopLeftRed = Input { Value = 0.5411764705882, },
@@ -1358,7 +1364,7 @@
 							Expression = "iif(Params.EnableBorderAnimation == 1, \"Duration\", \"Custom\")",
 						},
 						Input = Input {
-							Value = 443,
+							Value = 33159,
 							Expression = "comp.RenderEnd",
 						},
 						Curve = Input { Value = FuID { "Easing" }, },
@@ -1370,7 +1376,7 @@
 						ClipLow = Input { Value = 1, },
 						ClipHigh = Input { Value = 1, },
 						TimeScale = Input {
-							Value = 36.9166666666667,
+							Value = 2763.25,
 							Expression = "1.0 / ((Params.BorderAnimationTime * comp:GetPrefs(\"Comp.FrameFormat.Rate\")) / (comp.RenderEnd - comp.RenderStart))",
 						}
 					},
@@ -1406,8 +1412,8 @@
 							SourceOp = "AnimCurves8",
 							Source = "Value",
 						},
-						MaskWidth = Input { Value = 3830, },
-						MaskHeight = Input { Value = 2076, },
+						MaskWidth = Input { Value = 3840, },
+						MaskHeight = Input { Value = 2160, },
 						PixelAspect = Input { Value = { 1, 1 }, },
 						UseFrameFormatSettings = Input { Value = 1, },
 						ClippingMode = Input { Value = FuID { "None" }, },
@@ -1417,11 +1423,11 @@
 							Expression = "SourceParams.Width + BorderWidth",
 						},
 						Height = Input {
-							Value = 0.204536970134875,
+							Value = 0.204201388888889,
 							Expression = "SourceParams.Height + (BorderWidth * (MainTransform.Output.Width / MainTransform.Output.Height))",
 						},
 						WritePosition = Input {
-							Value = 0.589238599988258,
+							Value = 0.591281043084438,
 							Expression = "(((Height * Params.ReciprocalAspectRatio) / 2) + Width + (Height*Params.ReciprocalAspectRatio)) / ((Width + (Height * Params.ReciprocalAspectRatio)) * 2)\n",
 						}
 					},
@@ -1432,16 +1438,16 @@
 							INP_Integer = false,
 							ICS_ControlPage = "Controls",
 							INPID_InputControl = "SliderControl",
-							INP_Default = 0.5,
-							INP_MaxScale = 1,
 							PC_ControlID = 0,
-							INPID_PreviewControl = "RectangleControl",
+							INP_SplineType = "Default",
+							INP_Default = 0.5,
 							INP_MinScale = 0,
-							INP_External = false,
+							INPID_PreviewControl = "RectangleControl",
+							INP_MinAllowed = -1000000,
 							LINKID_DataType = "Number",
 							PC_ControlGroup = 1,
-							INP_MinAllowed = -1000000,
-							INP_SplineType = "Default",
+							INP_External = false,
+							INP_MaxScale = 1,
 							LINKS_Name = "Width"
 						},
 						Height = {
@@ -1449,16 +1455,16 @@
 							INP_Integer = false,
 							ICS_ControlPage = "Controls",
 							INPID_InputControl = "SliderControl",
-							INP_Default = 0.5,
-							INP_MaxScale = 1,
 							PC_ControlID = 1,
-							INPID_PreviewControl = "RectangleControl",
+							INP_SplineType = "Default",
+							INP_Default = 0.5,
 							INP_MinScale = 0,
-							INP_External = false,
+							INPID_PreviewControl = "RectangleControl",
+							INP_MinAllowed = -1000000,
 							LINKID_DataType = "Number",
 							PC_ControlGroup = 1,
-							INP_MinAllowed = -1000000,
-							INP_SplineType = "Default",
+							INP_External = false,
+							INP_MaxScale = 1,
 							LINKS_Name = "Height"
 						},
 						WritePosition = {
@@ -1515,8 +1521,8 @@
 					NameSet = true,
 					Inputs = {
 						Filter = Input { Value = FuID { "Box" }, },
-						MaskWidth = Input { Value = 3830, },
-						MaskHeight = Input { Value = 2076, },
+						MaskWidth = Input { Value = 3840, },
+						MaskHeight = Input { Value = 2160, },
 						PixelAspect = Input { Value = { 1, 1 }, },
 						UseFrameFormatSettings = Input { Value = 1, },
 						ClippingMode = Input { Value = FuID { "None" }, },
@@ -1549,16 +1555,16 @@
 							INP_Integer = false,
 							INPID_InputControl = "SliderControl",
 							ICS_ControlPage = "Controls",
-							INP_SplineType = "Default",
 							INP_MaxScale = 1,
-							PC_ControlID = 0,
-							INPID_PreviewControl = "RectangleControl",
+							INP_SplineType = "Default",
+							INP_Default = 0.5,
 							INP_MinScale = 0,
-							INP_MinAllowed = -1000000,
+							INPID_PreviewControl = "RectangleControl",
+							INP_External = false,
 							LINKID_DataType = "Number",
 							PC_ControlGroup = 1,
-							INP_External = false,
-							INP_Default = 0.5,
+							INP_MinAllowed = -1000000,
+							PC_ControlID = 0,
 							LINKS_Name = "Width"
 						},
 						Height = {
@@ -1566,16 +1572,16 @@
 							INP_Integer = false,
 							INPID_InputControl = "SliderControl",
 							ICS_ControlPage = "Controls",
-							INP_SplineType = "Default",
 							INP_MaxScale = 1,
-							PC_ControlID = 1,
-							INPID_PreviewControl = "RectangleControl",
+							INP_SplineType = "Default",
+							INP_Default = 0.5,
 							INP_MinScale = 0,
-							INP_MinAllowed = -1000000,
+							INPID_PreviewControl = "RectangleControl",
+							INP_External = false,
 							LINKID_DataType = "Number",
 							PC_ControlGroup = 1,
-							INP_External = false,
-							INP_Default = 0.5,
+							INP_MinAllowed = -1000000,
+							PC_ControlID = 1,
 							LINKS_Name = "Height"
 						}
 					}
@@ -1585,8 +1591,8 @@
 					NameSet = true,
 					Inputs = {
 						Filter = Input { Value = FuID { "Fast Gaussian" }, },
-						MaskWidth = Input { Value = 3830, },
-						MaskHeight = Input { Value = 2076, },
+						MaskWidth = Input { Value = 3840, },
+						MaskHeight = Input { Value = 2160, },
 						PixelAspect = Input { Value = { 1, 1 }, },
 						UseFrameFormatSettings = Input { Value = 1, },
 						ClippingMode = Input { Value = FuID { "None" }, },
@@ -1595,6 +1601,78 @@
 						Height = Input { Value = 0.1953125, }
 					},
 					ViewInfo = OperatorInfo { Pos = { -271.033, 37.6496 } },
+				},
+				Background1 = Background {
+					CtrlWShown = false,
+					Inputs = {
+						GlobalOut = Input { Value = 33159, },
+						Width = Input { Value = 3840, },
+						Height = Input { Value = 2160, },
+						UseFrameFormatSettings = Input { Value = 1, },
+						["Gamut.SLogVersion"] = Input { Value = FuID { "SLog2" }, },
+						TopLeftAlpha = Input { Value = 0, }
+					},
+					ViewInfo = OperatorInfo { Pos = { 224.389, 242.99 } },
+				},
+				TransparentSwitch = Switch {
+					NameSet = true,
+					Inputs = {
+						Source = Input {
+							Value = 1,
+							Expression = "EnableTransparency",
+						},
+						EnableTransparency = Input { Value = 1, },
+						Input0 = Input {
+							SourceOp = "BackgroundSwitch",
+							Source = "Output",
+						},
+						Input1 = Input {
+							SourceOp = "Background1",
+							Source = "Output",
+						}
+					},
+					ViewInfo = OperatorInfo { Pos = { 224.389, 197.133 } },
+					Colors = { TileColor = { R = 0.372549019607843, G = 0.6, B = 0.125490196078431 }, },
+					UserControls = ordered() {
+						EnableTransparency = {
+							CBC_TriState = false,
+							INP_Integer = false,
+							LINKID_DataType = "Number",
+							ICS_ControlPage = "Controls",
+							INPID_InputControl = "CheckboxControl",
+							INP_SplineType = "Default",
+							LINKS_Name = "Enable Transparency",
+						}
+					}
+				},
+				Instance_Switch1 = Switch {
+					SourceOp = "TransparentSwitch",
+					Inputs = {
+						LayersNest = Input {
+						},
+						Source = Input {
+							Value = 1,
+							Expression = "TransparentSwitch.EnableTransparency"
+						},
+						CommentsNest = Input {
+						},
+						FrameRenderScriptNest = Input {
+						},
+						StartRenderScripts = Input {
+						},
+						EndRenderScripts = Input {
+						},
+						Input0 = Input {
+							SourceOp = "PipeRouter1",
+							Source = "Output",
+						},
+						Input1 = Input {
+							SourceOp = "Background1",
+							Source = "Output",
+						}
+					},
+					ViewInfo = OperatorInfo { Pos = { 222.504, 286.272 } },
+					Colors = { TileColor = { R = 0.372549019607843, G = 0.6, B = 0.125490196078431 }, }
 				}
 			},
 		},
@@ -1616,10 +1694,13 @@
 				},
 				Invert = Input { Value = 1, },
 				TimeScale = Input {
-					Value = 339.388888888889,
+					Value = 1842.16666666667,
 					Expression = "1.0 / ((AnimTime * comp:GetPrefs(\"Comp.FrameFormat.Rate\")) / (comp.RenderEnd - comp.RenderStart))",
 				},
-				TimeOffset = Input { Expression = "1.0 - (((AnimTime * comp:GetPrefs(\"Comp.FrameFormat.Rate\")) + 1) / (comp.RenderEnd - comp.RenderStart))", },
+				TimeOffset = Input {
+					Value = 0.999427003226877,
+					Expression = "1.0 - (((AnimTime * comp:GetPrefs(\"Comp.FrameFormat.Rate\")) + 1) / (comp.RenderEnd - comp.RenderStart))",
+				},
 				AnimTime = Input {
 					Value = 0.3,
 					Expression = "Params.EndAnimationTime",
@@ -1645,6 +1726,7 @@
 				}
 			},
 			SplineColor = { Red = 0, Green = 0, Blue = 0 },
+			CtrlWZoom = false,
 		}
 	},
 	ActiveTool = "ZoomAndMove"
