@@ -1645,13 +1645,6 @@
 				}
 			},
 			SplineColor = { Red = 0, Green = 0, Blue = 0 },
-			CustomData = {
-				Path = {
-					Map = {
-						["Setting:"] = "C:\\Users\\mug\\onedrive\\Desktop\\effects\\"
-					}
-				},
-			},
 		}
 	},
 	ActiveTool = "ZoomAndMove"
