@@ -230,7 +230,7 @@
 				}
 			},
 			ViewInfo = GroupInfo {
-				Pos = { 327.555, 50.7105 },
+				Pos = { 567.971, 150.134 },
 				Flags = {
 					AllowPan = false,
 					AutoSnap = true,
@@ -607,8 +607,8 @@
 							INP_MinAllowed = 0.00100000004749745,
 							LINKID_DataType = "Number",
 							ICS_ControlPage = "Controls",
-							INP_External = false,
 							INP_SplineType = "Default",
+							INP_External = false,
 							LINKS_Name = "Border Animation Time"
 						},
 						MoveAnimationTime = {
@@ -621,8 +621,8 @@
 							INP_MinAllowed = 0.00100000004749745,
 							LINKID_DataType = "Number",
 							ICS_ControlPage = "Controls",
-							INP_External = false,
 							INP_SplineType = "Default",
+							INP_External = false,
 							LINKS_Name = "Move Animation Time"
 						},
 						AspectRatio = {
@@ -634,8 +634,8 @@
 							INP_MinAllowed = -1000000,
 							LINKID_DataType = "Number",
 							ICS_ControlPage = "Controls",
-							INP_SplineType = "Default",
 							INP_External = false,
+							INP_SplineType = "Default",
 							LINKS_Name = "Aspect Ratio"
 						},
 						ReciprocalAspectRatio = {
@@ -648,8 +648,8 @@
 							INP_MinAllowed = 0,
 							LINKID_DataType = "Number",
 							ICS_ControlPage = "Controls",
-							INP_SplineType = "Default",
 							INP_External = false,
+							INP_SplineType = "Default",
 							LINKS_Name = "Reciprocal Aspect Ratio"
 						},
 						BackgroundBlur = {
@@ -662,8 +662,8 @@
 							INP_MinAllowed = 0,
 							LINKID_DataType = "Number",
 							ICS_ControlPage = "Controls",
-							INP_External = false,
 							INP_SplineType = "Default",
+							INP_External = false,
 							LINKS_Name = "Background Blur"
 						},
 						BackgroundAnimationStartOffset = {
@@ -676,8 +676,8 @@
 							INP_MinAllowed = -1000000,
 							LINKID_DataType = "Number",
 							ICS_ControlPage = "Controls",
-							INP_External = false,
 							INP_SplineType = "Default",
+							INP_External = false,
 							LINKS_Name = "Background Animation Start Offset"
 						},
 						GrayoutLevel = {
@@ -690,8 +690,8 @@
 							INP_MinAllowed = -1000000,
 							LINKID_DataType = "Number",
 							ICS_ControlPage = "Controls",
-							INP_External = false,
 							INP_SplineType = "Default",
+							INP_External = false,
 							LINKS_Name = "Grayout Level"
 						},
 						EnableGrayout = {
@@ -703,9 +703,9 @@
 							INP_MinScale = 0,
 							INP_MinAllowed = 0,
 							LINKID_DataType = "Number",
-							INP_SplineType = "Default",
-							ICS_ControlPage = "Controls",
 							INP_External = false,
+							ICS_ControlPage = "Controls",
+							INP_SplineType = "Default",
 							LINKS_Name = "Enable Grayout"
 						},
 						EnableBorder = {
@@ -718,9 +718,9 @@
 							INP_MinScale = 0,
 							INP_MinAllowed = 0,
 							LINKID_DataType = "Number",
-							INP_SplineType = "Default",
-							ICS_ControlPage = "Controls",
 							INP_External = false,
+							ICS_ControlPage = "Controls",
+							INP_SplineType = "Default",
 							LINKS_Name = "Enable Border"
 						},
 						EndAnimationTime = {
@@ -733,8 +733,8 @@
 							INP_MinAllowed = 0.00100000004749745,
 							LINKID_DataType = "Number",
 							ICS_ControlPage = "Controls",
-							INP_External = false,
 							INP_SplineType = "Default",
+							INP_External = false,
 							LINKS_Name = "End Animation Time"
 						},
 						MoveAnimationStartOffset = {
@@ -747,8 +747,8 @@
 							INP_MinAllowed = 0,
 							LINKID_DataType = "Number",
 							ICS_ControlPage = "Controls",
-							INP_External = false,
 							INP_SplineType = "Default",
+							INP_External = false,
 							LINKS_Name = "Move Animation Start Offset"
 						},
 						EnableEndAnimation = {
@@ -759,8 +759,8 @@
 							INP_MinAllowed = 0,
 							LINKID_DataType = "Number",
 							ICS_ControlPage = "Controls",
-							INP_External = false,
 							CBC_TriState = false,
+							INP_External = false,
 							LINKS_Name = "Enable End Animation",
 						},
 						EnableBorderAnimation = {
@@ -771,8 +771,8 @@
 							INP_MinAllowed = 0,
 							LINKID_DataType = "Number",
 							ICS_ControlPage = "Controls",
-							INP_External = false,
 							CBC_TriState = false,
+							INP_External = false,
 							LINKS_Name = "Enable Border Animation",
 						},
 						EnableBackgroundAnimation = {
@@ -784,9 +784,9 @@
 							INP_MinScale = 0,
 							INP_External = false,
 							LINKID_DataType = "Number",
-							INP_SplineType = "Default",
-							ICS_ControlPage = "Controls",
 							INP_MinAllowed = 0,
+							ICS_ControlPage = "Controls",
+							INP_SplineType = "Default",
 							LINKS_Name = "Enable Background Animation"
 						},
 						EnableMovementAnimation = {
@@ -797,89 +797,89 @@
 							INP_MinAllowed = 0,
 							LINKID_DataType = "Number",
 							ICS_ControlPage = "Controls",
-							INP_External = false,
 							CBC_TriState = false,
+							INP_External = false,
 							LINKS_Name = "Enable Movement Animation",
 						},
 						LabelSource = {
-							LBLC_NestLevel = 1,
+							INP_Passive = true,
 							LBLC_DropDownButton = true,
 							INPID_InputControl = "LabelControl",
 							LBLC_NumInputs = 3,
-							INP_Passive = true,
+							LBLC_NestLevel = 1,
 							LINKID_DataType = "Number",
 							LINKS_Name = "Source",
 						},
 						LabelDestination = {
-							LBLC_NestLevel = 1,
+							INP_Passive = true,
 							LBLC_DropDownButton = true,
 							INPID_InputControl = "LabelControl",
 							LBLC_NumInputs = 4,
-							INP_Passive = true,
+							LBLC_NestLevel = 1,
 							LINKID_DataType = "Number",
 							LINKS_Name = "LabelDestination",
 						},
 						LabelBorder = {
-							INPID_InputControl = "LabelControl",
-							LBLC_NestLevel = 1,
-							LBLC_DropDownButton = true,
 							ICS_ControlPage = "Controls",
-							LBLC_NumInputs = 3,
-							INP_Passive = true,
 							LINKID_DataType = "Number",
+							LBLC_DropDownButton = true,
+							INPID_InputControl = "LabelControl",
+							LBLC_NumInputs = 3,
+							LBLC_NestLevel = 1,
+							INP_Passive = true,
 							LINKS_Name = "LabelBorder",
 						},
 						LabelAnimation = {
-							LBLC_NestLevel = 1,
+							INP_Passive = true,
 							LBLC_DropDownButton = true,
 							INPID_InputControl = "LabelControl",
 							LBLC_NumInputs = 12,
-							INP_Passive = true,
+							LBLC_NestLevel = 1,
 							LINKID_DataType = "Number",
 							LINKS_Name = "LabelAnimation",
 						},
 						LabelBorderAnimation = {
-							LBLC_NestLevel = 2,
+							INP_Passive = true,
 							LBLC_DropDownButton = true,
 							INPID_InputControl = "LabelControl",
 							LBLC_NumInputs = 2,
-							INP_Passive = true,
+							LBLC_NestLevel = 2,
 							LINKID_DataType = "Number",
 							LINKS_Name = "LabelBorderAnimation",
 						},
 						LabelMovement = {
-							LBLC_NestLevel = 2,
+							INP_Passive = true,
 							LBLC_DropDownButton = true,
 							INPID_InputControl = "LabelControl",
 							LBLC_NumInputs = 5,
-							INP_Passive = true,
+							LBLC_NestLevel = 2,
 							LINKID_DataType = "Number",
 							LINKS_Name = "LabelMovement",
 						},
 						LabelBackgroundAnimation = {
-							LBLC_NestLevel = 3,
+							INP_Passive = true,
 							LBLC_DropDownButton = true,
 							INPID_InputControl = "LabelControl",
 							LBLC_NumInputs = 2,
-							INP_Passive = true,
+							LBLC_NestLevel = 3,
 							LINKID_DataType = "Number",
 							LINKS_Name = "LabelBackgroundAnimation",
 						},
 						LabelEndAnimation = {
-							LBLC_NestLevel = 1,
+							INP_Passive = true,
 							LBLC_DropDownButton = true,
 							INPID_InputControl = "LabelControl",
 							LBLC_NumInputs = 2,
-							INP_Passive = true,
+							LBLC_NestLevel = 1,
 							LINKID_DataType = "Number",
 							LINKS_Name = "LabelEndAnimation",
 						},
 						LabelBackground = {
-							LBLC_NestLevel = 1,
+							INP_Passive = true,
 							LBLC_DropDownButton = true,
 							INPID_InputControl = "LabelControl",
 							LBLC_NumInputs = 4,
-							INP_Passive = true,
+							LBLC_NestLevel = 1,
 							LINKID_DataType = "Number",
 							LINKS_Name = "LabelBackground",
 						}
@@ -1438,16 +1438,16 @@
 							INP_Integer = false,
 							ICS_ControlPage = "Controls",
 							INPID_InputControl = "SliderControl",
-							PC_ControlID = 0,
+							INP_MaxScale = 1,
 							INP_SplineType = "Default",
-							INP_Default = 0.5,
+							PC_ControlID = 0,
+							INP_External = false,
 							INP_MinScale = 0,
-							INPID_PreviewControl = "RectangleControl",
 							INP_MinAllowed = -1000000,
 							LINKID_DataType = "Number",
 							PC_ControlGroup = 1,
-							INP_External = false,
-							INP_MaxScale = 1,
+							INPID_PreviewControl = "RectangleControl",
+							INP_Default = 0.5,
 							LINKS_Name = "Width"
 						},
 						Height = {
@@ -1455,16 +1455,16 @@
 							INP_Integer = false,
 							ICS_ControlPage = "Controls",
 							INPID_InputControl = "SliderControl",
-							PC_ControlID = 1,
+							INP_MaxScale = 1,
 							INP_SplineType = "Default",
-							INP_Default = 0.5,
+							PC_ControlID = 1,
+							INP_External = false,
 							INP_MinScale = 0,
-							INPID_PreviewControl = "RectangleControl",
 							INP_MinAllowed = -1000000,
 							LINKID_DataType = "Number",
 							PC_ControlGroup = 1,
-							INP_External = false,
-							INP_MaxScale = 1,
+							INPID_PreviewControl = "RectangleControl",
+							INP_Default = 0.5,
 							LINKS_Name = "Height"
 						},
 						WritePosition = {
@@ -1477,8 +1477,8 @@
 							INP_MinAllowed = -1000000,
 							LINKID_DataType = "Number",
 							ICS_ControlPage = "Controls",
-							INP_SplineType = "Default",
 							INP_External = false,
+							INP_SplineType = "Default",
 							LINKS_Name = "Position"
 						}
 					}
@@ -1555,16 +1555,16 @@
 							INP_Integer = false,
 							INPID_InputControl = "SliderControl",
 							ICS_ControlPage = "Controls",
+							PC_ControlID = 0,
 							INP_MaxScale = 1,
-							INP_SplineType = "Default",
 							INP_Default = 0.5,
+							INP_MinAllowed = -1000000,
 							INP_MinScale = 0,
-							INPID_PreviewControl = "RectangleControl",
 							INP_External = false,
 							LINKID_DataType = "Number",
 							PC_ControlGroup = 1,
-							INP_MinAllowed = -1000000,
-							PC_ControlID = 0,
+							INPID_PreviewControl = "RectangleControl",
+							INP_SplineType = "Default",
 							LINKS_Name = "Width"
 						},
 						Height = {
@@ -1572,16 +1572,16 @@
 							INP_Integer = false,
 							INPID_InputControl = "SliderControl",
 							ICS_ControlPage = "Controls",
+							PC_ControlID = 1,
 							INP_MaxScale = 1,
-							INP_SplineType = "Default",
 							INP_Default = 0.5,
+							INP_MinAllowed = -1000000,
 							INP_MinScale = 0,
-							INPID_PreviewControl = "RectangleControl",
 							INP_External = false,
 							LINKID_DataType = "Number",
 							PC_ControlGroup = 1,
-							INP_MinAllowed = -1000000,
-							PC_ControlID = 1,
+							INPID_PreviewControl = "RectangleControl",
+							INP_SplineType = "Default",
 							LINKS_Name = "Height"
 						}
 					}
@@ -1615,13 +1615,13 @@
 					ViewInfo = OperatorInfo { Pos = { 224.389, 242.99 } },
 				},
 				TransparentSwitch = Switch {
+					CtrlWShown = false,
 					NameSet = true,
 					Inputs = {
 						Source = Input {
 							Value = 1,
 							Expression = "EnableTransparency",
 						},
-						EnableTransparency = Input { Value = 1, },
 						Input0 = Input {
 							SourceOp = "BackgroundSwitch",
 							Source = "Output",
@@ -1646,6 +1646,7 @@
 					}
 				},
 				Instance_Switch1 = Switch {
+					CtrlWShown = false,
 					SourceOp = "TransparentSwitch",
 					Inputs = {
 						LayersNest = Input {
