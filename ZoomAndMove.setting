@@ -2,13 +2,6 @@
 	Tools = ordered() {
 		ZoomAndMove = GroupOperator {
 			CtrlWZoom = false,
-			CustomData = {
-				Path = {
-					Map = {
-						["Setting:"] = "C:\\Users\\mug\\onedrive\\Desktop\\effects\\"
-					}
-				},
-			},
 			Inputs = ordered() {
 				Input31 = InstanceInput {
 					SourceOp = "Params",
