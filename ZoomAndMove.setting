@@ -602,7 +602,6 @@
 							INP_MinAllowed = 0.00100000004749745,
 							LINKID_DataType = "Number",
 							INP_External = false,
-							INP_Passive = true,
 							INP_SplineType = "Default",
 							LINKS_Name = "Border Animation Time"
 						},
@@ -617,7 +616,6 @@
 							INP_MinAllowed = 0.00100000004749745,
 							LINKID_DataType = "Number",
 							INP_External = false,
-							INP_Passive = true,
 							INP_SplineType = "Default",
 							LINKS_Name = "Move Animation Time"
 						},
@@ -631,7 +629,6 @@
 							INP_MinAllowed = -1000000,
 							LINKID_DataType = "Number",
 							INP_SplineType = "Default",
-							INP_Passive = true,
 							INP_External = false,
 							LINKS_Name = "Aspect Ratio"
 						},
@@ -646,7 +643,6 @@
 							INP_MinAllowed = 0,
 							LINKID_DataType = "Number",
 							INP_SplineType = "Default",
-							INP_Passive = true,
 							INP_External = false,
 							LINKS_Name = "Reciprocal Aspect Ratio"
 						},
@@ -661,7 +657,6 @@
 							INP_MinAllowed = 0,
 							LINKID_DataType = "Number",
 							INP_External = false,
-							INP_Passive = true,
 							INP_SplineType = "Default",
 							LINKS_Name = "Background Blur"
 						},
@@ -676,7 +671,6 @@
 							INP_MinAllowed = -1000000,
 							LINKID_DataType = "Number",
 							INP_External = false,
-							INP_Passive = true,
 							INP_SplineType = "Default",
 							LINKS_Name = "Background Animation Start Offset"
 						},
@@ -691,7 +685,6 @@
 							INP_MinAllowed = -1000000,
 							LINKID_DataType = "Number",
 							INP_External = false,
-							INP_Passive = true,
 							INP_SplineType = "Default",
 							LINKS_Name = "Grayout Level"
 						},
@@ -706,7 +699,6 @@
 							INP_MinAllowed = 0,
 							LINKID_DataType = "Number",
 							ICS_ControlPage = "Controls",
-							INP_Passive = true,
 							INP_External = false,
 							LINKS_Name = "Enable Grayout"
 						},
@@ -722,7 +714,6 @@
 							INP_MinAllowed = 0,
 							LINKID_DataType = "Number",
 							ICS_ControlPage = "Controls",
-							INP_Passive = true,
 							INP_External = false,
 							LINKS_Name = "Enable Border"
 						},
@@ -737,7 +728,6 @@
 							INP_MinAllowed = 0.00100000004749745,
 							LINKID_DataType = "Number",
 							INP_External = false,
-							INP_Passive = true,
 							INP_SplineType = "Default",
 							LINKS_Name = "End Animation Time"
 						},
@@ -752,7 +742,6 @@
 							INP_MinAllowed = 0,
 							LINKID_DataType = "Number",
 							INP_External = false,
-							INP_Passive = true,
 							INP_SplineType = "Default",
 							LINKS_Name = "Move Animation Start Offset"
 						},
@@ -765,7 +754,6 @@
 							INP_MinAllowed = 0,
 							LINKID_DataType = "Number",
 							INP_External = false,
-							INP_Passive = true,
 							CBC_TriState = false,
 							LINKS_Name = "Enable End Animation",
 						},
@@ -778,7 +766,6 @@
 							INP_MinAllowed = 0,
 							LINKID_DataType = "Number",
 							INP_External = false,
-							INP_Passive = true,
 							CBC_TriState = false,
 							LINKS_Name = "Enable Border Animation",
 						},
@@ -793,7 +780,6 @@
 							INP_External = false,
 							LINKID_DataType = "Number",
 							ICS_ControlPage = "Controls",
-							INP_Passive = true,
 							INP_MinAllowed = 0,
 							LINKS_Name = "Enable Background Animation"
 						},
@@ -806,7 +792,6 @@
 							INP_MinAllowed = 0,
 							LINKID_DataType = "Number",
 							INP_External = false,
-							INP_Passive = true,
 							CBC_TriState = false,
 							LINKS_Name = "Enable Movement Animation",
 						},
@@ -815,6 +800,7 @@
 							INPID_InputControl = "LabelControl",
 							LBLC_NumInputs = 3,
 							LBLC_NestLevel = 1,
+							INP_Passive = true,
 							LINKID_DataType = "Number",
 							LINKS_Name = "Source",
 						},
@@ -823,6 +809,7 @@
 							INPID_InputControl = "LabelControl",
 							LBLC_NumInputs = 4,
 							LBLC_NestLevel = 1,
+							INP_Passive = true,
 							LINKID_DataType = "Number",
 							LINKS_Name = "LabelDestination",
 						},
@@ -832,6 +819,7 @@
 							ICS_ControlPage = "Controls",
 							LBLC_NumInputs = 3,
 							LBLC_NestLevel = 1,
+							INP_Passive = true,
 							LINKID_DataType = "Number",
 							LINKS_Name = "LabelBorder",
 						},
@@ -840,6 +828,7 @@
 							INPID_InputControl = "LabelControl",
 							LBLC_NumInputs = 12,
 							LBLC_NestLevel = 1,
+							INP_Passive = true,
 							LINKID_DataType = "Number",
 							LINKS_Name = "LabelAnimation",
 						},
@@ -848,6 +837,7 @@
 							INPID_InputControl = "LabelControl",
 							LBLC_NumInputs = 2,
 							LBLC_NestLevel = 2,
+							INP_Passive = true,
 							LINKID_DataType = "Number",
 							LINKS_Name = "LabelBorderAnimation",
 						},
@@ -856,6 +846,7 @@
 							INPID_InputControl = "LabelControl",
 							LBLC_NumInputs = 5,
 							LBLC_NestLevel = 2,
+							INP_Passive = true,
 							LINKID_DataType = "Number",
 							LINKS_Name = "LabelMovement",
 						},
@@ -864,6 +855,7 @@
 							INPID_InputControl = "LabelControl",
 							LBLC_NumInputs = 2,
 							LBLC_NestLevel = 3,
+							INP_Passive = true,
 							LINKID_DataType = "Number",
 							LINKS_Name = "LabelBackgroundAnimation",
 						},
@@ -872,6 +864,7 @@
 							INPID_InputControl = "LabelControl",
 							LBLC_NumInputs = 2,
 							LBLC_NestLevel = 1,
+							INP_Passive = true,
 							LINKID_DataType = "Number",
 							LINKS_Name = "LabelEndAnimation",
 						},
@@ -880,6 +873,7 @@
 							INPID_InputControl = "LabelControl",
 							LBLC_NumInputs = 3,
 							LBLC_NestLevel = 1,
+							INP_Passive = true,
 							LINKID_DataType = "Number",
 							LINKS_Name = "LabelBackground",
 						}
@@ -1000,7 +994,6 @@
 							INP_External = false,
 							LINKID_DataType = "Point",
 							ICS_ControlPage = "Controls",
-							INP_Passive = true,
 							OFCD_DisplayXScale = 1,
 							LINKS_Name = "Pivot",
 						},
@@ -1012,7 +1005,6 @@
 							INP_External = false,
 							LINKID_DataType = "Point",
 							ICS_ControlPage = "Controls",
-							INP_Passive = true,
 							OFCD_DisplayXScale = 1,
 							LINKS_Name = "Center",
 						}
@@ -1384,7 +1376,6 @@
 							LINKID_DataType = "Number",
 							INPID_InputControl = "SliderControl",
 							ICS_ControlPage = "Controls",
-							INP_Passive = true,
 							INP_SplineType = "Default",
 							LINKS_Name = "AnimTime",
 						}
@@ -1446,7 +1437,6 @@
 							INP_External = false,
 							LINKID_DataType = "Number",
 							PC_ControlGroup = 1,
-							INP_Passive = true,
 							INP_MaxScale = 1,
 							LINKS_Name = "Width"
 						},
@@ -1464,7 +1454,6 @@
 							INP_External = false,
 							LINKID_DataType = "Number",
 							PC_ControlGroup = 1,
-							INP_Passive = true,
 							INP_MaxScale = 1,
 							LINKS_Name = "Height"
 						},
@@ -1479,7 +1468,6 @@
 							INP_MinAllowed = -1000000,
 							LINKID_DataType = "Number",
 							INP_SplineType = "Default",
-							INP_Passive = true,
 							INP_External = false,
 							LINKS_Name = "Position"
 						}
@@ -1513,7 +1501,6 @@
 							INP_External = false,
 							LINKID_DataType = "Point",
 							ICS_ControlPage = "Controls",
-							INP_Passive = true,
 							OFCD_DisplayXScale = 1,
 							LINKS_Name = "Center",
 						}
