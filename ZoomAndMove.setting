@@ -230,7 +230,7 @@
 				}
 			},
 			ViewInfo = GroupInfo {
-				Pos = { 567.971, 150.134 },
+				Pos = { 284.111, 50.3571 },
 				Flags = {
 					AllowPan = false,
 					AutoSnap = true,
@@ -255,7 +255,6 @@
 					Colors = { TileColor = { R = 0.372549019607843, G = 0.6, B = 0.125490196078431 }, }
 				},
 				FinalMerge = Merge {
-					CtrlWShown = false,
 					NameSet = true,
 					Inputs = {
 						Blend = Input {
@@ -281,9 +280,12 @@
 							Value = FuID { "Duration" },
 							Expression = "iif (Params.EnableEndAnimation == 1, \"Duration\", \"Custom\")",
 						},
-						Input = Input { Expression = "comp.RenderStart", },
+						Input = Input {
+							Value = 216000,
+							Expression = "comp.RenderStart",
+						},
 						Curve = Input { Value = FuID { "Easing" }, },
-						EaseIn = Input { Value = FuID { "Quad" }, },
+						EaseIn = Input { Value = FuID { "Sine" }, },
 						Lookup = Input {
 							SourceOp = "AnimCurves7Lookup",
 							Source = "Value",
@@ -292,11 +294,11 @@
 						ClipLow = Input { Value = 1, },
 						ClipHigh = Input { Value = 1, },
 						TimeScale = Input {
-							Value = 1842.16666666667,
+							Value = 16.6111111111111,
 							Expression = "1.0 / ((AnimTime * comp:GetPrefs(\"Comp.FrameFormat.Rate\")) / (comp.RenderEnd - comp.RenderStart))",
 						},
 						TimeOffset = Input {
-							Value = 0.999427003226877,
+							Value = 0.936454849498328,
 							Expression = "1.0 - (((AnimTime * comp:GetPrefs(\"Comp.FrameFormat.Rate\")) + 1) / (comp.RenderEnd - comp.RenderStart))",
 						},
 						AnimTime = Input {
@@ -324,7 +326,6 @@
 						}
 					},
 					SplineColor = { Red = 0, Green = 0, Blue = 0 },
-					CtrlWZoom = false,
 				},
 				BackgroundBlur = Blur {
 					CtrlWShown = false,
@@ -350,7 +351,7 @@
 							Expression = "iif(Params.EnableBackgroundAnimation == 1, \"Duration\", \"Custom\" )",
 						},
 						Input = Input {
-							Value = 33159,
+							Value = 216299,
 							Expression = "comp.RenderEnd",
 						},
 						Curve = Input { Value = FuID { "Easing" }, },
@@ -366,11 +367,11 @@
 						ClipLow = Input { Value = 1, },
 						ClipHigh = Input { Value = 1, },
 						TimeScale = Input {
-							Value = 1381.625,
+							Value = 12.4583333333333,
 							Expression = "1.0 / ((AnimTime * comp:GetPrefs(\"Comp.FrameFormat.Rate\")) / (comp.RenderEnd - comp.RenderStart))",
 						},
 						TimeOffset = Input {
-							Value = 0.000723785397629603,
+							Value = 0.0802675585284281,
 							Expression = "(AnimStartTime * comp:GetPrefs(\"Comp.FrameFormat.Rate\")) / (comp.RenderEnd - comp.RenderStart)",
 						},
 						AnimTime = Input {
@@ -458,7 +459,7 @@
 							Expression = "iif(Params.EnableBackgroundAnimation == 1, \"Duration\", \"Custom\" )",
 						},
 						Input = Input {
-							Value = 33159,
+							Value = 216299,
 							Expression = "comp.RenderEnd",
 						},
 						Curve = Input { Value = FuID { "Easing" }, },
@@ -476,11 +477,11 @@
 						ClipLow = Input { Value = 1, },
 						ClipHigh = Input { Value = 1, },
 						TimeScale = Input {
-							Value = 1381.625,
+							Value = 12.4583333333333,
 							Expression = "1.0 / ((AnimTime * comp:GetPrefs(\"Comp.FrameFormat.Rate\")) / (comp.RenderEnd - comp.RenderStart))",
 						},
 						TimeOffset = Input {
-							Value = 0.000723785397629603,
+							Value = 0.0802675585284281,
 							Expression = "(AnimStartTime * comp:GetPrefs(\"Comp.FrameFormat.Rate\")) / (comp.RenderEnd - comp.RenderStart)",
 						},
 						AnimTime = Input {
@@ -821,12 +822,12 @@
 						},
 						LabelBorder = {
 							ICS_ControlPage = "Controls",
-							LINKID_DataType = "Number",
-							LBLC_DropDownButton = true,
 							INPID_InputControl = "LabelControl",
+							LBLC_DropDownButton = true,
+							LINKID_DataType = "Number",
 							LBLC_NumInputs = 3,
-							LBLC_NestLevel = 1,
 							INP_Passive = true,
+							LBLC_NestLevel = 1,
 							LINKS_Name = "LabelBorder",
 						},
 						LabelAnimation = {
@@ -1024,11 +1025,11 @@
 					CtrlWZoom = false,
 					Inputs = {
 						Source = Input {
-							Value = FuID { "Custom" },
+							Value = FuID { "Duration" },
 							Expression = "iif(Params.EnableMovementAnimation == 1, \"Duration\", \"Custom\")",
 						},
 						Input = Input {
-							Value = 756,
+							Value = 299,
 							Expression = "comp.RenderEnd",
 						},
 						Curve = Input { Value = FuID { "Easing" }, },
@@ -1038,21 +1039,21 @@
 							Source = "Value",
 						},
 						Scale = Input {
-							Value = 0.44175134202454,
+							Value = 0.517299107142857,
 							Expression = "DestinationParams.Center.Y - SourceParams.Center.Y",
 						},
 						Offset = Input {
-							Value = 0.195584328439965,
+							Value = 0.166852678571429,
 							Expression = "SourceParams.Center.Y",
 						},
 						ClipLow = Input { Value = 1, },
 						ClipHigh = Input { Value = 1, },
 						TimeScale = Input {
-							Value = 31.5,
+							Value = 12.4583333333333,
 							Expression = "1.0 / ((AnimTime * comp:GetPrefs(\"Comp.FrameFormat.Rate\")) / (comp.RenderEnd - comp.RenderStart))",
 						},
 						TimeOffset = Input {
-							Value = 0.0238095238095238,
+							Value = 0.0602006688963211,
 							Expression = "(AnimStartTime * comp:GetPrefs(\"Comp.FrameFormat.Rate\")) / (comp.RenderEnd - comp.RenderStart)",
 						},
 						AnimTime = Input {
@@ -1097,11 +1098,11 @@
 					CtrlWZoom = false,
 					Inputs = {
 						Source = Input {
-							Value = FuID { "Custom" },
+							Value = FuID { "Duration" },
 							Expression = "iif(Params.EnableMovementAnimation == 1, \"Duration\", \"Custom\")",
 						},
 						Input = Input {
-							Value = 756,
+							Value = 299,
 							Expression = "comp.RenderEnd",
 						},
 						Curve = Input { Value = FuID { "Easing" }, },
@@ -1111,21 +1112,21 @@
 							Source = "Value",
 						},
 						Scale = Input {
-							Value = -0.64740904753188,
+							Value = -0.727386934673366,
 							Expression = "DestinationParams.Center.X - SourceParams.Center.X",
 						},
 						Offset = Input {
-							Value = 0.850978295928665,
+							Value = 0.879711055276382,
 							Expression = "SourceParams.Center.X",
 						},
 						ClipLow = Input { Value = 1, },
 						ClipHigh = Input { Value = 1, },
 						TimeScale = Input {
-							Value = 31.5,
+							Value = 12.4583333333333,
 							Expression = "1.0 / ((AnimTime * comp:GetPrefs(\"Comp.FrameFormat.Rate\")) / (comp.RenderEnd - comp.RenderStart))",
 						},
 						TimeOffset = Input {
-							Value = 0.0238095238095238,
+							Value = 0.0602006688963211,
 							Expression = "(AnimStartOffset * comp:GetPrefs(\"Comp.FrameFormat.Rate\")) / (comp.RenderEnd - comp.RenderStart)",
 						},
 						AnimTime = Input {
@@ -1170,11 +1171,11 @@
 					CtrlWZoom = false,
 					Inputs = {
 						Source = Input {
-							Value = FuID { "Custom" },
+							Value = FuID { "Duration" },
 							Expression = "iif(Params.EnableMovementAnimation == 1, \"Duration\", \"Custom\")",
 						},
 						Input = Input {
-							Value = 756,
+							Value = 299,
 							Expression = "comp.RenderEnd",
 						},
 						Curve = Input { Value = FuID { "Easing" }, },
@@ -1184,17 +1185,17 @@
 							Source = "Value",
 						},
 						Scale = Input {
-							Value = 47.778,
+							Value = 58.78691,
 							Expression = "DestinationParams.Angle",
 						},
 						ClipLow = Input { Value = 1, },
 						ClipHigh = Input { Value = 1, },
 						TimeScale = Input {
-							Value = 31.5,
+							Value = 12.4583333333333,
 							Expression = "1.0 / ((AnimTime * comp:GetPrefs(\"Comp.FrameFormat.Rate\")) / (comp.RenderEnd - comp.RenderStart))",
 						},
 						TimeOffset = Input {
-							Value = 0.0238095238095238,
+							Value = 0.0602006688963211,
 							Expression = "(AnimStartTime * comp:GetPrefs(\"Comp.FrameFormat.Rate\")) / (comp.RenderEnd - comp.RenderStart)",
 						},
 						AnimTime = Input {
@@ -1239,11 +1240,11 @@
 					CtrlWZoom = false,
 					Inputs = {
 						Source = Input {
-							Value = FuID { "Custom" },
+							Value = FuID { "Duration" },
 							Expression = "iif(Params.EnableMovementAnimation == 1, \"Duration\", \"Custom\")",
 						},
 						Input = Input {
-							Value = 756,
+							Value = 299,
 							Expression = "comp.RenderEnd",
 						},
 						Curve = Input { Value = FuID { "Easing" }, },
@@ -1253,16 +1254,16 @@
 							Source = "Value",
 						},
 						Scale = Input {
-							Value = 0.609149095612203,
+							Value = 0.449628121904086,
 							Expression = "DestinationParams.Width / SourceParams.Width - 1.0",
 						},
 						Offset = Input { Value = 1, },
 						TimeScale = Input {
-							Value = 31.5,
+							Value = 12.4583333333333,
 							Expression = "1.0 / ((AnimTime * comp:GetPrefs(\"Comp.FrameFormat.Rate\")) / (comp.RenderEnd - comp.RenderStart))",
 						},
 						TimeOffset = Input {
-							Value = 0.0238095238095238,
+							Value = 0.0602006688963211,
 							Expression = "(AnimStartTime * comp:GetPrefs(\"Comp.FrameFormat.Rate\")) / (comp.RenderEnd - comp.RenderStart)",
 						},
 						AnimTime = Input {
@@ -1309,7 +1310,7 @@
 					Inputs = {
 						Filter = Input { Value = FuID { "Box" }, },
 						["Garbage.Matte"] = Input {
-							SourceOp = "SourceMask",
+							SourceOp = "SourceParams",
 							Source = "Mask",
 						},
 						["Garbage.MaskNest"] = Input { Value = 1, },
@@ -1331,7 +1332,7 @@
 						PixelAspect = Input { Value = { 1, 1 }, },
 						UseFrameFormatSettings = Input { Value = 1, },
 						ClippingMode = Input { Value = FuID { "None" }, },
-						Center = Input { Value = { 0.152324120603016, 0.684151785714286 }, },
+						Center = Input { Value = { 0.685027614568561, 0.601464446344767 }, },
 						Width = Input { Value = 0.2822768327829, },
 						Height = Input { Expression = "SourceParams.Height * (Width / SourceParams.Width)", },
 						Angle = Input { Value = 58.78691, }
@@ -1346,7 +1347,8 @@
 							SourceOp = "Border",
 							Source = "Mask",
 						},
-						GlobalOut = Input { Value = 33159, },
+						GlobalIn = Input { Value = 216000, },
+						GlobalOut = Input { Value = 216299, },
 						Width = Input { Value = 3840, },
 						Height = Input { Value = 2160, },
 						UseFrameFormatSettings = Input { Value = 1, },
@@ -1364,7 +1366,7 @@
 							Expression = "iif(Params.EnableBorderAnimation == 1, \"Duration\", \"Custom\")",
 						},
 						Input = Input {
-							Value = 33159,
+							Value = 216299,
 							Expression = "comp.RenderEnd",
 						},
 						Curve = Input { Value = FuID { "Easing" }, },
@@ -1376,7 +1378,7 @@
 						ClipLow = Input { Value = 1, },
 						ClipHigh = Input { Value = 1, },
 						TimeScale = Input {
-							Value = 2763.25,
+							Value = 24.9166666666667,
 							Expression = "1.0 / ((Params.BorderAnimationTime * comp:GetPrefs(\"Comp.FrameFormat.Rate\")) / (comp.RenderEnd - comp.RenderStart))",
 						}
 					},
@@ -1438,16 +1440,16 @@
 							INP_Integer = false,
 							ICS_ControlPage = "Controls",
 							INPID_InputControl = "SliderControl",
-							INP_MaxScale = 1,
 							INP_SplineType = "Default",
-							PC_ControlID = 0,
-							INP_External = false,
-							INP_MinScale = 0,
+							INP_MaxScale = 1,
+							INP_Default = 0.5,
 							INP_MinAllowed = -1000000,
+							INPID_PreviewControl = "RectangleControl",
+							INP_External = false,
 							LINKID_DataType = "Number",
 							PC_ControlGroup = 1,
-							INPID_PreviewControl = "RectangleControl",
-							INP_Default = 0.5,
+							INP_MinScale = 0,
+							PC_ControlID = 0,
 							LINKS_Name = "Width"
 						},
 						Height = {
@@ -1455,16 +1457,16 @@
 							INP_Integer = false,
 							ICS_ControlPage = "Controls",
 							INPID_InputControl = "SliderControl",
-							INP_MaxScale = 1,
 							INP_SplineType = "Default",
-							PC_ControlID = 1,
-							INP_External = false,
-							INP_MinScale = 0,
+							INP_MaxScale = 1,
+							INP_Default = 0.5,
 							INP_MinAllowed = -1000000,
+							INPID_PreviewControl = "RectangleControl",
+							INP_External = false,
 							LINKID_DataType = "Number",
 							PC_ControlGroup = 1,
-							INPID_PreviewControl = "RectangleControl",
-							INP_Default = 0.5,
+							INP_MinScale = 0,
+							PC_ControlID = 1,
 							LINKS_Name = "Height"
 						},
 						WritePosition = {
@@ -1516,7 +1518,7 @@
 						}
 					}
 				},
-				SourceMask = RectangleMask {
+				SourceParams = RectangleMask {
 					CtrlWShown = false,
 					NameSet = true,
 					Inputs = {
@@ -1526,86 +1528,17 @@
 						PixelAspect = Input { Value = { 1, 1 }, },
 						UseFrameFormatSettings = Input { Value = 1, },
 						ClippingMode = Input { Value = FuID { "None" }, },
-						Center = Input {
-							Value = { 0.879711055276382, 0.166852678571429 },
-							Expression = "SourceParams.Center",
-						},
-						Width = Input {
-							Value = 0.1947236180905,
-							Expression = "SourceParams.Width",
-						},
-						Height = Input {
-							Value = 0.1953125,
-							Expression = "SourceParams.Height",
-						}
-					},
-					ViewInfo = OperatorInfo { Pos = { -73.666, 74.6666 } },
-					UserControls = ordered() {
-						Center = {
-							INPID_PreviewControl = "CrosshairControl",
-							INP_External = false,
-							LINKID_DataType = "Point",
-							ICS_ControlPage = "Controls",
-							INPID_InputControl = "OffsetControl",
-							CHC_Style = "NormalCross",
-							LINKS_Name = "Center",
-						},
-						Width = {
-							INP_MaxAllowed = 1000000,
-							INP_Integer = false,
-							INPID_InputControl = "SliderControl",
-							ICS_ControlPage = "Controls",
-							PC_ControlID = 0,
-							INP_MaxScale = 1,
-							INP_Default = 0.5,
-							INP_MinAllowed = -1000000,
-							INP_MinScale = 0,
-							INP_External = false,
-							LINKID_DataType = "Number",
-							PC_ControlGroup = 1,
-							INPID_PreviewControl = "RectangleControl",
-							INP_SplineType = "Default",
-							LINKS_Name = "Width"
-						},
-						Height = {
-							INP_MaxAllowed = 1000000,
-							INP_Integer = false,
-							INPID_InputControl = "SliderControl",
-							ICS_ControlPage = "Controls",
-							PC_ControlID = 1,
-							INP_MaxScale = 1,
-							INP_Default = 0.5,
-							INP_MinAllowed = -1000000,
-							INP_MinScale = 0,
-							INP_External = false,
-							LINKID_DataType = "Number",
-							PC_ControlGroup = 1,
-							INPID_PreviewControl = "RectangleControl",
-							INP_SplineType = "Default",
-							LINKS_Name = "Height"
-						}
-					}
-				},
-				SourceParams = RectangleMask {
-					CtrlWShown = false,
-					NameSet = true,
-					Inputs = {
-						Filter = Input { Value = FuID { "Fast Gaussian" }, },
-						MaskWidth = Input { Value = 3840, },
-						MaskHeight = Input { Value = 2160, },
-						PixelAspect = Input { Value = { 1, 1 }, },
-						UseFrameFormatSettings = Input { Value = 1, },
-						ClippingMode = Input { Value = FuID { "None" }, },
 						Center = Input { Value = { 0.879711055276382, 0.166852678571429 }, },
 						Width = Input { Value = 0.1947236180905, },
 						Height = Input { Value = 0.1953125, }
 					},
-					ViewInfo = OperatorInfo { Pos = { -271.033, 37.6496 } },
+					ViewInfo = OperatorInfo { Pos = { -67.3856, 59.9342 } },
 				},
 				Background1 = Background {
 					CtrlWShown = false,
 					Inputs = {
-						GlobalOut = Input { Value = 33159, },
+						GlobalIn = Input { Value = 216000, },
+						GlobalOut = Input { Value = 216299, },
 						Width = Input { Value = 3840, },
 						Height = Input { Value = 2160, },
 						UseFrameFormatSettings = Input { Value = 1, },
@@ -1618,10 +1551,7 @@
 					CtrlWShown = false,
 					NameSet = true,
 					Inputs = {
-						Source = Input {
-							Value = 1,
-							Expression = "EnableTransparency",
-						},
+						Source = Input { Expression = "EnableTransparency", },
 						Input0 = Input {
 							SourceOp = "BackgroundSwitch",
 							Source = "Output",
@@ -1679,13 +1609,6 @@
 		},
 		AnimCurves9 = LUTLookup {
 			CtrlWZoom = false,
-			CustomData = {
-				Path = {
-					Map = {
-						["Setting:"] = "C:\\Users\\mug\\onedrive\\Desktop\\effects\\"
-					}
-				},
-			},
 			Inputs = {
 				Curve = Input { Value = FuID { "Easing" }, },
 				EaseIn = Input { Value = FuID { "Quint" }, },
