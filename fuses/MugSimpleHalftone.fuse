@@ -12,14 +12,14 @@ FuRegisterClass("MugSimpleHalftone", CT_Tool, {
     REGS_IconID            = "Icons.Tools.Icons.SimpleHalftone",
     REG_Source_GlobalCtrls = true,
     REG_Source_SizeCtrls   = true,
-    REG_Version            = 2.00,
+    REG_Version            = 2.10,
 })
 
 -- セル情報計算用パラメータ構造体
 CellInfoParams = [[
   int srcSize[2];         // ソース画像のサイズ // TEX_NORMALIZED_COORDS_FALSE
   int dstSize[2];         // 出力サイズ(cell数)
-  float cellPitch[2];     // セルの間隔
+  int cellPitch[2];       // セルの間隔
   float contrast;         // コントラスト調整
   float dotGain;          // ドットゲイン効果
   float brightnessCutoff; // 明るさの閾値
@@ -39,7 +39,7 @@ CellInfoParams = [[
 --
 -- float4 cellInfo2:
 --   x: セル輝度値 (0.0-1.0)
---   y: ドット半径 (0.0 - maxCellRadius)
+--   y: ドット半径 - 半径ドット数 (整数値: 0 - maxCellRadius)
 --   z: 行オフセットフラグ - このセルの行はオフセットするか (整数値: 0=通常行, 1=オフセット行)
 --   w: 予約済み - 将来拡張用 (常に1.0)
 --
@@ -72,8 +72,8 @@ __KERNEL__ void CellInfoKernel(
         return;
 
     // セルの間隔と行間隔をベクトルとして定義
-    const float cellPitchX = params->cellPitch[0];
-    const float cellPitchY = params->cellPitch[1];
+    const float cellPitchX = (float)(params->cellPitch[0]);
+    const float cellPitchY = (float)(params->cellPitch[1]);
     const float2 cellPitch = to_float2(cellPitchX, cellPitchY);
     const float halfPitchX = cellPitchX * 0.5f;
 
@@ -97,12 +97,12 @@ __KERNEL__ void CellInfoKernel(
     };
 
     // セルの周辺範囲を定義して平均輝度を計算
-    const float samplingRadiusF = _floorf(halfPitchX);
-    const float radiusSquared = samplingRadiusF * samplingRadiusF;
+    const int samplingRadius = (int)(halfPitchX);
+    const float radiusSquared = (float)(samplingRadius * samplingRadius);
 
     // サンプリングステップの動的調整
     int sampleStep = 1;
-    if (samplingRadiusF > SAMPLING_STEP_THRESHOLD) {
+    if ((float)samplingRadius > SAMPLING_STEP_THRESHOLD) {
         sampleStep = SAMPLING_STEP_LARGE;
     }
     const float sampleStepSquared = (float)(sampleStep * sampleStep); // 事前計算
@@ -112,14 +112,10 @@ __KERNEL__ void CellInfoKernel(
     float4 avgColor = to_float4(0.0f, 0.0f, 0.0f, 0.0f);
 
     // ループ範囲の計算（境界チェック）
-    const float minXf = cellCenterX - samplingRadiusF;
-    const float maxXf = cellCenterX + samplingRadiusF;
-    const float minYf = cellCenterY - samplingRadiusF;
-    const float maxYf = cellCenterY + samplingRadiusF;
-    const int minX = max(0, (int)_floorf(minXf));
-    const int maxX = min(params->srcSize[0] - 1, (int)_ceilf(maxXf));
-    const int minY = max(0, (int)_floorf(minYf));
-    const int maxY = min(params->srcSize[1] - 1, (int)_ceilf(maxYf));
+    const int minX = max(0, (int)(cellCenterX - (float)samplingRadius));
+    const int maxX = min(params->srcSize[0] - 1, (int)(cellCenterX + (float)samplingRadius));
+    const int minY = max(0, (int)(cellCenterY - (float)samplingRadius));
+    const int maxY = min(params->srcSize[1] - 1, (int)(cellCenterY + (float)samplingRadius));
 
     // セル範囲内のピクセルをサンプリング - 円形サンプリング（サンプリングステップあり）
     for (int pixelY = minY; pixelY <= maxY; pixelY += sampleStep) {
@@ -216,6 +212,9 @@ RenderParams = [[
 
 RenderDotsKernel = [[
 // 定数定義
+#define LUMA_R 0.3f
+#define LUMA_G 0.59f
+#define LUMA_B 0.11f
 #define DOT_RADIUS_THRESHOLD 0.1f
 #define BOUNDING_BOX_MARGIN 1.0f
 #define HIGH_DENSITY_THRESHOLD 100.0f  // この値以上の密度は高密度と判断
@@ -238,13 +237,11 @@ __DEVICE__ float checkCellDot(
         const float4 cellInfo2Data = _tex2DVecN(cell_info2, cellUV.x, cellUV.y, 15);
         const float dotRadius = cellInfo2Data.y;
 
-        if (dotRadius <= 0.0f) {
+        if (dotRadius <= 0.0f)
             return 0.0f;
-        }
 
-        if (dotRadius <= DOT_RADIUS_THRESHOLD && aaEdgeWidth <= 0.0f) {
+        if (dotRadius <= DOT_RADIUS_THRESHOLD && aaEdgeWidth <= 0.0f)
             return 0.0f;
-        }
 
         const float4 cellInfo1Data = _tex2DVecN(cell_info1, cellUV.x, cellUV.y, 15);
         const float2 cellCenter = to_float2(cellInfo1Data.z, cellInfo1Data.w);
@@ -253,33 +250,30 @@ __DEVICE__ float checkCellDot(
         const float2 diff = pixelPos - cellCenter;
         const float2 absDiff = to_float2(_fabs(diff.x), _fabs(diff.y));
 
-        if (absDiff.x > bbSize || absDiff.y > bbSize) {
+        if (absDiff.x > bbSize || absDiff.y > bbSize)
             return 0.0f;
-        }
 
         const float distSq = diff.x * diff.x + diff.y * diff.y;
         const float radiusSq = dotRadius * dotRadius;
 
-        if (aaEdgeWidth <= 0.0f) {
+        if (aaEdgeWidth <= 0.0f)
             return (distSq <= radiusSq) ? 1.0f : 0.0f;
-        }
 
-        if (distSq >= radiusSq) {
+        if (distSq >= radiusSq)
             return 0.0f;
-        }
 
         const float dist = _sqrtf(distSq);
         const float innerRadius = _fmaxf(dotRadius - aaEdgeWidth, 0.0f);
 
-        if (dist <= innerRadius) {
+        if (dist <= innerRadius)
             return 1.0f;
-        }
 
         const float t = (dotRadius - dist) / aaEdgeWidth;
         return _saturatef(t);
     }
     return 0.0f;
 }
+
 
 // 隣接セルのオフセット定義
 __DEVICE__ void getNeighborOffsets(const int isOddRow, float2 neighborOffsets[6])
@@ -304,94 +298,15 @@ __DEVICE__ void getNeighborOffsets(const int isOddRow, float2 neighborOffsets[6]
 }
 
 // 高密度モード用の処理関数
-__DEVICE__ float processHighDensityCells(
-    const float2 mainCellPos,
-    const float2 pixelPos,
-    const float2 relPos,
-    const float2 cellPitch,
-    const int isOddRow,
-    const float2 cellGridNum,
-    __TEXTURE2D__ cell_info1,
-    __TEXTURE2D__ cell_info2,
-    const float aaEdgeWidth)
-{
-    float bestCoverage = 0.0f;
-
-    float2 neighborOffsets[6];
-    getNeighborOffsets(isOddRow, neighborOffsets);
-
-    int checkIndices[2] = {-1, -1};
-    int checkCount = 0;
-
-    const float2 cellThreshold = cellPitch * 0.25f;
-    const float2 absRelPos = to_float2(_fabs(relPos.x), _fabs(relPos.y));
-
-    if (absRelPos.x > cellThreshold.x) {
-        checkIndices[checkCount++] = (relPos.x > 0.0f) ? 2 : 5;
-    }
-
-    if (absRelPos.y > cellThreshold.y) {
-        checkIndices[checkCount++] = (relPos.y > 0.0f)
-            ? (isOddRow ? 3 : 4)
-            : (isOddRow ? 0 : 1);
-        if (checkCount > 2) checkCount = 2;
-    }
-
-    for (int i = 0; i < checkCount; i++) {
-        const int index = checkIndices[i];
-        if (index < 0) continue;
-
-        const float2 cellPos = mainCellPos + neighborOffsets[index];
-        const float coverage = checkCellDot(cellPos, pixelPos, cellGridNum, cell_info1, cell_info2, aaEdgeWidth);
-        if (coverage > bestCoverage) {
-            bestCoverage = coverage;
-            if (bestCoverage >= 1.0f) {
-                return 1.0f;
-            }
-        }
-    }
-
-    return bestCoverage;
-}
-
 // 通常密度モード用の処理関数
-__DEVICE__ float processNormalDensityCells(
-    const float2 mainCellPos,
-    const int isOddRow,
-    const float2 pixelPos,
-    const float2 cellGridNum,
-    __TEXTURE2D__ cell_info1,
-    __TEXTURE2D__ cell_info2,
-    const float aaEdgeWidth)
-{
-    float bestCoverage = 0.0f;
-
-    float2 neighborOffsets[6];
-    getNeighborOffsets(isOddRow, neighborOffsets);
-
-    for (int i = 0; i < 6; i++) {
-        const float2 cellPos = mainCellPos + neighborOffsets[i];
-        const float coverage = checkCellDot(cellPos, pixelPos, cellGridNum, cell_info1, cell_info2, aaEdgeWidth);
-        if (coverage > bestCoverage) {
-            bestCoverage = coverage;
-            if (bestCoverage >= 1.0f) {
-                return 1.0f;
-            }
-        }
-    }
-
-    return bestCoverage;
-}
-
 __DEVICE__ float4 blendDotOver(
     const float4 baseColor,
     const float4 dotColor,
     const float coverage)
 {
     const float blendFactor = _saturatef(dotColor.w * coverage);
-    if (blendFactor <= 0.0f) {
+    if (blendFactor <= 0.0f)
         return baseColor;
-    }
 
     return to_float4(
         baseColor.x * (1.0f - blendFactor) + dotColor.x * blendFactor,
@@ -400,6 +315,7 @@ __DEVICE__ float4 blendDotOver(
         _fmaxf(baseColor.w, blendFactor)
     );
 }
+
 
 __KERNEL__ void RenderDotsKernel(
     __CONSTANTREF__ RenderParams *params,
@@ -411,45 +327,33 @@ __KERNEL__ void RenderDotsKernel(
 {
     DEFINE_KERNEL_ITERATORS_XY(x, y);
 
-    // 画像範囲外なら処理しない
     if (x >= params->srcSize[0] || y >= params->srcSize[1])
         return;
 
-
-    // 現在のピクセル位置をベクトルとして定義
     const float2 pixelPos = to_float2((float)x, (float)y);
-
-    // セルの間隔
     const float2 cellPitch = to_float2(params->cellPitch[0], params->cellPitch[1]);
     const float aaEdgeWidth = (params->enableAntialias != 0) ? params->aaEdgeWidth : 0.0f;
 
-    // 半セル分Y位置をオフセット（固定値として半セル分）
     const float yOffset = cellPitch.y * 0.5f;
-
-    // 高密度チェック
     const float avgCellSize = (cellPitch.x + cellPitch.y) * 0.5f;
     const int isHighDensity = avgCellSize < MIN_CHECK_RADIUS ? 1 : 0;
 
-    // このピクセルが属する行の情報
     const int baseRowY = (int)((pixelPos.y + yOffset) / cellPitch.y);
     const int isOddRow = (baseRowY % 2 != 0) ? 1 : 0;
 
-    // メインセルの計算
     float adjustedX = pixelPos.x;
     if (isOddRow != 0) {
-        adjustedX += cellPitch.x * 0.5f; // オフセット行の調整
+        adjustedX += cellPitch.x * 0.5f;
     }
     const int mainCellX = (int)_floorf(adjustedX / cellPitch.x);
     const int mainCellY = baseRowY;
     const float2 mainCellPos = to_float2((float)mainCellX, (float)mainCellY);
 
-    // グリッド情報
     const float2 cellGridNum = to_float2(
         (float)params->cellGridNum[0],
         (float)params->cellGridNum[1]
     );
 
-    // 背景色（紙の色）
     const float4 paperColor = {
         params->paperColor[0],
         params->paperColor[1],
@@ -457,24 +361,18 @@ __KERNEL__ void RenderDotsKernel(
         params->paperColor[3]
     };
 
-    // ドットの色
-    float4 dotColor = {
+    const float4 userDotColor = {
         params->dotColor[0],
         params->dotColor[1],
         params->dotColor[2],
         params->dotColor[3]
     };
-    if (params->useOriginalColor != 0) {
-        const float2 cellUV = (mainCellPos + to_float2(0.5f, 0.5f)) / cellGridNum;
-        dotColor = _tex2DVecN(cell_info3, cellUV.x, cellUV.y, 15);
-    }
+    const int useOriginalColorFlag = params->useOriginalColor;
 
     float4 inputColor = paperColor;
 
-    // 元の色を使用するかどうか
     const int blendWithInput = params->blendWithInput > 0 ? 1 : 0;
     if (blendWithInput != 0) {
-        // 入力画像のピクセル値を取得
         inputColor = _tex2DVecN(
             src_img,
             (float)x / (float)params->srcSize[0],
@@ -483,9 +381,35 @@ __KERNEL__ void RenderDotsKernel(
         );
     }
 
-    float4 outputColor = paperColor;
+    float bestCoverage = 0.0f;
+    float bestStrength = -1.0f;
+    float4 bestDotColor = userDotColor;
 
-    float coverage = checkCellDot(mainCellPos, pixelPos, cellGridNum, cell_info1, cell_info2, aaEdgeWidth);
+#define UPDATE_BEST_CELL(posExpr) \
+    do { \
+        const float2 candidatePos = (posExpr); \
+        const float coverageCandidate = checkCellDot(candidatePos, pixelPos, cellGridNum, cell_info1, cell_info2, aaEdgeWidth); \
+        if (coverageCandidate > 0.0f) { \
+            float4 candidateDotColor = userDotColor; \
+            if (useOriginalColorFlag != 0) { \
+                const float2 candidateUV = (candidatePos + to_float2(0.5f, 0.5f)) / cellGridNum; \
+                candidateDotColor = _tex2DVecN(cell_info3, candidateUV.x, candidateUV.y, 15); \
+            } \
+            float candidateStrength = coverageCandidate; \
+            if (useOriginalColorFlag != 0) { \
+                const float candidateLuma = candidateDotColor.x * LUMA_R + candidateDotColor.y * LUMA_G + candidateDotColor.z * LUMA_B; \
+                candidateStrength *= _fmaxf(1.0f - candidateLuma, 0.0f); \
+            } \
+            if (candidateStrength > bestStrength + 1e-4f || \
+                (candidateStrength >= bestStrength - 1e-4f && coverageCandidate > bestCoverage)) { \
+                bestStrength = candidateStrength; \
+                bestCoverage = coverageCandidate; \
+                bestDotColor = candidateDotColor; \
+            } \
+        } \
+    } while (0)
+
+    UPDATE_BEST_CELL(mainCellPos);
 
     const float2 cellCenter = to_float2(
         mainCellX * cellPitch.x + (isOddRow != 0 ? cellPitch.x * 0.5f : 0.0f) + cellPitch.x * 0.5f,
@@ -494,23 +418,41 @@ __KERNEL__ void RenderDotsKernel(
 
     const float2 relPos = pixelPos - cellCenter;
 
-    if (coverage <= 0.0f) {
-        if (isHighDensity != 0) {
-            coverage = processHighDensityCells(
-                mainCellPos, pixelPos, relPos, cellPitch, isOddRow, cellGridNum,
-                cell_info1, cell_info2, aaEdgeWidth
-            );
-        } else {
-            coverage = processNormalDensityCells(
-                mainCellPos, isOddRow, pixelPos, cellGridNum,
-                cell_info1, cell_info2, aaEdgeWidth
-            );
+    float2 neighborOffsets[6];
+    getNeighborOffsets(isOddRow, neighborOffsets);
+
+    if (isHighDensity != 0) {
+        int checkIndices[2] = {-1, -1};
+        int checkCount = 0;
+        const float2 cellThreshold = cellPitch * 0.25f;
+        const float2 absRelPos = to_float2(_fabs(relPos.x), _fabs(relPos.y));
+
+        if (absRelPos.x > cellThreshold.x) {
+            checkIndices[checkCount++] = (relPos.x > 0.0f) ? 2 : 5;
+        }
+
+        if (absRelPos.y > cellThreshold.y) {
+            checkIndices[checkCount++] = (relPos.y > 0.0f) ? (isOddRow ? 3 : 4)
+                                                          : (isOddRow ? 0 : 1);
+            if (checkCount > 2) checkCount = 2;
+        }
+
+        for (int i = 0; i < checkCount; i++) {
+            const int index = checkIndices[i];
+            if (index < 0) continue;
+            UPDATE_BEST_CELL(mainCellPos + neighborOffsets[index]);
+        }
+    } else {
+        for (int i = 0; i < 6; i++) {
+            UPDATE_BEST_CELL(mainCellPos + neighborOffsets[i]);
         }
     }
 
-    if (coverage > 0.0f) {
+#undef UPDATE_BEST_CELL
+
+    if (bestCoverage > 0.0f) {
         const float4 baseColor = (blendWithInput != 0) ? inputColor : paperColor;
-        const float4 finalColor = blendDotOver(baseColor, dotColor, coverage);
+        const float4 finalColor = blendDotOver(baseColor, bestDotColor, bestCoverage);
         _tex2DVec4Write(dst, x, y, finalColor);
         return;
     }
@@ -551,8 +493,8 @@ function Create()
         LINKID_DataType = "Number",
         INPID_InputControl = "SliderControl",
         INP_Default = 0.00,
-        INP_MinAllowed = -0.5,
-        INP_MaxAllowed = 0.5,
+        INP_MinAllowed = -1.0,
+        INP_MaxAllowed = 1.0,
         INPS_StatusText = "Simulates ink spread on paper",
     })
 
@@ -582,7 +524,6 @@ function Create()
         INP_MaxAllowed = 1.0,
         INPS_StatusText = "Controls the maximum size of dots in the halftone pattern",
     })
-
 
     InEnableDotAntialias = self:AddInput("Enable Dot Antialias", "EnableDotAntialias", {
         LINKID_DataType = "Number",
