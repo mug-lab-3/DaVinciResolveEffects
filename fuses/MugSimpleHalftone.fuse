@@ -12,7 +12,7 @@ FuRegisterClass("MugSimpleHalftone", CT_Tool, {
     REGS_IconID            = "Icons.Tools.Icons.SimpleHalftone",
     REG_Source_GlobalCtrls = true,
     REG_Source_SizeCtrls   = true,
-    REG_Version            = 2.10,
+    REG_Version            = 2.20,
 })
 
 -- セル情報計算用パラメータ構造体
@@ -76,9 +76,10 @@ __KERNEL__ void CellInfoKernel(
     const float cellPitchY = (float)(params->cellPitch[1]);
     const float2 cellPitch = to_float2(cellPitchX, cellPitchY);
     const float halfPitchX = cellPitchX * 0.5f;
+    const float halfPitchY = cellPitchY * 0.5f; // 事前計算
 
     // 半セル分Y位置をオフセット（固定値として半セル分）
-    const float yOffset = cellPitchY * 0.5f;
+    const float yOffset = halfPitchY;
 
     // 行オフセットの計算（奇数行は横にオフセット）
     const int isOddRow = (y % 2 != 0) ? 1 : 0;
@@ -86,7 +87,7 @@ __KERNEL__ void CellInfoKernel(
 
     // セルの中心位置をピクセル座標で計算
     const float cellCenterX = ((float)x * cellPitchX) + halfPitchX + rowOffset;
-    const float cellCenterY = ((float)y * cellPitchY) + (cellPitchY * 0.5f) - yOffset;
+    const float cellCenterY = ((float)y * cellPitchY) + halfPitchY - yOffset;
 
     // dst_info1: セル位置情報を格納
     const float4 cellInfo1 = {
@@ -100,22 +101,28 @@ __KERNEL__ void CellInfoKernel(
     const int samplingRadius = (int)(halfPitchX);
     const float radiusSquared = (float)(samplingRadius * samplingRadius);
 
-    // サンプリングステップの動的調整
-    int sampleStep = 1;
-    if ((float)samplingRadius > SAMPLING_STEP_THRESHOLD) {
-        sampleStep = SAMPLING_STEP_LARGE;
-    }
+    // サンプリングステップの動的調整（閾値との比較を事前計算）
+    const int sampleStep = ((float)samplingRadius > SAMPLING_STEP_THRESHOLD) ? SAMPLING_STEP_LARGE : 1;
     const float sampleStepSquared = (float)(sampleStep * sampleStep); // 事前計算
 
     float totalLuma = 0.0f;
     int sampleCount = 0;
     float4 avgColor = to_float4(0.0f, 0.0f, 0.0f, 0.0f);
 
-    // ループ範囲の計算（境界チェック）
-    const int minX = max(0, (int)(cellCenterX - (float)samplingRadius));
-    const int maxX = min(params->srcSize[0] - 1, (int)(cellCenterX + (float)samplingRadius));
-    const int minY = max(0, (int)(cellCenterY - (float)samplingRadius));
-    const int maxY = min(params->srcSize[1] - 1, (int)(cellCenterY + (float)samplingRadius));
+    // ループ範囲の計算（境界チェック）- 事前計算で効率化
+    const float fSamplingRadius = (float)samplingRadius;
+    const int minX = max(0, (int)(cellCenterX - fSamplingRadius));
+    const int maxX = min(params->srcSize[0] - 1, (int)(cellCenterX + fSamplingRadius));
+    const int minY = max(0, (int)(cellCenterY - fSamplingRadius));
+    const int maxY = min(params->srcSize[1] - 1, (int)(cellCenterY + fSamplingRadius));
+
+    // 無効な範囲の早期リターン（GPU効率向上）
+    if (minX > maxX || minY > maxY) {
+        _tex2DVec4Write(dst_info1, x, y, cellInfo1);
+        _tex2DVec4Write(dst_info2, x, y, to_float4(0.5f, 0.0f, (float)isOddRow, 1.0f));
+        _tex2DVec4Write(dst_info3, x, y, to_float4(0.0f, 0.0f, 0.0f, 1.0f));
+        return;
+    }
 
     // セル範囲内のピクセルをサンプリング - 円形サンプリング（サンプリングステップあり）
     for (int pixelY = minY; pixelY <= maxY; pixelY += sampleStep) {
