@@ -274,7 +274,7 @@ graph LR
     B -->|Yes| C[coverage = 0.0]
     B -->|No| D{dist ≤ innerRadius?}
     D -->|Yes| E[coverage = 1.0]
-    D -->|No| F[(dotRadius - dist) ÷ aaEdgeWidth]
+    D -->|No| F[(dotRadius - dist) / aaEdgeWidth]
     F --> G[saturate]
 
     C --> H[blendDotOver]
@@ -307,19 +307,18 @@ graph LR
 
 ```mermaid
 flowchart TB
-    subgraph PixelEvaluation[ピクセルごとの評価]
+    subgraph PixelEvaluation["ピクセルごとの評価"]
         A[所属セルを特定] --> B{高密度モード?}
         B -->|Yes| C[隣接2セルを候補化]
         B -->|No| D[隣接6セルを候補化]
-        C --> E[各候補に対して<br/>checkCellDot()]
+        C --> E["各候補に対して\ncheckCellDot()"]
         D --> E
-        E --> F[カバレッジ×(1-luma)で<br/>bestStrengthを更新]
+        E --> F["カバレッジ × (1 - luma) で\nbestStrength を更新"]
         F --> G{最終候補決定}
     end
 
-    G --> H[選ばれたドットにのみ<br/>AAカバレッジを適用]
-    H --> I[blendDotOver()で
-        背景と合成]
+    G --> H["選ばれたドットにのみ\nAA カバレッジを適用"]
+    H --> I["blendDotOver() で背景と合成"]
 ```
 
 上図の通り、重なり合う領域でも最終的に 1 つの候補ドットが選ばれ、アンチエイリアスはそのドットのみに適用されます。
