@@ -226,11 +226,11 @@ graph LR
 
 ```mermaid
 flowchart TD
-     A[Coverage] --> D[αdot]
-     B[Dot Color] --> E[blendDotOver()]
-   C["Base: Input or Paper"] --> E
-     D --> E
-     E --> F[最終出力]
+       A[Coverage] --> D[αdot]
+       B[Dot Color] --> E[blendDotOver()]
+       C["Base: Input or Paper"] --> E
+       D --> E
+       E --> F[最終出力]
 ```
 
 ### 7. GPU カーネル詳細（ステージ対応）
