@@ -12,7 +12,7 @@ FuRegisterClass("MugSimpleHalftone", CT_Tool, {
     REGS_IconID            = "Icons.Tools.Icons.SimpleHalftone",
     REG_Source_GlobalCtrls = true,
     REG_Source_SizeCtrls   = true,
-    REG_Version            = 2.50,
+    REG_Version            = 2.51,
 })
 
 -- セル情報計算用パラメータ構造体
@@ -24,6 +24,7 @@ CellInfoParams = [[
   float dotGain;          // ドットゲイン効果
   float brightnessCutoff; // 明るさの閾値
   float minDotRadius;     // 最小ドット半径
+  float dotCurve;         // ドットサイズカーブ係数
   int useOriginalColor;   // 元の色を使用するかどうか
   float clipRadius;       // クリッピング半径
   int invertMode;         // 輝度を反転してドットを生成するか
@@ -194,6 +195,12 @@ __KERNEL__ void CellInfoKernel(
 
     // ドットゲイン適用
     tonalValue = _saturatef(tonalValue + params->dotGain);
+
+    // ドットサイズカーブ補正（1.0でリニア）
+    if (params->dotCurve != 1.0f) {
+        const float curveFactor = _fmaxf(params->dotCurve, 1e-4f);
+        tonalValue = _powf(_saturatef(tonalValue), curveFactor);
+    }
 
     // 明るさのカットオフと最小ドット半径を一括処理
     const int passesBrightness = (invertMode != 0)
@@ -531,6 +538,15 @@ function Create()
         INPS_StatusText = "Simulates ink spread on paper",
     })
 
+    InDotSizeCurve = self:AddInput("Dot Size Curve", "DotSizeCurve", {
+        LINKID_DataType = "Number",
+        INPID_InputControl = "SliderControl",
+        INP_Default = 1.0,
+        INP_MinAllowed = 0.01,
+        INP_MaxAllowed = 5.0,
+        INPS_StatusText = "Adjusts the growth curve of dot sizes (1.0 = linear)",
+    })
+
     InInvertMode = self:AddInput("Invert Brightness", "InvertMode", {
         LINKID_DataType = "Number",
         INPID_InputControl = "CheckboxControl",
@@ -758,6 +774,7 @@ function Process(req)
     local useOriginalColor = InUseOriginalColor:GetValue(req).Value
     local enableDotAntialias = InEnableDotAntialias:GetValue(req).Value > 0.5
     local aaEdgeSoftness = InAAEdgeSoftness:GetValue(req).Value
+    local dotSizeCurve = InDotSizeCurve:GetValue(req).Value
     local brightnessCutoff = InBrightnessCutoff:GetValue(req).Value
     local cutoffDotRadius = InCutoffDotRadius:GetValue(req).Value
     local maxDotRadius = InClipDotRadius:GetValue(req).Value
@@ -832,6 +849,7 @@ function Process(req)
         params.dotGain = dotGain
         params.brightnessCutoff = brightnessCutoff
         params.minDotRadius = cutoffDotRadius
+        params.dotCurve = dotSizeCurve
         params.useOriginalColor = useOriginalColor > 0.5 and 1 or 0
         params.clipRadius = maxDotRadius
         params.invertMode = invertMode > 0.5 and 1 or 0
