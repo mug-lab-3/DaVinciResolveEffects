@@ -274,7 +274,7 @@ graph LR
     B -->|Yes| C[coverage = 0.0]
     B -->|No| D{dist ≤ innerRadius?}
     D -->|Yes| E[coverage = 1.0]
-    D -->|No| F[(dotRadius - dist) / aaEdgeWidth]
+    D -->|No| F["(dotRadius - dist) / aaEdgeWidth"]
     F --> G[saturate]
 
     C --> H[blendDotOver]
