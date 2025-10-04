@@ -2,7 +2,7 @@
 
 ## 概要
 
-MugSimpleHalftone.fuse は、DaVinci Resolve/Fusion 用の高性能なハーフトーンエフェクトプラグインです。六角形グリッドベースのドット配置により、印刷物風のハーフトーン効果を生成します。GPU アクセラレーション（OpenCL）を使用し、リアルタイムでの高品質なレンダリングを実現します。v2.41 では「Invert Brightness」オプションが追加され、明るい領域を強調するハイライト寄りの表現も可能になりました。
+MugSimpleHalftone.fuse は、DaVinci Resolve/Fusion 用の高性能なハーフトーンエフェクトプラグインです。六角形グリッドベースのドット配置により、印刷物風のハーフトーン効果を生成します。GPU アクセラレーション（OpenCL）を使用し、リアルタイムでの高品質なレンダリングを実現します。輝度極性の反転やドットゲイン、トーンカーブ制御、アンチエイリアス処理、紙色・ドット色のブレンド設定などを備え、幅広いハーフトーン表現を構築できます。
 
 ## アーキテクチャ概要
 
@@ -167,11 +167,11 @@ end
 
 ```mermaid
 graph LR
-    A[r, w, d] --> B{d ≤ r_inner?}
-    B -->|Yes| C[coverage = 1]
+    A["r, w, d"] --> B{d ≤ r_inner?}
+    B -->|Yes| C["coverage = 1"]
     B -->|No| D{d ≥ r?}
-    D -->|Yes| E[coverage = 0]
-    D -->|No| F[coverage = (r - d)/w]
+    D -->|Yes| E["coverage = 0"]
+    D -->|No| F["coverage = (r - d)/w"]
     F --> G[saturate]
 ```
 
@@ -189,7 +189,7 @@ graph LR
 flowchart TD
     A[Coverage] --> D[αdot]
     B[Dot Color] --> E[blendDotOver()]
-    C[Base (Input or Paper)] --> E
+    C["Base (Input or Paper)"] --> E
     D --> E
     E --> F[最終出力]
 ```
