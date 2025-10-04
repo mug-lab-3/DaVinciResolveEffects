@@ -12,20 +12,19 @@ FuRegisterClass("MugSimpleHalftone", CT_Tool, {
     REGS_IconID            = "Icons.Tools.Icons.SimpleHalftone",
     REG_Source_GlobalCtrls = true,
     REG_Source_SizeCtrls   = true,
-    REG_Version            = 2.30,
+    REG_Version            = 2.40,
 })
 
 -- セル情報計算用パラメータ構造体
 CellInfoParams = [[
   int srcSize[2];         // ソース画像のサイズ // TEX_NORMALIZED_COORDS_FALSE
   int dstSize[2];         // 出力サイズ(cell数)
-  int cellPitch[2];       // セルの間隔
+  float screenDensity;    // スクリーン密度（GPU側でセルサイズ計算用）
   float contrast;         // コントラスト調整
   float dotGain;          // ドットゲイン効果
   float brightnessCutoff; // 明るさの閾値
   float minDotRadius;     // 最小ドット半径
   int useOriginalColor;   // 元の色を使用するかどうか
-  float maxCellRadius;    // 最大セル半径
   float clipRadius;       // クリッピング半径
 ]]
 
@@ -71,12 +70,16 @@ __KERNEL__ void CellInfoKernel(
     if (x >= params->dstSize[0] || y >= params->dstSize[1])
         return;
 
-    // セルの間隔と行間隔をベクトルとして定義
-    const float cellPitchX = (float)(params->cellPitch[0]);
-    const float cellPitchY = (float)(params->cellPitch[1]);
+    // GPU側でセルサイズを動的計算（CPU負荷削減）
+    const float SIN60 = 0.866025f; // √3/2
+    const float width = (float)params->srcSize[0];
+    const float cellBasePitch = _fmaxf(3.0f, _floorf(width / params->screenDensity));
+    const float cellPitchX = cellBasePitch;
+    const float cellPitchY = _fmaxf(3.0f, _floorf(cellBasePitch * SIN60));
     const float2 cellPitch = to_float2(cellPitchX, cellPitchY);
     const float halfPitchX = cellPitchX * 0.5f;
     const float halfPitchY = cellPitchY * 0.5f; // 事前計算
+    const float maxCellRadius = (cellBasePitch * 0.5f) * 1.5f;
 
     // 半セル分Y位置をオフセット（固定値として半セル分）
     const float yOffset = halfPitchY;
@@ -192,8 +195,7 @@ __KERNEL__ void CellInfoKernel(
     // 明るさのカットオフと最小ドット半径を一括処理
     float dotRadius = 0.0f;
     if (avgLuma <= params->brightnessCutoff && inverseLuma >= params->minDotRadius) {
-        const float maxRadius = params->maxCellRadius;
-        dotRadius = _fminf(inverseLuma * maxRadius, maxRadius * params->clipRadius);
+        dotRadius = _fminf(inverseLuma * maxCellRadius, maxCellRadius * params->clipRadius);
     }
 
     // dst_info2: ドット情報を格納
@@ -218,7 +220,7 @@ RenderParams = [[
   float paperColor[4];  // 紙の色（背景色）[R,G,B,A]
   float dotColor[4];    // ドットの色（前景色）[R,G,B,A]
   int useOriginalColor; // 元の色を使用するかどうか
-  float cellPitch[2];   // セルの間隔
+  float screenDensity;  // スクリーン密度（GPU側でセルピッチ計算用）
   int blendWithInput;   // 入力画像とブレンドするかどうか
   int enableAntialias;  // ドット境界にアンチエイリアスを適用するか
   float aaEdgeWidth;    // アンチエイリアス境界幅（ピクセル単位）
@@ -349,7 +351,13 @@ __KERNEL__ void RenderDotsKernel(
         return;
 
     const float2 pixelPos = to_float2((float)x, (float)y);
-    const float2 cellPitch = to_float2(params->cellPitch[0], params->cellPitch[1]);
+
+    // GPU側でセルピッチを計算（CPU負荷削減）
+    const float SIN60 = 0.866025f;
+    const float width = (float)params->srcSize[0];
+    const float cellBasePitch = _fmaxf(3.0f, _floorf(width / params->screenDensity));
+    const float2 cellPitch = to_float2(cellBasePitch, _fmaxf(3.0f, _floorf(cellBasePitch * SIN60)));
+
     const float aaEdgeWidth = (params->enableAntialias != 0) ? params->aaEdgeWidth : 0.0f;
 
     const float yOffset = cellPitch.y * 0.5f;
@@ -804,14 +812,12 @@ function Process(req)
         params.srcSize[1] = height
         params.dstSize[0] = cellGridNumX
         params.dstSize[1] = cellGridNumY
-        params.cellPitch[0] = cellPitchX
-        params.cellPitch[1] = cellPitchY
+        params.screenDensity = screenDensity -- GPU側でセルサイズ計算
         params.contrast = contrast
         params.dotGain = dotGain
         params.brightnessCutoff = brightnessCutoff
         params.minDotRadius = cutoffDotRadius
         params.useOriginalColor = useOriginalColor > 0.5 and 1 or 0
-        params.maxCellRadius = MAX_CELL_RADIUS
         params.clipRadius = maxDotRadius
 
         cellInfoNode:SetParamBlock(params)
@@ -850,8 +856,7 @@ function Process(req)
         params.dotColor[2] = dotColor[3]
         params.dotColor[3] = dotColor[4]
         params.useOriginalColor = useOriginalColor > 0.5 and 1 or 0
-        params.cellPitch[0] = cellPitchX
-        params.cellPitch[1] = cellPitchY
+        params.screenDensity = screenDensity -- GPU側でセルピッチ計算
         params.enableAntialias = enableDotAntialias and 1 or 0
         params.aaEdgeWidth = aaEdgeWidth
 
