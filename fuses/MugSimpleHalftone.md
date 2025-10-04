@@ -228,7 +228,7 @@ graph LR
 flowchart TD
      A[Coverage] --> D[αdot]
      B[Dot Color] --> E[blendDotOver()]
-     C["Base (Input or Paper)"] --> E
+   C["Base: Input or Paper"] --> E
      D --> E
      E --> F[最終出力]
 ```
