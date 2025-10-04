@@ -203,11 +203,11 @@ end
 
 ```mermaid
 graph LR
-   A[r, w, d] --> B{d ≤ r_inner?}
-   B -->|Yes| C[coverage = 1]
-   B -->|No| D{d ≥ r?}
-   D -->|Yes| E[coverage = 0]
-   D -->|No| F[coverage = (r - d)/w]
+   A[r, w, d] --> B{Inside inner radius?}
+   B -->|Yes| C[Full coverage]
+   B -->|No| D{Beyond outer radius?}
+   D -->|Yes| E[Zero coverage]
+   D -->|No| F[Gradient falloff]
    F --> G[saturate]
 ```
 
