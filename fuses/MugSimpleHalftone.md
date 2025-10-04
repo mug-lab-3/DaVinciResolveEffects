@@ -203,12 +203,12 @@ end
 
 ```mermaid
 graph LR
-     A["r, w, d"] --> B{d ≤ r_inner?}
-     B -->|Yes| C["coverage = 1"]
-     B -->|No| D{d ≥ r?}
-     D -->|Yes| E["coverage = 0"]
-     D -->|No| F["coverage = (r - d)/w"]
-     F --> G[saturate]
+   A[r, w, d] --> B{d ≤ r_inner?}
+   B -->|Yes| C[coverage = 1]
+   B -->|No| D{d ≥ r?}
+   D -->|Yes| E[coverage = 0]
+   D -->|No| F[coverage = (r - d)/w]
+   F --> G[saturate]
 ```
 
 候補セル間で最も強いカバレッジ（`coverage × (1 - luma)`）を持つものだけが採用され、RenderDotsKernel 内で `bestStrength` として保持されます。
@@ -226,11 +226,11 @@ graph LR
 
 ```mermaid
 flowchart TD
-       A[Coverage] --> D[αdot]
-       B[Dot Color] --> E[blendDotOver()]
-       C["Base: Input or Paper"] --> E
-       D --> E
-       E --> F[最終出力]
+   A[Coverage] --> D[Alpha Dot]
+   B[Dot Color] --> E[blendDotOver]
+   C[Base Input or Paper] --> E
+   D --> E
+   E --> F[最終出力]
 ```
 
 ### 7. GPU カーネル詳細（ステージ対応）
