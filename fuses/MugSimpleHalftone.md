@@ -2,7 +2,7 @@
 
 ## 概要
 
-MugSimpleHalftone.fuse は、DaVinci Resolve/Fusion 用の高性能なハーフトーンエフェクトプラグインです。六角形グリッドベースのドット配置により、印刷物風のハーフトーン効果を生成します。GPU アクセラレーション（OpenCL）を使用し、リアルタイムでの高品質なレンダリングを実現します。
+MugSimpleHalftone.fuse は、DaVinci Resolve/Fusion 用の高性能なハーフトーンエフェクトプラグインです。六角形グリッドベースのドット配置により、印刷物風のハーフトーン効果を生成します。GPU アクセラレーション（OpenCL）を使用し、リアルタイムでの高品質なレンダリングを実現します。v2.41 では「Invert Brightness」オプションが追加され、明るい領域を強調するハイライト寄りの表現も可能になりました。
 
 ## アーキテクチャ概要
 
@@ -32,23 +32,65 @@ graph TD
 
 ### 1. 全体処理フロー
 
+Fusion から渡される入力画像と UI パラメータは `Process()` に集約され、セル解析（`CellInfoKernel`）と描画（`RenderDotsKernel`）を 2 段階で実行します。パラメータは処理ステージごとに評価され、値の一部は GPU カーネルへ定数としてバンドルされます。
+
 ```mermaid
 sequenceDiagram
-    participant U as User Input
-    participant P as Process()
-    participant CK as CellInfoKernel
-    participant RK as RenderDotsKernel
-    participant O as Output
+     participant Img as Source Image
+     participant Cfg as UI Parameters
+     participant Proc as Process()
+     participant CK as CellInfoKernel
+     participant RK as RenderDotsKernel
+     participant Out as Output
 
-    U->>P: 入力画像 + パラメータ
-    P->>P: パラメータ検証・前処理
-    P->>P: セルグリッドサイズ計算
-    P->>CK: セル情報計算実行
-    CK->>P: セル情報バッファ (3種類)
-    P->>RK: ドット描画実行
-    RK->>P: レンダリング結果
-    P->>O: 最終画像出力
+     Img->>Proc: Input image
+     Cfg->>Proc: Screen Density〜Paper Color
+     Proc->>Proc: セルグリッド計算 & パラメータ整形
+     Proc->>CK: CellInfoParams を渡して実行
+     CK->>Proc: cell_info1/2/3
+     Proc->>RK: Dot 描画用パラメータを渡して実行
+     RK->>Proc: Dot Coverage & 色ブレンド済み画像
+     Proc->>Out: 最終画像を出力
 ```
+
+### 1-1. パラメータ駆動の処理ステージ
+
+ドット生成は次の 6 ステージで進み、各ステージが該当パラメータを順に適用します。式中の $L$ はセル輝度、$R_{\max}$ はセルが取り得る最大半径です。
+
+1. **セルグリッド生成 — Screen Density**  
+   `Screen Density` は水平方向のセル数を指定し、六角グリッドのピッチ $p_x$ と $p_y$ を決定します。ピッチは `CellInfoKernel` と `RenderDotsKernel` の両方で共有され、後段のサンプリング半径やアンチエイリアス幅の基準になります。
+2. **輝度統計と正規化 — Contrast**  
+   サンプリングした平均輝度 $L$ は $L' = 0.5 + (L-0.5)\times\text{Contrast}$ でリマップし、`Contrast` が高いほどシャドウとハイライトを強調します。ここで得た $L'$ が以後のトーン計算の基礎になります。
+3. **トーン生成 — Invert Brightness / Dot Gain / Dot Size Curve**  
+   `Invert Brightness` がオフなら $T_0 = 1 - L'$, オンなら $T_0 = L'$ で極性を切り替えます。続いて `Dot Gain` で $T_1 = \mathrm{saturate}(T_0 + \text{DotGain})$ の線形オフセット、`Dot Size Curve` で $T_2 = \mathrm{saturate}(T_1)^{\max(\text{DotSizeCurve},10^{-4})}$ の非線形リマップを行い、ハイライト・シャドウどちらにドットを残すかを制御します。
+4. **描画許可と半径制御 — Brightness Cutoff / Cutoff Dot Radius / Clip Dot Radius**  
+   `Brightness Cutoff` は $L'$ と閾値を比較し、条件を満たさないセルをゼロ半径にします。条件を満たしたセルは $\text{radius}_\text{raw} = T_2\times R_{\max}$ を計算し、`Cutoff Dot Radius` 未満ならノイズ抑制のため描画しません。最後に `Clip Dot Radius` を掛け上限 $R_{\max}\times\text{ClipDotRadius}$ に収め、極端な肥大化を止めます。
+5. **境界サンプリング設計 — Enable Dot Antialias / AA Edge Softness**  
+   `Enable Dot Antialias` がオンの場合のみ後述のアンチエイリアス計算を有効化します。`AA Edge Softness` はセルピッチから求める幅 $w = \text{AAEdgeSoftness} \times p_\text{avg}$ を与え、半径から内側バリアを引いた上でソフトなカバレッジ関数を構築します。オフの場合はハードなステップ関数が使用されます。
+6. **色と紙の決定 — Use Original Color / Dot Color* / Blend With Input / Paper Color Preset / Paper Color***  
+   `Use Original Color` がオンなら cell_info3 の平均色を採用し、オフなら `Dot Color` の RGBA（`Dot Color Red/Green/Blue/Alpha`）を使用します。`Blend With Input` がオンの場合は入力画像が背景、オフの場合は紙色が背景になります。紙色は `Paper Color Preset` でプリセットを選ぶか、`Paper Color Red/Green/Blue/Alpha` で直接指定します。これらの値は次節のブレンド処理で使用されます。
+
+ステージ 1〜4 が `CellInfoKernel`、ステージ 5〜6 が `RenderDotsKernel` の主担当です。アンチエイリアスと色処理の詳細は以下の節で掘り下げます。
+
+### 1-2. アンチエイリアス処理
+
+`Enable Dot Antialias` がオンのセルには、ピクセルとセル中心の距離 $d$ に基づいてカバレッジを計算します。セルピッチから算出した幅 $w = \text{AAEdgeSoftness} \times p_\text{avg}$ を使い、
+
+1. 内側半径を $r_{\text{inner}} = \max(r - w,\, 0)$ と定義。
+2. $d \le r_{\text{inner}}$ ならカバレッジ 1、$d \ge r$ なら 0。
+3. それ以外は $\mathrm{saturate}\Big(\dfrac{r - d}{w}\Big)$ で滑らかに減衰。
+
+`Enable Dot Antialias` がオフ、または半径が `DOT_RADIUS_THRESHOLD` 未満のセルはハードエッジ（0/1）のみを使用します。選ばれたカバレッジは近傍セルの中で最も強いドットに限定して適用され、次節の色ブレンドに渡されます。
+
+### 1-3. 色とブレンド
+
+最終色は紙色／入力画像／ドット色の 3 者合成で決まります。
+
+1. **ドット色の選択** — `Use Original Color` がオンのときはセル平均色に $(1-L')$ を掛け、暗部ほど濃くなるよう調整します。オフのときは `Dot Color Red/Green/Blue` と `Dot Color Alpha` がそのまま使用されます。
+2. **背景ベースの決定** — `Blend With Input` がオンなら入力ピクセルがベース。オフなら `Paper Color Preset` の選択値で `Paper Color Red/Green/Blue/Alpha` を上書きし、その RGBA を背景として採用します。`Paper Color Alpha` を 1 未満に設定すれば、背景と入力の合成を意図的に透過させることもできます。
+3. **合成** — `RenderDotsKernel` 内の `blendDotOver()` で $\text{Final} = (1-\alpha_\text{dot})\times\text{Base} + \alpha_\text{dot}\times\text{DotColor}$ を計算します。$\alpha_\text{dot}$ はアンチエイリアスで得たカバレッジと `Dot Color Alpha` の積です。
+
+これらの結果が GPU テクスチャとして戻り、`Process()` が Fusion へ最終画像を返します。
 
 ### 2. セルグリッド計算
 
@@ -214,24 +256,25 @@ graph TB
 
 ### 基本パラメータ
 
-| パラメータ        | デフォルト | 範囲     | 説明                         |
-| ----------------- | ---------- | -------- | ---------------------------- |
-| Screen Density    | 150.0      | 1-1000   | ハーフトーンパターンの密度   |
-| Contrast          | 1.0        | 0.1-15.0 | コントラスト調整             |
-| Dot Gain          | 0.0        | -1.0-1.0 | インクの滲み効果シミュレート |
-| Brightness Cutoff | 0.75       | 0.0-1.0  | ドット描画しない明度閾値     |
-| Cutoff Dot Radius | 0.05       | 0.0-1.0  | 描画しない最小ドット半径     |
-| Clip Dot Radius   | 1.0        | 0.0-1.0  | ドットの最大サイズ制限       |
+| パラメータ        | デフォルト | 範囲     | 説明                                                                       |
+| ----------------- | ---------- | -------- | -------------------------------------------------------------------------- |
+| Screen Density    | 150.0      | 1-1000   | ハーフトーンパターンの密度                                                 |
+| Contrast          | 1.0        | 0.1-15.0 | コントラスト調整                                                           |
+| Dot Gain          | 0.0        | -1.0-1.0 | インクの滲み効果シミュレート                                               |
+| Invert Brightness | Off        | 0 or 1   | 明るい領域ほどドットを大きくする（閾値判定も反転）                         |
+| Brightness Cutoff | 0.75       | 0.0-1.0  | ドットの描画条件を決める明度閾値（Invert Brightness 有効時は明部側で判定） |
+| Cutoff Dot Radius | 0.05       | 0.0-1.0  | 描画しない最小ドット半径                                                   |
+| Clip Dot Radius   | 1.0        | 0.0-1.0  | ドットの最大サイズ制限                                                     |
 
 ### 視覚効果パラメータ
 
 ```mermaid
 graph LR
     A[明度] --> B{Brightness Cutoff}
-    B -->|明度 > 閾値| C[ドット非描画]
-    B -->|明度 ≤ 閾値| D[ドットサイズ計算]
+    B -->|条件外| C[ドット非描画]
+    B -->|条件内| D[ドットサイズ計算]
 
-    D --> E[反転明度計算<br/>1.0 - brightness]
+    D --> E[トーン値計算<br/>Invert 有効時は明度を使用]
     E --> F[Dot Gain適用]
     F --> G[最大サイズ制限]
     G --> H{半径 < Cutoff?}
@@ -353,6 +396,7 @@ graph TD
 1. **新聞風効果**: Screen Density = 80-120, Use Original Color = Off
 2. **雑誌風効果**: Screen Density = 150-200, Use Original Color = On
 3. **アート効果**: Screen Density = 50-80, Dot Gain = 0.2-0.5
+4. **ハイライト強調**: Invert Brightness = On, Brightness Cutoff = 0.7-0.9, Dot Gain = -0.1~-0.3
 
 ### パフォーマンス最適化
 
@@ -377,4 +421,4 @@ graph TD
 
 ---
 
-_このドキュメントは MugSimpleHalftone.fuse v2.40 に基づいて作成されています。_
+_このドキュメントは MugSimpleHalftone.fuse v2.60 に基づいて作成されています。_
