@@ -12,7 +12,7 @@ FuRegisterClass("MugSimpleHalftone", CT_Tool, {
     REGS_IconID            = "Icons.Tools.Icons.SimpleHalftone",
     REG_Source_GlobalCtrls = true,
     REG_Source_SizeCtrls   = true,
-    REG_Version            = 2.40,
+    REG_Version            = 2.50,
 })
 
 -- セル情報計算用パラメータ構造体
@@ -26,6 +26,7 @@ CellInfoParams = [[
   float minDotRadius;     // 最小ドット半径
   int useOriginalColor;   // 元の色を使用するかどうか
   float clipRadius;       // クリッピング半径
+  int invertMode;         // 輝度を反転してドットを生成するか
 ]]
 
 -- セル情報計算カーネル
@@ -186,16 +187,22 @@ __KERNEL__ void CellInfoKernel(
     avgLuma = 0.5f + (avgLuma - 0.5f) * params->contrast;
     avgLuma = _saturatef(avgLuma);  // 0.0-1.0に制限
 
-    // 輝度を反転（暗い部分ほど大きなドットに）
-    float inverseLuma = 1.0f - avgLuma;
+    const int invertMode = params->invertMode;
+
+    // 輝度からドットの強度を計算（反転モードに対応）
+    float tonalValue = (invertMode != 0) ? avgLuma : (1.0f - avgLuma);
 
     // ドットゲイン適用
-    inverseLuma = _saturatef(inverseLuma + params->dotGain);
+    tonalValue = _saturatef(tonalValue + params->dotGain);
 
     // 明るさのカットオフと最小ドット半径を一括処理
+    const int passesBrightness = (invertMode != 0)
+        ? (avgLuma >= params->brightnessCutoff ? 1 : 0)
+        : (avgLuma <= params->brightnessCutoff ? 1 : 0);
+
     float dotRadius = 0.0f;
-    if (avgLuma <= params->brightnessCutoff && inverseLuma >= params->minDotRadius) {
-        dotRadius = _fminf(inverseLuma * maxCellRadius, maxCellRadius * params->clipRadius);
+    if (passesBrightness && tonalValue >= params->minDotRadius) {
+        dotRadius = _fminf(tonalValue * maxCellRadius, maxCellRadius * params->clipRadius);
     }
 
     // dst_info2: ドット情報を格納
@@ -524,13 +531,20 @@ function Create()
         INPS_StatusText = "Simulates ink spread on paper",
     })
 
+    InInvertMode = self:AddInput("Invert Brightness", "InvertMode", {
+        LINKID_DataType = "Number",
+        INPID_InputControl = "CheckboxControl",
+        INP_Default = 0.0,
+        INPS_StatusText = "When enabled, brighter areas generate larger dots",
+    })
+
     InBrightnessCutoff = self:AddInput("Brightness Cutoff", "BrightnessCutoff", {
         LINKID_DataType = "Number",
         INPID_InputControl = "SliderControl",
         INP_Default = 0.75,
         INP_MinAllowed = 0.0,
         INP_MaxAllowed = 1.0,
-        INPS_StatusText = "Brightness threshold above which dots are not drawn",
+        INPS_StatusText = "Brightness threshold controlling dot placement; flips when Invert Brightness is enabled",
     })
 
     InCutoffDotRadius = self:AddInput("Cutoff Dot Radius", "MinDotRadius", {
@@ -740,6 +754,7 @@ function Process(req)
     local contrast = InContrast:GetValue(req).Value
     local screenDensity = InScreenDensity:GetValue(req).Value
     local dotGain = InDotGain:GetValue(req).Value
+    local invertMode = InInvertMode:GetValue(req).Value
     local useOriginalColor = InUseOriginalColor:GetValue(req).Value
     local enableDotAntialias = InEnableDotAntialias:GetValue(req).Value > 0.5
     local aaEdgeSoftness = InAAEdgeSoftness:GetValue(req).Value
@@ -819,6 +834,7 @@ function Process(req)
         params.minDotRadius = cutoffDotRadius
         params.useOriginalColor = useOriginalColor > 0.5 and 1 or 0
         params.clipRadius = maxDotRadius
+        params.invertMode = invertMode > 0.5 and 1 or 0
 
         cellInfoNode:SetParamBlock(params)
         cellInfoNode:AddSampler("RowSampler", TEX_FILTER_MODE_POINT, TEX_ADDRESS_MODE_CLAMP,
