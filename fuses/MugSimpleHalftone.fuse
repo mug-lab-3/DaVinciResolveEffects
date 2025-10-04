@@ -12,7 +12,7 @@ FuRegisterClass("MugSimpleHalftone", CT_Tool, {
     REGS_IconID            = "Icons.Tools.Icons.SimpleHalftone",
     REG_Source_GlobalCtrls = true,
     REG_Source_SizeCtrls   = true,
-    REG_Version            = 2.20,
+    REG_Version            = 2.30,
 })
 
 -- セル情報計算用パラメータ構造体
@@ -124,12 +124,23 @@ __KERNEL__ void CellInfoKernel(
         return;
     }
 
-    // セル範囲内のピクセルをサンプリング - 円形サンプリング（サンプリングステップあり）
+    // セル範囲内のピクセルをサンプリング - 円形サンプリング（高速化版）
+    const int sampleStepInt = sampleStep * sampleStep; // 整数版で高速化
+
     for (int pixelY = minY; pixelY <= maxY; pixelY += sampleStep) {
         const float dy = (float)pixelY - cellCenterY;
         const float dySquared = dy * dy;
 
-        for (int pixelX = minX; pixelX <= maxX; pixelX += sampleStep) {
+        // Y方向での早期カットオフ（円形範囲チェック）
+        if (dySquared > radiusSquared) continue;
+
+        // X方向の最大範囲を事前計算（円形範囲内）
+        const float maxDxSq = radiusSquared - dySquared;
+        const float maxDx = _sqrtf(maxDxSq);
+        const int localMinX = max(minX, (int)(cellCenterX - maxDx));
+        const int localMaxX = min(maxX, (int)(cellCenterX + maxDx));
+
+        for (int pixelX = localMinX; pixelX <= localMaxX; pixelX += sampleStep) {
             const float dx = (float)pixelX - cellCenterX;
             const float distSq = dx*dx + dySquared;
 
@@ -142,14 +153,13 @@ __KERNEL__ void CellInfoKernel(
                 const float luma = color.x * LUMA_R + color.y * LUMA_G + color.z * LUMA_B;
 
                 // サンプリングステップの補正（事前計算した値を使用）
-                totalLuma += luma * sampleStepSquared;
-                sampleCount += sampleStep * sampleStep;
+                const float lumaWeighted = luma * sampleStepSquared;
+                totalLuma += lumaWeighted;
+                sampleCount += sampleStepInt;
 
-                // 色成分の累積
-                avgColor.x += color.x * sampleStepSquared;
-                avgColor.y += color.y * sampleStepSquared;
-                avgColor.z += color.z * sampleStepSquared;
-                avgColor.w += color.w * sampleStepSquared;
+                // 色成分の累積（ベクトル演算で効率化）
+                const float4 colorWeighted = color * sampleStepSquared;
+                avgColor += colorWeighted;
             }
         }
     }
@@ -166,11 +176,8 @@ __KERNEL__ void CellInfoKernel(
     const float invSampleCount = (sampleCount > 0) ? (1.0f / (float)sampleCount) : 0.0f;
     float avgLuma = totalLuma * invSampleCount;
 
-    // 色成分の平均値計算
-    avgColor.x *= invSampleCount;
-    avgColor.y *= invSampleCount;
-    avgColor.z *= invSampleCount;
-    avgColor.w *= invSampleCount;
+    // 色成分の平均値計算（ベクトル演算で効率化）
+    avgColor *= invSampleCount;
 
     // コントラスト調整
     avgLuma = 0.5f + (avgLuma - 0.5f) * params->contrast;
@@ -269,11 +276,15 @@ __DEVICE__ float checkCellDot(
         if (distSq >= radiusSq)
             return 0.0f;
 
-        const float dist = _sqrtf(distSq);
+        // 高速近似または正確な計算の選択（半径に基づく）
         const float innerRadius = _fmaxf(dotRadius - aaEdgeWidth, 0.0f);
+        const float innerRadiusSq = innerRadius * innerRadius;
 
-        if (dist <= innerRadius)
+        if (distSq <= innerRadiusSq)
             return 1.0f;
+
+        // 平方根計算を最後まで遅延
+        const float dist = _sqrtf(distSq);
 
         const float t = (dotRadius - dist) / aaEdgeWidth;
         return _saturatef(t);
@@ -348,9 +359,11 @@ __KERNEL__ void RenderDotsKernel(
     const int baseRowY = (int)((pixelPos.y + yOffset) / cellPitch.y);
     const int isOddRow = (baseRowY % 2 != 0) ? 1 : 0;
 
+    const float2 halfCellPitch = cellPitch * 0.5f; // 事前計算
+
     float adjustedX = pixelPos.x;
     if (isOddRow != 0) {
-        adjustedX += cellPitch.x * 0.5f;
+        adjustedX += halfCellPitch.x;
     }
     const int mainCellX = (int)_floorf(adjustedX / cellPitch.x);
     const int mainCellY = baseRowY;
@@ -398,17 +411,15 @@ __KERNEL__ void RenderDotsKernel(
         const float coverageCandidate = checkCellDot(candidatePos, pixelPos, cellGridNum, cell_info1, cell_info2, aaEdgeWidth); \
         if (coverageCandidate > 0.0f) { \
             float4 candidateDotColor = userDotColor; \
+            float candidateStrength = coverageCandidate; \
             if (useOriginalColorFlag != 0) { \
                 const float2 candidateUV = (candidatePos + to_float2(0.5f, 0.5f)) / cellGridNum; \
                 candidateDotColor = _tex2DVecN(cell_info3, candidateUV.x, candidateUV.y, 15); \
-            } \
-            float candidateStrength = coverageCandidate; \
-            if (useOriginalColorFlag != 0) { \
                 const float candidateLuma = candidateDotColor.x * LUMA_R + candidateDotColor.y * LUMA_G + candidateDotColor.z * LUMA_B; \
                 candidateStrength *= _fmaxf(1.0f - candidateLuma, 0.0f); \
             } \
-            if (candidateStrength > bestStrength + 1e-4f || \
-                (candidateStrength >= bestStrength - 1e-4f && coverageCandidate > bestCoverage)) { \
+            const float strengthDiff = candidateStrength - bestStrength; \
+            if (strengthDiff > 1e-4f || (strengthDiff >= -1e-4f && coverageCandidate > bestCoverage)) { \
                 bestStrength = candidateStrength; \
                 bestCoverage = coverageCandidate; \
                 bestDotColor = candidateDotColor; \
@@ -419,8 +430,8 @@ __KERNEL__ void RenderDotsKernel(
     UPDATE_BEST_CELL(mainCellPos);
 
     const float2 cellCenter = to_float2(
-        mainCellX * cellPitch.x + (isOddRow != 0 ? cellPitch.x * 0.5f : 0.0f) + cellPitch.x * 0.5f,
-        mainCellY * cellPitch.y + cellPitch.y * 0.5f
+        mainCellX * cellPitch.x + (isOddRow != 0 ? halfCellPitch.x : 0.0f) + halfCellPitch.x,
+        mainCellY * cellPitch.y + halfCellPitch.y
     );
 
     const float2 relPos = pixelPos - cellCenter;
@@ -431,7 +442,7 @@ __KERNEL__ void RenderDotsKernel(
     if (isHighDensity != 0) {
         int checkIndices[2] = {-1, -1};
         int checkCount = 0;
-        const float2 cellThreshold = cellPitch * 0.25f;
+        const float2 cellThreshold = halfCellPitch * 0.5f; // cellPitch * 0.25f と同等
         const float2 absRelPos = to_float2(_fabs(relPos.x), _fabs(relPos.y));
 
         if (absRelPos.x > cellThreshold.x) {
