@@ -186,9 +186,9 @@ graph LR
 3. **ブレンド** — `blendDotOver()` により $\text{Final} = (1-\alpha_{dot})\times\text{Base} + \alpha_{dot}\times\text{DotColor}$ を計算します。$\alpha_{dot}$ はカバレッジ値とドット色アルファの積です。
 
 ```mermaid
-graph TD
-    A[coverage] --> D[αdot]
-    B[Dot Color] --> E[blendDotOver]
+flowchart TD
+    A[Coverage] --> D[αdot]
+    B[Dot Color] --> E[blendDotOver()]
     C[Base (Input or Paper)] --> E
     D --> E
     E --> F[最終出力]
