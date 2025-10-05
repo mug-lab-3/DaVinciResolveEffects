@@ -1,0 +1,364 @@
+--[[--
+Mug Smart Anti-Aliasing
+--]] --
+
+FuRegisterClass("MugSmartAA", CT_Tool, {
+    REGS_Category          = "Fuses\\Mug",
+    REGS_OpIconString      = "MSA",
+    REGS_OpDescription     = "Mug Smart Anti-Aliasing",
+    REGS_HelpTopic         = "https://x.com/MugLab3",
+    REGS_URL               = "https://www.youtube.com/@MugLabVideoEditing",
+    REGS_IconID            = "Icons.Tools.Icons.SmartAA",
+    REG_Source_GlobalCtrls = true,
+    REG_Source_SizeCtrls   = true,
+    REG_Version            = 1.00,
+})
+
+-- ここからMLAA用のパラメータ構造体とカーネルコードを定義
+
+MLAAEdgeParams = [[
+  int imgSize[2];        // 入力画像サイズ
+  float lumaThreshold;   // 輝度差の閾値
+  float colorThreshold;  // 色差の閾値
+]]
+
+MLAABlendParams = [[
+  int imgSize[2];        // 入力画像サイズ
+  float strength;        // ブレンド強度
+  int maxSearchSteps;    // 走査範囲（ピクセル数）
+  int debugMode;         // デバッグモード
+  int preserveAlpha;     // アルファ維持フラグ
+]]
+
+MLAAEdgeKernel = [[
+#define LUMA_R 0.299f
+#define LUMA_G 0.587f
+#define LUMA_B 0.114f
+
+__KERNEL__ void MLAAEdgeKernel(
+    __CONSTANTREF__ MLAAEdgeParams *params,
+    __TEXTURE2D__ src,
+    __TEXTURE2D_WRITE__ outMask)
+{
+    DEFINE_KERNEL_ITERATORS_XY(x, y);
+
+    if (x >= params->imgSize[0] || y >= params->imgSize[1]) {
+        return;
+    }
+
+    const int maxX = params->imgSize[0] - 1;
+    const int maxY = params->imgSize[1] - 1;
+
+    const float4 center = _tex2DVecN(src, x, y, 15);
+    const float centerLuma = center.x * LUMA_R + center.y * LUMA_G + center.z * LUMA_B;
+
+    float horizontalEdge = 0.0f;
+    float verticalEdge = 0.0f;
+
+    if (x < maxX) {
+        const float4 right = _tex2DVecN(src, x + 1, y, 15);
+        const float rightLuma = right.x * LUMA_R + right.y * LUMA_G + right.z * LUMA_B;
+        const float lumaDiff = _fabs(centerLuma - rightLuma);
+        const float dx = center.x - right.x;
+        const float dy = center.y - right.y;
+        const float dz = center.z - right.z;
+        const float chroma = _sqrtf(dx * dx + dy * dy + dz * dz);
+
+        if (lumaDiff >= params->lumaThreshold || chroma >= params->colorThreshold) {
+            horizontalEdge = 1.0f;
+        }
+    }
+
+    if (y < maxY) {
+        const float4 down = _tex2DVecN(src, x, y + 1, 15);
+        const float downLuma = down.x * LUMA_R + down.y * LUMA_G + down.z * LUMA_B;
+        const float lumaDiff = _fabs(centerLuma - downLuma);
+        const float dx = center.x - down.x;
+        const float dy = center.y - down.y;
+        const float dz = center.z - down.z;
+        const float chroma = _sqrtf(dx * dx + dy * dy + dz * dz);
+
+        if (lumaDiff >= params->lumaThreshold || chroma >= params->colorThreshold) {
+            verticalEdge = 1.0f;
+        }
+    }
+
+    const float4 outValue = to_float4(
+        horizontalEdge,
+        verticalEdge,
+        0.0f,
+        1.0f);
+    _tex2DVec4Write(outMask, x, y, outValue);
+}
+]]
+
+MLAABlendKernel = [[
+__KERNEL__ void MLAABlendKernel(
+    __CONSTANTREF__ MLAABlendParams *params,
+    __TEXTURE2D__ src,
+    __TEXTURE2D__ edgeMask,
+    __TEXTURE2D_WRITE__ dst)
+{
+    DEFINE_KERNEL_ITERATORS_XY(x, y);
+
+    if (x >= params->imgSize[0] || y >= params->imgSize[1]) {
+        return;
+    }
+
+    const float4 color = _tex2DVecN(src, x, y, 15);
+    const float4 mask = _tex2DVecN(edgeMask, x, y, 15);
+
+    if (params->debugMode == 1) {
+        const float edgeVal = _saturatef(mask.x + mask.y);
+        _tex2DVec4Write(dst, x, y, to_float4(edgeVal, edgeVal, edgeVal, 1.0f));
+        return;
+    } else if (params->debugMode == 2) {
+        const float edgeVal = _saturatef(mask.x);
+        _tex2DVec4Write(dst, x, y, to_float4(edgeVal, 0.0f, 0.0f, 1.0f));
+        return;
+    } else if (params->debugMode == 3) {
+        const float edgeVal = _saturatef(mask.y);
+        _tex2DVec4Write(dst, x, y, to_float4(0.0f, edgeVal, 0.0f, 1.0f));
+        return;
+    }
+
+    float4 result = color;
+
+    const float strength = _saturatef(params->strength);
+    const int maxSteps = (params->maxSearchSteps > 1) ? params->maxSearchSteps : 1;
+
+    if (mask.x > 0.0f) {
+        int steps = 0;
+        float4 accum = color;
+        int count = 1;
+        int sx = x - 1;
+        while (sx >= 0 && steps < maxSteps) {
+            const float4 neighborMask = _tex2DVecN(edgeMask, sx, y, 15);
+            if (neighborMask.x <= 0.0f) break;
+            accum += _tex2DVecN(src, sx, y, 15);
+            count++;
+            sx--;
+            steps++;
+        }
+
+        steps = 0;
+        sx = x + 1;
+        while (sx < params->imgSize[0] && steps < maxSteps) {
+            const float4 neighborMask = _tex2DVecN(edgeMask, sx, y, 15);
+            if (neighborMask.x <= 0.0f) break;
+            accum += _tex2DVecN(src, sx, y, 15);
+            count++;
+            sx++;
+            steps++;
+        }
+
+      const float invCount = 1.0f / (float)count;
+      const float4 average = accum * invCount;
+      const float blendFactor = _saturatef(strength * mask.x);
+      result = result + (average - result) * blendFactor;
+    }
+
+    if (mask.y > 0.0f) {
+        int steps = 0;
+        float4 accum = result;
+        int count = 1;
+        int sy = y - 1;
+        while (sy >= 0 && steps < maxSteps) {
+            const float4 neighborMask = _tex2DVecN(edgeMask, x, sy, 15);
+            if (neighborMask.y <= 0.0f) break;
+            accum += _tex2DVecN(src, x, sy, 15);
+            count++;
+            sy--;
+            steps++;
+        }
+
+        steps = 0;
+        sy = y + 1;
+        while (sy < params->imgSize[1] && steps < maxSteps) {
+            const float4 neighborMask = _tex2DVecN(edgeMask, x, sy, 15);
+            if (neighborMask.y <= 0.0f) break;
+            accum += _tex2DVecN(src, x, sy, 15);
+            count++;
+            sy++;
+            steps++;
+        }
+
+      const float invCount = 1.0f / (float)count;
+      const float4 average = accum * invCount;
+      const float blendFactor = _saturatef(strength * mask.y);
+      result = result + (average - result) * blendFactor;
+    }
+
+    if (params->preserveAlpha != 0) {
+        result.w = color.w;
+    }
+
+    _tex2DVec4Write(dst, x, y, result);
+}
+]]
+
+function Create()
+    self:BeginControlNest("Mode", "ModeNest", true)
+
+    InMode = self:AddInput("Mode", "Mode", {
+        LINKID_DataType    = "Number",
+        INPID_InputControl = "ComboControl",
+        INP_Default        = 0,
+        INP_Integer        = true,
+        { CCS_AddString = "MLAA" },
+    })
+
+    self:EndControlNest()
+
+    self:BeginControlNest("MLAA", "MLAASettings", true)
+
+    InStrength = self:AddInput("Blend Strength", "BlendStrength", {
+        LINKID_DataType    = "Number",
+        INPID_InputControl = "SliderControl",
+        INP_Default        = 0.8,
+        INP_MinAllowed     = 0.0,
+        INP_MaxAllowed     = 1.0,
+        INPS_StatusText    = "Controls how strongly the MLAA result is blended back.",
+    })
+
+    InLumaThreshold = self:AddInput("Luma Threshold", "LumaThreshold", {
+        LINKID_DataType    = "Number",
+        INPID_InputControl = "SliderControl",
+        INP_Default        = 0.08,
+        INP_MinAllowed     = 0.0,
+        INP_MaxAllowed     = 1.0,
+        INPS_StatusText    = "Minimum luma difference to flag an edge.",
+    })
+
+    InColorThreshold = self:AddInput("Color Threshold", "ColorThreshold", {
+        LINKID_DataType    = "Number",
+        INPID_InputControl = "SliderControl",
+        INP_Default        = 0.10,
+        INP_MinAllowed     = 0.0,
+        INP_MaxAllowed     = 1.0,
+        INPS_StatusText    = "Minimum color difference to flag an edge.",
+    })
+
+    InMaxSearch = self:AddInput("Max Search Steps", "MaxSearchSteps", {
+        LINKID_DataType    = "Number",
+        INPID_InputControl = "SliderControl",
+        INP_Default        = 8,
+        INP_MinAllowed     = 1,
+        INP_MaxAllowed     = 32,
+        INP_Integer        = true,
+        INPS_StatusText    = "Maximum pixels to scan when smoothing edges.",
+    })
+
+    InPreserveAlpha = self:AddInput("Preserve Alpha", "PreserveAlpha", {
+        LINKID_DataType    = "Number",
+        INPID_InputControl = "CheckboxControl",
+        INP_Default        = 1,
+        INPS_StatusText    = "Keeps original alpha channel instead of blending it.",
+    })
+
+    self:EndControlNest()
+
+    self:BeginControlNest("Debug", "DebugNest", true)
+
+    InDebugView = self:AddInput("Debug View", "DebugView", {
+        LINKID_DataType    = "Number",
+        INPID_InputControl = "ComboControl",
+        INP_Default        = 0,
+        INP_Integer        = true,
+        { CCS_AddString = "Off" },
+        { CCS_AddString = "Edge Mask" },
+        { CCS_AddString = "Horizontal" },
+        { CCS_AddString = "Vertical" },
+    })
+
+    self:EndControlNest()
+
+    InImage = self:AddInput("Input", "Image", {
+        LINKID_DataType = "Image",
+        LINK_Main       = 1,
+    })
+
+    OutImage = self:AddOutput("Output", "Output", {
+        LINKID_DataType = "Image",
+        LINK_Main       = 1,
+    })
+end
+
+function Process(req)
+    local img = InImage:GetValue(req)
+    if not img then
+        OutImage:Set(req, nil)
+        return
+    end
+
+    local mode = math.floor(InMode:GetValue(req).Value + 0.5)
+    if mode ~= 0 then
+        -- 将来拡張用モードが未実装の場合は入力を透過
+        OutImage:Set(req, img)
+        return
+    end
+
+    local width = img.DataWindow:Width()
+    local height = img.DataWindow:Height()
+
+    local strength = InStrength:GetValue(req).Value
+    local lumaThreshold = InLumaThreshold:GetValue(req).Value
+    local colorThreshold = InColorThreshold:GetValue(req).Value
+    local maxSearchSteps = math.max(1, math.floor(InMaxSearch:GetValue(req).Value + 0.5))
+    local preserveAlpha = InPreserveAlpha:GetValue(req).Value > 0.5 and 1 or 0
+    local debugMode = math.floor(InDebugView:GetValue(req).Value + 0.5)
+
+    local edgeMask = Image({ IMG_Like = img })
+    local outImg = Image({ IMG_Like = img })
+
+    local edgeNode = DVIPComputeNode(req, "MLAAEdgeKernel", MLAAEdgeKernel, "MLAAEdgeParams", MLAAEdgeParams)
+    if edgeNode then
+        local params = edgeNode:GetParamBlock(MLAAEdgeParams)
+        params.imgSize[0] = width
+        params.imgSize[1] = height
+        params.lumaThreshold = lumaThreshold
+        params.colorThreshold = colorThreshold
+
+        edgeNode:SetParamBlock(params)
+        edgeNode:AddSampler("RowSampler", TEX_FILTER_MODE_POINT, TEX_ADDRESS_MODE_CLAMP, TEX_NORMALIZED_COORDS_FALSE)
+        edgeNode:AddInput("src", img)
+        edgeNode:AddOutput("outMask", edgeMask)
+
+        local success = edgeNode:RunSession(req)
+        if not success then
+            OutImage:Set(req, img)
+            return
+        end
+    else
+        OutImage:Set(req, img)
+        return
+    end
+
+    local blendNode = DVIPComputeNode(req, "MLAABlendKernel", MLAABlendKernel, "MLAABlendParams", MLAABlendParams)
+    if blendNode then
+        local params = blendNode:GetParamBlock(MLAABlendParams)
+        params.imgSize[0] = width
+        params.imgSize[1] = height
+        params.strength = strength
+        params.maxSearchSteps = maxSearchSteps
+        params.debugMode = debugMode
+        params.preserveAlpha = preserveAlpha
+
+        blendNode:SetParamBlock(params)
+        blendNode:AddSampler("RowSampler", TEX_FILTER_MODE_POINT, TEX_ADDRESS_MODE_CLAMP, TEX_NORMALIZED_COORDS_FALSE)
+        blendNode:AddInput("src", img)
+        blendNode:AddInput("edgeMask", edgeMask)
+        blendNode:AddOutput("dst", outImg)
+
+        local success = blendNode:RunSession(req)
+        if not success then
+            OutImage:Set(req, img)
+            return
+        end
+    else
+        OutImage:Set(req, img)
+        return
+    end
+
+    OutImage:Set(req, outImg)
+end
