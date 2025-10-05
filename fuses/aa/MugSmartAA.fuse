@@ -30,6 +30,16 @@ MLAABlendParams = [[
   int preserveAlpha;     // アルファ維持フラグ
 ]]
 
+CMAABlendParams = [[
+    int imgSize[2];         // 入力画像サイズ
+    float strength;         // ブレンド強度
+    int maxSearchSteps;     // 走査範囲（ピクセル数）
+    float maxColorDelta;    // 許容色差
+    float diagonalWeight;   // 斜め方向の影響度
+    int debugMode;          // デバッグモード
+    int preserveAlpha;      // アルファ維持フラグ
+]]
+
 MLAAEdgeKernel = [[
 #define LUMA_R 0.299f
 #define LUMA_G 0.587f
@@ -197,6 +207,192 @@ __KERNEL__ void MLAABlendKernel(
 }
 ]]
 
+CMAA2BlendKernel = [[
+__KERNEL__ void CMAA2BlendKernel(
+    __CONSTANTREF__ CMAABlendParams *params,
+    __TEXTURE2D__ src,
+    __TEXTURE2D__ edgeMask,
+    __TEXTURE2D_WRITE__ dst)
+{
+    DEFINE_KERNEL_ITERATORS_XY(x, y);
+
+    if (x >= params->imgSize[0] || y >= params->imgSize[1]) {
+        return;
+    }
+
+    const int maxX = params->imgSize[0] - 1;
+    const int maxY = params->imgSize[1] - 1;
+
+    const float4 baseColor = _tex2DVecN(src, x, y, 15);
+    const float4 mask = _tex2DVecN(edgeMask, x, y, 15);
+
+    if (params->debugMode == 1) {
+        const float edgeVal = _saturatef(mask.x + mask.y);
+        _tex2DVec4Write(dst, x, y, to_float4(edgeVal, edgeVal, edgeVal, 1.0f));
+        return;
+    } else if (params->debugMode == 2) {
+        const float edgeVal = _saturatef(mask.x);
+        _tex2DVec4Write(dst, x, y, to_float4(edgeVal, 0.0f, 0.0f, 1.0f));
+        return;
+    } else if (params->debugMode == 3) {
+        const float edgeVal = _saturatef(mask.y);
+        _tex2DVec4Write(dst, x, y, to_float4(0.0f, edgeVal, 0.0f, 1.0f));
+        return;
+    }
+
+    float4 result = baseColor;
+
+    const float strength = _saturatef(params->strength);
+    const int maxSteps = (params->maxSearchSteps > 1) ? params->maxSearchSteps : 1;
+    const float diagWeight = _saturatef(params->diagonalWeight);
+    const float maxColorDelta = _fmaxf(params->maxColorDelta, 1e-4f);
+    const float maxColorDeltaSq = maxColorDelta * maxColorDelta;
+    const float neighborLimitSq = maxColorDeltaSq * 2.25f; // (1.5x)^2
+
+    if (mask.x > 0.0f) {
+        int steps = 0;
+        float4 accum = baseColor;
+        int count = 1;
+        int sx = x - 1;
+        while (sx >= 0 && steps < maxSteps) {
+            const float4 neighborMask = _tex2DVecN(edgeMask, sx, y, 15);
+            if (neighborMask.x <= 0.0f) break;
+            const float4 sampleColor = _tex2DVecN(src, sx, y, 15);
+            const float diffR = sampleColor.x - baseColor.x;
+            const float diffG = sampleColor.y - baseColor.y;
+            const float diffB = sampleColor.z - baseColor.z;
+            const float diffSq = diffR * diffR + diffG * diffG + diffB * diffB;
+            if (diffSq > neighborLimitSq) break;
+            accum += sampleColor;
+            count++;
+            sx--;
+            steps++;
+        }
+
+        steps = 0;
+        sx = x + 1;
+        while (sx <= maxX && steps < maxSteps) {
+            const float4 neighborMask = _tex2DVecN(edgeMask, sx, y, 15);
+            if (neighborMask.x <= 0.0f) break;
+            const float4 sampleColor = _tex2DVecN(src, sx, y, 15);
+            const float diffR = sampleColor.x - baseColor.x;
+            const float diffG = sampleColor.y - baseColor.y;
+            const float diffB = sampleColor.z - baseColor.z;
+            const float diffSq = diffR * diffR + diffG * diffG + diffB * diffB;
+            if (diffSq > neighborLimitSq) break;
+            accum += sampleColor;
+            count++;
+            sx++;
+            steps++;
+        }
+
+        const float invCount = 1.0f / (float)count;
+        const float4 average = accum * invCount;
+        float blendFactor = _saturatef(strength * mask.x);
+
+        if (diagWeight > 0.0f) {
+            float adjacent = 0.0f;
+            if (y > 0) {
+                const float4 upMask = _tex2DVecN(edgeMask, x, y - 1, 15);
+                adjacent += upMask.y;
+            }
+            if (y < maxY) {
+                const float4 downMask = _tex2DVecN(edgeMask, x, y + 1, 15);
+                adjacent += downMask.y;
+            }
+            adjacent *= 0.5f;
+            const float diagFactor = 1.0f - _saturatef(diagWeight * adjacent);
+            blendFactor *= diagFactor;
+        }
+
+        const float dR = average.x - baseColor.x;
+        const float dG = average.y - baseColor.y;
+        const float dB = average.z - baseColor.z;
+        const float diffSq = dR * dR + dG * dG + dB * dB;
+        if (diffSq > maxColorDeltaSq) {
+            const float limitFactor = maxColorDelta / (_sqrtf(diffSq) + 1e-6f);
+            blendFactor *= limitFactor;
+        }
+
+        result = result + (average - result) * blendFactor;
+    }
+
+    if (mask.y > 0.0f) {
+        int steps = 0;
+        float4 accum = result;
+        int count = 1;
+        int sy = y - 1;
+        while (sy >= 0 && steps < maxSteps) {
+            const float4 neighborMask = _tex2DVecN(edgeMask, x, sy, 15);
+            if (neighborMask.y <= 0.0f) break;
+            const float4 sampleColor = _tex2DVecN(src, x, sy, 15);
+            const float diffR = sampleColor.x - baseColor.x;
+            const float diffG = sampleColor.y - baseColor.y;
+            const float diffB = sampleColor.z - baseColor.z;
+            const float diffSq = diffR * diffR + diffG * diffG + diffB * diffB;
+            if (diffSq > neighborLimitSq) break;
+            accum += sampleColor;
+            count++;
+            sy--;
+            steps++;
+        }
+
+        steps = 0;
+        sy = y + 1;
+        while (sy <= maxY && steps < maxSteps) {
+            const float4 neighborMask = _tex2DVecN(edgeMask, x, sy, 15);
+            if (neighborMask.y <= 0.0f) break;
+            const float4 sampleColor = _tex2DVecN(src, x, sy, 15);
+            const float diffR = sampleColor.x - baseColor.x;
+            const float diffG = sampleColor.y - baseColor.y;
+            const float diffB = sampleColor.z - baseColor.z;
+            const float diffSq = diffR * diffR + diffG * diffG + diffB * diffB;
+            if (diffSq > neighborLimitSq) break;
+            accum += sampleColor;
+            count++;
+            sy++;
+            steps++;
+        }
+
+        const float invCount = 1.0f / (float)count;
+        const float4 average = accum * invCount;
+        float blendFactor = _saturatef(strength * mask.y);
+
+        if (diagWeight > 0.0f) {
+            float adjacent = 0.0f;
+            if (x > 0) {
+                const float4 leftMask = _tex2DVecN(edgeMask, x - 1, y, 15);
+                adjacent += leftMask.x;
+            }
+            if (x < maxX) {
+                const float4 rightMask = _tex2DVecN(edgeMask, x + 1, y, 15);
+                adjacent += rightMask.x;
+            }
+            adjacent *= 0.5f;
+            const float diagFactor = 1.0f - _saturatef(diagWeight * adjacent);
+            blendFactor *= diagFactor;
+        }
+
+        const float dR = average.x - baseColor.x;
+        const float dG = average.y - baseColor.y;
+        const float dB = average.z - baseColor.z;
+        const float diffSq = dR * dR + dG * dG + dB * dB;
+        if (diffSq > maxColorDeltaSq) {
+            const float limitFactor = maxColorDelta / (_sqrtf(diffSq) + 1e-6f);
+            blendFactor *= limitFactor;
+        }
+
+        result = result + (average - result) * blendFactor;
+    }
+
+    if (params->preserveAlpha != 0) {
+        result.w = baseColor.w;
+    }
+
+    _tex2DVec4Write(dst, x, y, result);
+}
+]]
+
 function Create()
     self:BeginControlNest("Mode", "ModeNest", true)
 
@@ -206,20 +402,12 @@ function Create()
         INP_Default        = 0,
         INP_Integer        = true,
         { CCS_AddString = "MLAA" },
+        { CCS_AddString = "CMAA2" },
     })
 
     self:EndControlNest()
 
-    self:BeginControlNest("MLAA", "MLAASettings", true)
-
-    InStrength = self:AddInput("Blend Strength", "BlendStrength", {
-        LINKID_DataType    = "Number",
-        INPID_InputControl = "SliderControl",
-        INP_Default        = 0.8,
-        INP_MinAllowed     = 0.0,
-        INP_MaxAllowed     = 1.0,
-        INPS_StatusText    = "Controls how strongly the MLAA result is blended back.",
-    })
+    self:BeginControlNest("Edge Detection", "EdgeSettings", true)
 
     InLumaThreshold = self:AddInput("Luma Threshold", "LumaThreshold", {
         LINKID_DataType    = "Number",
@@ -239,7 +427,20 @@ function Create()
         INPS_StatusText    = "Minimum color difference to flag an edge.",
     })
 
-    InMaxSearch = self:AddInput("Max Search Steps", "MaxSearchSteps", {
+    self:EndControlNest()
+
+    self:BeginControlNest("MLAA", "MLAASettings", true)
+
+    InMLAAStrength = self:AddInput("Blend Strength", "BlendStrength", {
+        LINKID_DataType    = "Number",
+        INPID_InputControl = "SliderControl",
+        INP_Default        = 0.8,
+        INP_MinAllowed     = 0.0,
+        INP_MaxAllowed     = 1.0,
+        INPS_StatusText    = "Controls how strongly the MLAA result is blended back.",
+    })
+
+    InMLAAMaxSearch = self:AddInput("Max Search Steps", "MaxSearchSteps", {
         LINKID_DataType    = "Number",
         INPID_InputControl = "SliderControl",
         INP_Default        = 8,
@@ -249,12 +450,59 @@ function Create()
         INPS_StatusText    = "Maximum pixels to scan when smoothing edges.",
     })
 
+    self:EndControlNest()
+
+    self:BeginControlNest("CMAA2", "CMAA2Settings", true)
+
+    InCMAAStrength = self:AddInput("Conservative Strength", "CMAAStrength", {
+        LINKID_DataType    = "Number",
+        INPID_InputControl = "SliderControl",
+        INP_Default        = 0.6,
+        INP_MinAllowed     = 0.0,
+        INP_MaxAllowed     = 1.0,
+        INPS_StatusText    = "Controls the blend ratio while preserving line contrast.",
+    })
+
+    InCMAAMaxSearch = self:AddInput("Max Search Steps", "CMAAMaxSearch", {
+        LINKID_DataType    = "Number",
+        INPID_InputControl = "SliderControl",
+        INP_Default        = 6,
+        INP_MinAllowed     = 1,
+        INP_MaxAllowed     = 24,
+        INP_Integer        = true,
+        INPS_StatusText    = "Maximum pixels to scan before aborting conservative smoothing.",
+    })
+
+    InCMAAMaxColorDelta = self:AddInput("Max Color Delta", "CMAAMaxColorDelta", {
+        LINKID_DataType    = "Number",
+        INPID_InputControl = "SliderControl",
+        INP_Default        = 0.15,
+        INP_MinAllowed     = 0.0,
+        INP_MaxAllowed     = 1.0,
+        INPS_StatusText    = "Limits color deviation permitted during conservative blending.",
+    })
+
+    InCMAADiagonalWeight = self:AddInput("Diagonal Weight", "CMAADiagonalWeight", {
+        LINKID_DataType    = "Number",
+        INPID_InputControl = "SliderControl",
+        INP_Default        = 0.35,
+        INP_MinAllowed     = 0.0,
+        INP_MaxAllowed     = 1.0,
+        INPS_StatusText    = "Adjusts the influence of diagonal samples when available.",
+    })
+
+    self:EndControlNest()
+
+    self:BeginControlNest("Output", "OutputSettings", true)
+
     InPreserveAlpha = self:AddInput("Preserve Alpha", "PreserveAlpha", {
         LINKID_DataType    = "Number",
         INPID_InputControl = "CheckboxControl",
         INP_Default        = 1,
         INPS_StatusText    = "Keeps original alpha channel instead of blending it.",
     })
+
+    self:EndControlNest()
 
     self:EndControlNest()
 
@@ -292,8 +540,8 @@ function Process(req)
     end
 
     local mode = math.floor(InMode:GetValue(req).Value + 0.5)
-    if mode ~= 0 then
-        -- 将来拡張用モードが未実装の場合は入力を透過
+    if mode < 0 or mode > 1 then
+        -- 未対応のモードは入力を透過
         OutImage:Set(req, img)
         return
     end
@@ -301,10 +549,14 @@ function Process(req)
     local width = img.DataWindow:Width()
     local height = img.DataWindow:Height()
 
-    local strength = InStrength:GetValue(req).Value
     local lumaThreshold = InLumaThreshold:GetValue(req).Value
     local colorThreshold = InColorThreshold:GetValue(req).Value
-    local maxSearchSteps = math.max(1, math.floor(InMaxSearch:GetValue(req).Value + 0.5))
+    local mlStrength = InMLAAStrength:GetValue(req).Value
+    local mlMaxSearch = math.max(1, math.floor(InMLAAMaxSearch:GetValue(req).Value + 0.5))
+    local cmaaStrength = InCMAAStrength:GetValue(req).Value
+    local cmaaMaxSearch = math.max(1, math.floor(InCMAAMaxSearch:GetValue(req).Value + 0.5))
+    local cmaaMaxColorDelta = InCMAAMaxColorDelta:GetValue(req).Value
+    local cmaaDiagonalWeight = InCMAADiagonalWeight:GetValue(req).Value
     local preserveAlpha = InPreserveAlpha:GetValue(req).Value > 0.5 and 1 or 0
     local debugMode = math.floor(InDebugView:GetValue(req).Value + 0.5)
 
@@ -334,30 +586,62 @@ function Process(req)
         return
     end
 
-    local blendNode = DVIPComputeNode(req, "MLAABlendKernel", MLAABlendKernel, "MLAABlendParams", MLAABlendParams)
-    if blendNode then
-        local params = blendNode:GetParamBlock(MLAABlendParams)
-        params.imgSize[0] = width
-        params.imgSize[1] = height
-        params.strength = strength
-        params.maxSearchSteps = maxSearchSteps
-        params.debugMode = debugMode
-        params.preserveAlpha = preserveAlpha
+    if mode == 0 then
+        local blendNode = DVIPComputeNode(req, "MLAABlendKernel", MLAABlendKernel, "MLAABlendParams", MLAABlendParams)
+        if blendNode then
+            local params = blendNode:GetParamBlock(MLAABlendParams)
+            params.imgSize[0] = width
+            params.imgSize[1] = height
+            params.strength = mlStrength
+            params.maxSearchSteps = mlMaxSearch
+            params.debugMode = debugMode
+            params.preserveAlpha = preserveAlpha
 
-        blendNode:SetParamBlock(params)
-        blendNode:AddSampler("RowSampler", TEX_FILTER_MODE_POINT, TEX_ADDRESS_MODE_CLAMP, TEX_NORMALIZED_COORDS_FALSE)
-        blendNode:AddInput("src", img)
-        blendNode:AddInput("edgeMask", edgeMask)
-        blendNode:AddOutput("dst", outImg)
+            blendNode:SetParamBlock(params)
+            blendNode:AddSampler("RowSampler", TEX_FILTER_MODE_POINT, TEX_ADDRESS_MODE_CLAMP, TEX_NORMALIZED_COORDS_FALSE)
+            blendNode:AddInput("src", img)
+            blendNode:AddInput("edgeMask", edgeMask)
+            blendNode:AddOutput("dst", outImg)
 
-        local success = blendNode:RunSession(req)
-        if not success then
+            local success = blendNode:RunSession(req)
+            if not success then
+                OutImage:Set(req, img)
+                return
+            end
+        else
             OutImage:Set(req, img)
             return
         end
-    else
-        OutImage:Set(req, img)
-        return
+    elseif mode == 1 then
+        local conservativeNode = DVIPComputeNode(req, "CMAA2BlendKernel", CMAA2BlendKernel, "CMAABlendParams",
+            CMAABlendParams)
+        if conservativeNode then
+            local params = conservativeNode:GetParamBlock(CMAABlendParams)
+            params.imgSize[0] = width
+            params.imgSize[1] = height
+            params.strength = cmaaStrength
+            params.maxSearchSteps = cmaaMaxSearch
+            params.maxColorDelta = cmaaMaxColorDelta
+            params.diagonalWeight = cmaaDiagonalWeight
+            params.debugMode = debugMode
+            params.preserveAlpha = preserveAlpha
+
+            conservativeNode:SetParamBlock(params)
+            conservativeNode:AddSampler("RowSampler", TEX_FILTER_MODE_POINT, TEX_ADDRESS_MODE_CLAMP,
+                TEX_NORMALIZED_COORDS_FALSE)
+            conservativeNode:AddInput("src", img)
+            conservativeNode:AddInput("edgeMask", edgeMask)
+            conservativeNode:AddOutput("dst", outImg)
+
+            local success = conservativeNode:RunSession(req)
+            if not success then
+                OutImage:Set(req, img)
+                return
+            end
+        else
+            OutImage:Set(req, img)
+            return
+        end
     end
 
     OutImage:Set(req, outImg)
