@@ -1,0 +1,272 @@
+{
+	Tools = ordered() {
+		spath3 = sPolygon {
+			DrawMode = "InsertAndModify",
+			Inputs = {
+				JoinStyle = Input { Value = 2, },
+				MiterLimit = Input { Value = 4, },
+				CapStyle = Input { Value = 0, },
+				FillMethod = Input { Value = 0, },
+				Polyline = Input {
+					SourceOp = "Publish2",
+					Source = "Value",
+				}
+			},
+			ViewInfo = OperatorInfo { Pos = { 613.147, -6.02773 } },
+		},
+		Publish2 = PublishPolyLine {
+			Inputs = {
+				Value = Input {
+					Value = Polyline {
+						Closed = true,
+						Points = {
+							{ X = 0.55976271609336, Y = 0.41223314850247, LX = 0.0475768718668616, LY = -0.0451979486299803, RX = -0.027753046354338, RY = 0.026365347578109 },
+							{ X = 0.349179165970728, Y = 0.30486194484069, LX = 0.0465191108134696, LY = 0.0346869802198976, RX = -0.0331594929203244, RY = -0.0247253796324951 },
+							{ X = 0.2512346157758, Y = 0.185987482058729, LX = 0.0422633281253658, LY = 0.0209323752175418, RX = -0.0512920947524625, RY = -0.0254041842106577 },
+							{ X = 0.0239316762180485, Y = 0.233133136081218, LX = 0.165675826322411, LY = 0.00139872664324024, RX = -0.247227379381204, RY = -0.00208722980385234 },
+							{ X = -0.220593617596373, Y = 0.199318642019011, LX = 0.0214000662401097, LY = 0.0100124932354938, RX = -0.00693704207935763, RY = -0.00324564821971105 },
+							{ X = -0.244552685546844, Y = 0.202534832756087, LX = 0.00815878193559532, LY = -0.0115742424415553, RX = -0.0220983930137236, RY = 0.0313493068363208 },
+							{ X = -0.328983522265762, Y = 0.311333196813532, LX = 0.0341296209535074, LY = -0.0265428324241364, RX = -0.0725976680560098, RY = 0.0564596876191131 },
+							{ X = -0.559455587426053, Y = 0.426963677630197, LX = 0.0318533468040618, LY = 0.0273402565637768, RX = -0.0589390026354996, RY = -0.0505883247867116 },
+							{ X = -0.475588338602037, Y = 0.219893679201791, LX = -0.0142048896921914, LY = 0.011174885785437, RX = 0.0175458195874489, RY = -0.0138031715944568 },
+							{ X = -0.397184104390308, Y = 0.15042889429618, LX = -0.0282359056974, LY = 0.0240600023959868, RX = 0.0167088734672827, RY = -0.0142377418300443 },
+							{ X = -0.352367281485994, Y = 0.112499552708992, LX = -0.00750384840322832, LY = 0.0238907480935388, RX = 0.0168177757655755, RY = -0.0535444245030496 },
+							{ X = -0.375146860318976, Y = -0.120480085259703, LX = 0.0120366711377197, LY = 0.0678132298703143, RX = -0.00835998989124246, RY = -0.0470992278281795 },
+							{ X = -0.370349985318976, Y = -0.264716847641157, LX = -0.0164635253209856, LY = 0.0399112668733724, RX = 0.0204669720426728, RY = -0.049616516958477 },
+							{ X = -0.256700115390104, Y = -0.348345609139006, LX = -0.0470764881049002, LY = 0.0266644215351984, RX = 0.0644057999331173, RY = -0.0364798536989783 },
+							{ X = 0.306607703832982, Y = -0.341453696462285, LX = -0.0878999541481659, LY = -0.0574434451068566, RX = 0.031760499886075, RY = 0.0207557847948001 },
+							{ X = 0.384344842158412, Y = -0.257951171875, LX = -0.0157143871825655, LY = -0.0358774916448198, RX = 0.012941254773241, RY = 0.0295461575819875 },
+							{ X = 0.389200643632552, Y = -0.159800209787715, LX = 0.00560557702316575, LY = -0.0315811804508353, RX = -0.0143795622470841, RY = 0.0810128106798761 },
+							{ X = 0.332944451533412, Y = 0.0800915073706972, LX = 0.00463242046890888, LY = -0.0671135392585143, RX = -0.00219034507242749, RY = 0.0317332614762994 },
+							{ X = 0.46895732622601, Y = 0.194343939661556, LX = -0.0302574711355734, LY = -0.0220538434842603, RX = 0.0410983262984258, RY = 0.0299554464280717 }
+						}
+					},
+				}
+			},
+		},
+		var = Custom {
+			NameSet = true,
+			Inputs = {
+				LUTIn1 = Input {
+					SourceOp = "CustomTool1LUTIn1",
+					Source = "Value",
+				},
+				LUTIn2 = Input {
+					SourceOp = "CustomTool1LUTIn2",
+					Source = "Value",
+				},
+				LUTIn3 = Input {
+					SourceOp = "CustomTool1LUTIn3",
+					Source = "Value",
+				},
+				LUTIn4 = Input {
+					SourceOp = "CustomTool1LUTIn4",
+					Source = "Value",
+				},
+				P = Input { Value = { 0.912025110642782, 0.888267879436419 }, },
+				P_Offset = Input {
+					Value = { 0.334642760059613, 0.0307460317460317 },
+					Expression = "Point((P.X - 0.5)*AspectRatio,  (P.Y - 0.5))",
+				},
+				Progress = Input {
+					SourceOp = "varProgress",
+					Source = "Value",
+				},
+				Radius = Input { Value = 0.354, },
+				Scale = Input { Value = 1, },
+				AspectRatio = Input { Expression = "comp:GetPrefs(\"Comp.FrameFormat.Width\") / comp:GetPrefs(\"Comp.FrameFormat.Height\")", }
+			},
+			ViewInfo = OperatorInfo { Pos = { 750.667, -9 } },
+			UserControls = ordered() {
+				Scale = {
+					LINKS_Name = "Scale",
+					LINKID_DataType = "Number",
+					INPID_InputControl = "SliderControl",
+					INP_Integer = false,
+					INP_MinScale = 0,
+					INP_MaxScale = 1,
+					INP_MinAllowed = -1000000,
+					INP_MaxAllowed = 1000000,
+					INP_SplineType = "Default",
+				},
+				P = {
+					LINKS_Name = "P",
+					LINKID_DataType = "Point",
+					INPID_InputControl = "OffsetControl",
+					INPID_PreviewControl = "CrosshairControl",
+					INP_DefaultX = 0,
+					INP_DefaultY = 0,
+					OFCD_DisplayXScale = 1,
+					OFCD_DisplayYScale = 1,
+					CHC_Style = "NormalCross",
+				},
+				P_Offset = {
+					LINKS_Name = "P_Offset",
+					LINKID_DataType = "Point",
+					INPID_InputControl = "OffsetControl",
+				},
+				Progress = {
+					LINKS_Name = "Progress",
+					LINKID_DataType = "Number",
+					INPID_InputControl = "SliderControl",
+					INP_Integer = false,
+					INP_SplineType = "Default",
+				},
+				Radius = {
+					LINKS_Name = "Radius",
+					LINKID_DataType = "Number",
+					INPID_InputControl = "SliderControl",
+					INP_Integer = false,
+					INP_SplineType = "Default",
+				},
+				AspectRatio = {
+					LINKS_Name = "Aspect Ratio",
+					LINKID_DataType = "Number",
+					INPID_InputControl = "SliderControl",
+					INP_Integer = false,
+					INP_SplineType = "Default",
+				}
+			}
+		},
+		CustomTool1LUTIn1 = LUTBezier {
+			KeyColorSplines = {
+				[0] = {
+					[0] = { 0, RH = { 0.333333333333333, 0.333333333333333 }, Flags = { Linear = true } },
+					[1] = { 1, LH = { 0.666666666666667, 0.666666666666667 }, Flags = { Linear = true } }
+				}
+			},
+			SplineColor = { Red = 0, Green = 0, Blue = 0 },
+			NameSet = true,
+		},
+		CustomTool1LUTIn2 = LUTBezier {
+			KeyColorSplines = {
+				[0] = {
+					[0] = { 0, RH = { 0.333333333333333, 0.333333333333333 }, Flags = { Linear = true } },
+					[1] = { 1, LH = { 0.666666666666667, 0.666666666666667 }, Flags = { Linear = true } }
+				}
+			},
+			SplineColor = { Red = 0, Green = 0, Blue = 0 },
+			NameSet = true,
+		},
+		CustomTool1LUTIn3 = LUTBezier {
+			KeyColorSplines = {
+				[0] = {
+					[0] = { 0, RH = { 0.333333333333333, 0.333333333333333 }, Flags = { Linear = true } },
+					[1] = { 1, LH = { 0.666666666666667, 0.666666666666667 }, Flags = { Linear = true } }
+				}
+			},
+			SplineColor = { Red = 0, Green = 0, Blue = 0 },
+			NameSet = true,
+		},
+		CustomTool1LUTIn4 = LUTBezier {
+			KeyColorSplines = {
+				[0] = {
+					[0] = { 0, RH = { 0.333333333333333, 0.333333333333333 }, Flags = { Linear = true } },
+					[1] = { 1, LH = { 0.666666666666667, 0.666666666666667 }, Flags = { Linear = true } }
+				}
+			},
+			SplineColor = { Red = 0, Green = 0, Blue = 0 },
+			NameSet = true,
+		},
+		varProgress = BezierSpline {
+			SplineColor = { Red = 237, Green = 100, Blue = 9 },
+			CtrlWZoom = false,
+			NameSet = true,
+			KeyFrames = {
+				[0] = { 0, RH = { 94.5, 0 } },
+				[180] = { 3.8, LH = { 180, 3.80000000000017 } }
+			}
+		},
+		sMerge1 = sMerge {
+			Inputs = {
+				Input1 = Input {
+					SourceOp = "s31",
+					Source = "Output",
+				}
+			},
+			ViewInfo = OperatorInfo { Pos = { 672.48, 64.942 } },
+		},
+		sTransform1 = sTransform {
+			Inputs = {
+				XSize = Input { Value = 0.5625, },
+				YSize = Input { Value = 0.5625, },
+				Input = Input {
+					SourceOp = "sMerge1",
+					Source = "Output",
+				}
+			},
+			ViewInfo = OperatorInfo { Pos = { 799.147, 63.7298 } },
+		},
+		s31 = sPolygon {
+			DrawMode = "ModifyOnly",
+			NameSet = true,
+			Inputs = {
+				Polyline = Input {
+					SourceOp = "CustomPoly1",
+					Source = "Output",
+				},
+				Green = Input { Value = 0.677, },
+				Blue = Input { Value = 0.008, }
+			},
+			ViewInfo = OperatorInfo { Pos = { 548, 63.7273 } },
+		},
+		CustomPoly1 = CustomPoly {
+			CtrlWZoom = false,
+			Inputs = {
+				p1 = Input {
+					Value = { 0.732489085587168, 0.388267879436419 },
+					Expression = "var.P_Offset",
+				},
+				n1 = Input { Expression = "var.Progress", },
+				n2 = Input {
+					Value = 0.354,
+					Expression = "var.Radius",
+				},
+				n3 = Input {
+					Value = 1,
+					Expression = "var.Scale",
+				},
+				SourcePolyline = Input {
+					SourceOp = "Publish2",
+					Source = "Value",
+				},
+				SourcePolyline2 = Input {
+					Value = Polyline {
+						Points = {
+							{ X = -0.5, Y = 0, RX = 0, RY = 0 },
+							{ X = 0.5, Y = 0, LX = 0, LY = 0 }
+						}
+					},
+				},
+				SourcePolyline3 = Input {
+					Value = Polyline {
+						Points = {
+							{ X = -0.5, Y = 0, RX = 0, RY = 0 },
+							{ X = 0.5, Y = 0, LX = 0, LY = 0 }
+						}
+					},
+				},
+				NumPoints = Input { Value = 100, },
+				PolyExpressionX = Input { Value = "(px*n3) + (p1x - px*n3) * if((n1*n1)*((n2*n2)/((n2*n2)+(p1x - px*n3)*(p1x - px*n3)+(p1y - py*n3)*(p1y - py*n3))) > 1, 1, if((n1*n1)*((n2*n2)/((n2*n2)+(p1x - px*n3)*(p1x - px*n3)+(p1y - py*n3)*(p1y - py*n3))) < 0, 0, (n1*n1)*((n2*n2)/((n2*n2)+(p1x - px*n3)*(p1x - px*n3)+(p1y - py*n3)*(p1y - py*n3)))))", },
+				PolyExpressionY = Input { Value = "(py*n3) + (p1y - py*n3) * if((n1*n1)*((n2*n2)/((n2*n2)+(p1x - px*n3)*(p1x - px*n3)+(p1y - py*n3)*(p1y - py*n3))) > 1, 1, if((n1*n1)*((n2*n2)/((n2*n2)+(p1x - px*n3)*(p1x - px*n3)+(p1y - py*n3)*(p1y - py*n3))) < 0, 0, (n1*n1)*((n2*n2)/((n2*n2)+(p1x - px*n3)*(p1x - px*n3)+(p1y - py*n3)*(p1y - py*n3)))))", },
+				NumberControls = Input { Value = 1, },
+				ShowNumber4 = Input { Value = 0, }
+			},
+		},
+		sRender1 = sRender {
+			CtrlWZoom = false,
+			Inputs = {
+				GlobalOut = Input { Value = 299, },
+				Width = Input { Value = 3840, },
+				Height = Input { Value = 2160, },
+				UseFrameFormatSettings = Input { Value = 1, },
+				["Gamut.SLogVersion"] = Input { Value = FuID { "SLog2" }, },
+				Input = Input {
+					SourceOp = "sTransform1",
+					Source = "Output",
+				}
+			},
+			ViewInfo = OperatorInfo { Pos = { 906.48, 63.7299 } },
+		}
+	}
+}
