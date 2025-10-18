@@ -1,18 +1,120 @@
 {
 	Tools = ordered() {
-		spath3 = sPolygon {
-			DrawMode = "InsertAndModify",
+		sRender1 = sRender {
 			Inputs = {
-				JoinStyle = Input { Value = 2, },
-				MiterLimit = Input { Value = 4, },
-				CapStyle = Input { Value = 0, },
-				FillMethod = Input { Value = 0, },
-				Polyline = Input {
-					SourceOp = "Publish2",
-					Source = "Value",
+				GlobalOut = Input { Value = 199, },
+				Width = Input { Value = 3840, },
+				Height = Input { Value = 2160, },
+				UseFrameFormatSettings = Input { Value = 1, },
+				["Gamut.SLogVersion"] = Input { Value = FuID { "SLog2" }, },
+				Input = Input {
+					SourceOp = "sTransform1",
+					Source = "Output",
 				}
 			},
-			ViewInfo = OperatorInfo { Pos = { 613.147, -6.02773 } },
+			ViewInfo = OperatorInfo { Pos = { 719.333, 84.394 } },
+		},
+		sTransform1 = sTransform {
+			Inputs = {
+				XSize = Input { Value = 0.5625, },
+				YSize = Input { Value = 0.5625, },
+				Input = Input {
+					SourceOp = "sMerge1",
+					Source = "Output",
+				}
+			},
+			ViewInfo = OperatorInfo { Pos = { 612.667, 85 } },
+		},
+		sMerge1 = sMerge {
+			Inputs = {
+				Input1 = Input {
+					SourceOp = "sPoly",
+					Source = "Output",
+				}
+			},
+			ViewInfo = OperatorInfo { Pos = { 498.666, 85 } },
+		},
+		["sPoly補足"] = Note {
+			NameSet = true,
+			Inputs = {
+				Comments = Input { Value = "SPolyでCustom Polyを設定しています\n\np1, n1-n3へそれぞれvarノードのパラメータを紐づけています\nそれらを使用して吸い込み計算を行います\n計算式についてはAIを使用して組み立てたものなのでよくわかってないです🥺\n", }
+			},
+			ViewInfo = StickyNoteInfo {
+				Pos = { 347.334, -33.8485 },
+				Flags = {
+					Expanded = true
+				},
+				Size = { 144.666, 105 }
+			},
+		},
+		["var補足"] = Note {
+			NameSet = true,
+			Inputs = {
+				Comments = Input { Value = "varノードのUserページで変形パラメータ設定しています\n\n\nScale:\n  全体的なサイズ\nP:\n  吸い込みポイント\nProgress:\n  進行度(吸い込み状況)\nRadius\n  吸い込み影響半径\n", }
+			},
+			ViewInfo = StickyNoteInfo {
+				Pos = { 616, -79.303 },
+				Flags = {
+					Expanded = true
+				},
+				Size = { 143.333, 133.485 }
+			},
+		},
+		sPoly = sPolygon {
+			DrawMode = "ModifyOnly",
+			NameSet = true,
+			Inputs = {
+				Polyline = Input {
+					SourceOp = "CustomPoly1",
+					Source = "Output",
+				},
+				Green = Input { Value = 0.677, },
+				Blue = Input { Value = 0.008, }
+			},
+			ViewInfo = OperatorInfo { Pos = { 381.52, 84.9975 } },
+		},
+		CustomPoly1 = CustomPoly {
+			CtrlWZoom = false,
+			Inputs = {
+				p1 = Input {
+					Value = { 0.732489085587168, 0.388267879436419 },
+					Expression = "var.P_Offset",
+				},
+				n1 = Input { Expression = "var.Progress", },
+				n2 = Input {
+					Value = 0.693,
+					Expression = "var.Radius",
+				},
+				n3 = Input {
+					Value = 0.567,
+					Expression = "var.Scale",
+				},
+				SourcePolyline = Input {
+					SourceOp = "Publish2",
+					Source = "Value",
+				},
+				SourcePolyline2 = Input {
+					Value = Polyline {
+						Points = {
+							{ X = -0.5, Y = 0, RX = 0, RY = 0 },
+							{ X = 0.5, Y = 0, LX = 0, LY = 0 }
+						}
+					},
+				},
+				SourcePolyline3 = Input {
+					Value = Polyline {
+						Points = {
+							{ X = -0.5, Y = 0, RX = 0, RY = 0 },
+							{ X = 0.5, Y = 0, LX = 0, LY = 0 }
+						}
+					},
+				},
+				NumPoints = Input { Value = 100, },
+				PolyExpressionX = Input { Value = "(px*n3) + (p1x - px*n3) * if((n1*n1)*(n2*n2) > (n2*n2) + (p1x - px*n3)*(p1x - px*n3) + (p1y - py*n3)*(p1y - py*n3), 1, (n1*n1)*(n2*n2) / ( (n2*n2) + (p1x - px*n3)*(p1x - px*n3) + (p1y - py*n3)*(p1y - py*n3) ))\n", },
+				PolyExpressionY = Input { Value = "(py*n3) + (p1y - py*n3) * if((n1*n1)*(n2*n2) > (n2*n2) + (p1x - px*n3)*(p1x - px*n3) + (p1y - py*n3)*(p1y - py*n3), 1, (n1*n1)*(n2*n2) / ( (n2*n2) + (p1x - px*n3)*(p1x - px*n3) + (p1y - py*n3)*(p1y - py*n3) ))", },
+				NumberControls = Input { Value = 1, },
+				ShowNumber4 = Input { Value = 0, }
+			},
 		},
 		Publish2 = PublishPolyLine {
 			Inputs = {
@@ -44,6 +146,20 @@
 				}
 			},
 		},
+		spath3 = sPolygon {
+			DrawMode = "InsertAndModify",
+			Inputs = {
+				JoinStyle = Input { Value = 2, },
+				MiterLimit = Input { Value = 4, },
+				CapStyle = Input { Value = 0, },
+				FillMethod = Input { Value = 0, },
+				Polyline = Input {
+					SourceOp = "Publish2",
+					Source = "Value",
+				}
+			},
+			ViewInfo = OperatorInfo { Pos = { 384.667, 129.182 } },
+		},
 		var = Custom {
 			NameSet = true,
 			Inputs = {
@@ -63,6 +179,7 @@
 					SourceOp = "CustomTool1LUTIn4",
 					Source = "Value",
 				},
+				Scale = Input { Value = 0.567, },
 				P = Input { Value = { 0.912025110642782, 0.888267879436419 }, },
 				P_Offset = Input {
 					Value = { 0.334642760059613, 0.0307460317460317 },
@@ -72,61 +189,11 @@
 					SourceOp = "varProgress",
 					Source = "Value",
 				},
-				Radius = Input { Value = 0.354, },
-				Scale = Input { Value = 1, },
+				Radius = Input { Value = 0.693, },
 				AspectRatio = Input { Expression = "comp:GetPrefs(\"Comp.FrameFormat.Width\") / comp:GetPrefs(\"Comp.FrameFormat.Height\")", }
 			},
-			ViewInfo = OperatorInfo { Pos = { 750.667, -9 } },
-			UserControls = ordered() {
-				Scale = {
-					LINKS_Name = "Scale",
-					LINKID_DataType = "Number",
-					INPID_InputControl = "SliderControl",
-					INP_Integer = false,
-					INP_MinScale = 0,
-					INP_MaxScale = 1,
-					INP_MinAllowed = -1000000,
-					INP_MaxAllowed = 1000000,
-					INP_SplineType = "Default",
-				},
-				P = {
-					LINKS_Name = "P",
-					LINKID_DataType = "Point",
-					INPID_InputControl = "OffsetControl",
-					INPID_PreviewControl = "CrosshairControl",
-					INP_DefaultX = 0,
-					INP_DefaultY = 0,
-					OFCD_DisplayXScale = 1,
-					OFCD_DisplayYScale = 1,
-					CHC_Style = "NormalCross",
-				},
-				P_Offset = {
-					LINKS_Name = "P_Offset",
-					LINKID_DataType = "Point",
-					INPID_InputControl = "OffsetControl",
-				},
-				Progress = {
-					LINKS_Name = "Progress",
-					LINKID_DataType = "Number",
-					INPID_InputControl = "SliderControl",
-					INP_Integer = false,
-					INP_SplineType = "Default",
-				},
-				Radius = {
-					LINKS_Name = "Radius",
-					LINKID_DataType = "Number",
-					INPID_InputControl = "SliderControl",
-					INP_Integer = false,
-					INP_SplineType = "Default",
-				},
-				AspectRatio = {
-					LINKS_Name = "Aspect Ratio",
-					LINKID_DataType = "Number",
-					INPID_InputControl = "SliderControl",
-					INP_Integer = false,
-					INP_SplineType = "Default",
-				}
-			}
+			ViewInfo = OperatorInfo { Pos = { 509.52, -75.0026 } },
+			UserControls = ordered() { Scale = { INP_MaxAllowed = 1000000, INP_Integer = false, INPID_InputControl = "SliderControl", INP_MaxScale = 1, INP_MinScale = 0, INP_MinAllowed = -1000000, LINKID_DataType = "Number", INP_SplineType = "Default", LINKS_Name = "Scale", }, P = { OFCD_DisplayYScale = 1, INPID_InputControl = "OffsetControl", CHC_Style = "NormalCross", INP_DefaultX = 0, INPID_PreviewControl = "CrosshairControl", INP_DefaultY = 0, LINKID_DataType = "Point", OFCD_DisplayXScale = 1, LINKS_Name = "P", }, P_Offset = { LINKS_Name = "P_Offset", LINKID_DataType = "Point", INPID_InputControl = "OffsetControl", }, Progress = { INP_Integer = false, LINKID_DataType = "Number", INPID_InputControl = "SliderControl", INP_SplineType = "Default", LINKS_Name = "Progress", }, Radius = { INP_Integer = false, LINKID_DataType = "Number", INPID_InputControl = "SliderControl", INP_SplineType = "Default", LINKS_Name = "Radius", }, AspectRatio = { INP_Integer = false, LINKID_DataType = "Number", INPID_InputControl = "SliderControl", INP_SplineType = "Default", LINKS_Name = "Aspect Ratio", } }
 		},
 		CustomTool1LUTIn1 = LUTBezier {
 			KeyColorSplines = {
@@ -136,7 +203,7 @@
 				}
 			},
 			SplineColor = { Red = 0, Green = 0, Blue = 0 },
-			NameSet = true,
+			CtrlWZoom = false,
 		},
 		CustomTool1LUTIn2 = LUTBezier {
 			KeyColorSplines = {
@@ -146,7 +213,7 @@
 				}
 			},
 			SplineColor = { Red = 0, Green = 0, Blue = 0 },
-			NameSet = true,
+			CtrlWZoom = false,
 		},
 		CustomTool1LUTIn3 = LUTBezier {
 			KeyColorSplines = {
@@ -156,7 +223,7 @@
 				}
 			},
 			SplineColor = { Red = 0, Green = 0, Blue = 0 },
-			NameSet = true,
+			CtrlWZoom = false,
 		},
 		CustomTool1LUTIn4 = LUTBezier {
 			KeyColorSplines = {
@@ -166,107 +233,16 @@
 				}
 			},
 			SplineColor = { Red = 0, Green = 0, Blue = 0 },
-			NameSet = true,
+			CtrlWZoom = false,
 		},
 		varProgress = BezierSpline {
 			SplineColor = { Red = 237, Green = 100, Blue = 9 },
 			CtrlWZoom = false,
-			NameSet = true,
 			KeyFrames = {
-				[0] = { 0, RH = { 94.5, 0 } },
-				[180] = { 3.8, LH = { 180, 3.80000000000017 } }
+				[0] = { 0, RH = { 165, 0 } },
+				[200] = { 3.84, LH = { 200, 3.84000000000019 } }
 			}
-		},
-		s31 = sPolygon {
-			DrawMode = "ModifyOnly",
-			CtrlWZoom = false,
-			NameSet = true,
-			Inputs = {
-				Polyline = Input {
-					SourceOp = "CustomPoly1",
-					Source = "Output",
-				},
-				Green = Input { Value = 0.677, },
-				Blue = Input { Value = 0.008, }
-			},
-			ViewInfo = OperatorInfo { Pos = { 548, 63.7273 } },
-		},
-		CustomPoly1 = CustomPoly {
-			CtrlWZoom = false,
-			Inputs = {
-				p1 = Input {
-					Value = { 0.732489085587168, 0.388267879436419 },
-					Expression = "var.P_Offset",
-				},
-				n1 = Input { Expression = "var.Progress", },
-				n2 = Input {
-					Value = 0.354,
-					Expression = "var.Radius",
-				},
-				n3 = Input {
-					Value = 1,
-					Expression = "var.Scale",
-				},
-				SourcePolyline = Input {
-					SourceOp = "Publish2",
-					Source = "Value",
-				},
-				SourcePolyline2 = Input {
-					Value = Polyline {
-						Points = {
-							{ X = -0.5, Y = 0, RX = 0, RY = 0 },
-							{ X = 0.5, Y = 0, LX = 0, LY = 0 }
-						}
-					},
-				},
-				SourcePolyline3 = Input {
-					Value = Polyline {
-						Points = {
-							{ X = -0.5, Y = 0, RX = 0, RY = 0 },
-							{ X = 0.5, Y = 0, LX = 0, LY = 0 }
-						}
-					},
-				},
-				NumPoints = Input { Value = 100, },
-				PolyExpressionX = Input { Value = "(px*n3) + (p1x - px*n3) * if((n1*n1)*(n2*n2) > (n2*n2) + (p1x - px*n3)*(p1x - px*n3) + (p1y - py*n3)*(p1y - py*n3), 1, (n1*n1)*(n2*n2) / ( (n2*n2) + (p1x - px*n3)*(p1x - px*n3) + (p1y - py*n3)*(p1y - py*n3) ))\n", },
-				PolyExpressionY = Input { Value = "(py*n3) + (p1y - py*n3) * if((n1*n1)*(n2*n2) > (n2*n2) + (p1x - px*n3)*(p1x - px*n3) + (p1y - py*n3)*(p1y - py*n3), 1, (n1*n1)*(n2*n2) / ( (n2*n2) + (p1x - px*n3)*(p1x - px*n3) + (p1y - py*n3)*(p1y - py*n3) ))", },
-				NumberControls = Input { Value = 1, },
-				ShowNumber4 = Input { Value = 0, }
-			},
-		},
-		sMerge1 = sMerge {
-			Inputs = {
-				Input1 = Input {
-					SourceOp = "s31",
-					Source = "Output",
-				}
-			},
-			ViewInfo = OperatorInfo { Pos = { 672.48, 64.942 } },
-		},
-		sTransform1 = sTransform {
-			Inputs = {
-				XSize = Input { Value = 0.5625, },
-				YSize = Input { Value = 0.5625, },
-				Input = Input {
-					SourceOp = "sMerge1",
-					Source = "Output",
-				}
-			},
-			ViewInfo = OperatorInfo { Pos = { 799.147, 63.7298 } },
-		},
-		sRender1 = sRender {
-			Inputs = {
-				GlobalOut = Input { Value = 299, },
-				Width = Input { Value = 3840, },
-				Height = Input { Value = 2160, },
-				UseFrameFormatSettings = Input { Value = 1, },
-				["Gamut.SLogVersion"] = Input { Value = FuID { "SLog2" }, },
-				Input = Input {
-					SourceOp = "sTransform1",
-					Source = "Output",
-				}
-			},
-			ViewInfo = OperatorInfo { Pos = { 906.48, 63.7299 } },
 		}
-	}
+	},
+	ActiveTool = "sPoly補足"
 }
