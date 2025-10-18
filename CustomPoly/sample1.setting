@@ -177,28 +177,9 @@
 				[180] = { 3.8, LH = { 180, 3.80000000000017 } }
 			}
 		},
-		sMerge1 = sMerge {
-			Inputs = {
-				Input1 = Input {
-					SourceOp = "s31",
-					Source = "Output",
-				}
-			},
-			ViewInfo = OperatorInfo { Pos = { 672.48, 64.942 } },
-		},
-		sTransform1 = sTransform {
-			Inputs = {
-				XSize = Input { Value = 0.5625, },
-				YSize = Input { Value = 0.5625, },
-				Input = Input {
-					SourceOp = "sMerge1",
-					Source = "Output",
-				}
-			},
-			ViewInfo = OperatorInfo { Pos = { 799.147, 63.7298 } },
-		},
 		s31 = sPolygon {
 			DrawMode = "ModifyOnly",
+			CtrlWZoom = false,
 			NameSet = true,
 			Inputs = {
 				Polyline = Input {
@@ -247,14 +228,33 @@
 					},
 				},
 				NumPoints = Input { Value = 100, },
-				PolyExpressionX = Input { Value = "(px*n3) + (p1x - px*n3) * if((n1*n1)*((n2*n2)/((n2*n2)+(p1x - px*n3)*(p1x - px*n3)+(p1y - py*n3)*(p1y - py*n3))) > 1, 1, if((n1*n1)*((n2*n2)/((n2*n2)+(p1x - px*n3)*(p1x - px*n3)+(p1y - py*n3)*(p1y - py*n3))) < 0, 0, (n1*n1)*((n2*n2)/((n2*n2)+(p1x - px*n3)*(p1x - px*n3)+(p1y - py*n3)*(p1y - py*n3)))))", },
-				PolyExpressionY = Input { Value = "(py*n3) + (p1y - py*n3) * if((n1*n1)*((n2*n2)/((n2*n2)+(p1x - px*n3)*(p1x - px*n3)+(p1y - py*n3)*(p1y - py*n3))) > 1, 1, if((n1*n1)*((n2*n2)/((n2*n2)+(p1x - px*n3)*(p1x - px*n3)+(p1y - py*n3)*(p1y - py*n3))) < 0, 0, (n1*n1)*((n2*n2)/((n2*n2)+(p1x - px*n3)*(p1x - px*n3)+(p1y - py*n3)*(p1y - py*n3)))))", },
+				PolyExpressionX = Input { Value = "(px*n3) + (p1x - px*n3) * if((n1*n1)*(n2*n2) > (n2*n2) + (p1x - px*n3)*(p1x - px*n3) + (p1y - py*n3)*(p1y - py*n3), 1, (n1*n1)*(n2*n2) / ( (n2*n2) + (p1x - px*n3)*(p1x - px*n3) + (p1y - py*n3)*(p1y - py*n3) ))\n", },
+				PolyExpressionY = Input { Value = "(py*n3) + (p1y - py*n3) * if((n1*n1)*(n2*n2) > (n2*n2) + (p1x - px*n3)*(p1x - px*n3) + (p1y - py*n3)*(p1y - py*n3), 1, (n1*n1)*(n2*n2) / ( (n2*n2) + (p1x - px*n3)*(p1x - px*n3) + (p1y - py*n3)*(p1y - py*n3) ))", },
 				NumberControls = Input { Value = 1, },
 				ShowNumber4 = Input { Value = 0, }
 			},
 		},
+		sMerge1 = sMerge {
+			Inputs = {
+				Input1 = Input {
+					SourceOp = "s31",
+					Source = "Output",
+				}
+			},
+			ViewInfo = OperatorInfo { Pos = { 672.48, 64.942 } },
+		},
+		sTransform1 = sTransform {
+			Inputs = {
+				XSize = Input { Value = 0.5625, },
+				YSize = Input { Value = 0.5625, },
+				Input = Input {
+					SourceOp = "sMerge1",
+					Source = "Output",
+				}
+			},
+			ViewInfo = OperatorInfo { Pos = { 799.147, 63.7298 } },
+		},
 		sRender1 = sRender {
-			CtrlWZoom = false,
 			Inputs = {
 				GlobalOut = Input { Value = 299, },
 				Width = Input { Value = 3840, },
