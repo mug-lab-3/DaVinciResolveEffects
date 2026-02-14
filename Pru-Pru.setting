@@ -1,0 +1,138 @@
+{
+	Tools = ordered() {
+		PruPru = GroupOperator {
+			Inputs = ordered() {
+				MainInput1 = InstanceInput {
+					SourceOp = "Switch1",
+					Source = "Input0",
+				},
+				Input1 = InstanceInput {
+					SourceOp = "Switch1",
+					Source = "PatternIndex",
+					Page = "Controls",
+					Default = 1,
+				},
+				Input2 = InstanceInput {
+					SourceOp = "Switch1",
+					Source = "NumberofPatterns",
+					Page = "Controls",
+					Default = 2,
+				},
+				Input3 = InstanceInput {
+					SourceOp = "Switch1",
+					Source = "Interval",
+					Page = "Controls",
+					Default = 0.2,
+				}
+			},
+			Outputs = {
+				MainOutput1 = InstanceOutput {
+					SourceOp = "Switch1",
+					Source = "Output",
+				}
+			},
+			ViewInfo = GroupInfo { Pos = { 0, 0 } },
+			Tools = ordered() {
+				Background1 = Background {
+					Inputs = {
+						Width = Input { Value = 8, },
+						Height = Input { Value = 8, },
+						Depth = Input { Value = 1, },
+						["Gamut.SLogVersion"] = Input { Value = FuID { "SLog2" }, },
+						TopLeftAlpha = Input { Value = 0, }
+					},
+					ViewInfo = OperatorInfo { Pos = { 434.333, 25.2576 } },
+				},
+				Switch1 = Switch {
+					CtrlWZoom = false,
+					Inputs = {
+						Source = Input { Expression = "iif(CurrentIndex == PatternIndex, 0, 1)", },
+						Interval = Input { Value = 0.2, },
+						IntervalFrames = Input {
+							Value = 30,
+							Expression = "Interval * comp:GetPrefs(\"Comp.FrameFormat.Rate\")",
+						},
+						CurrentIndex = Input {
+							Value = 1,
+							Expression = "floor((time / IntervalFrames)  % NumberofPatterns) + 1",
+						},
+						Name0 = Input { Value = "On", },
+						Name1 = Input { Value = "Off", },
+						Input1 = Input {
+							SourceOp = "Background1",
+							Source = "Output",
+						}
+					},
+					ViewInfo = OperatorInfo { Pos = { 433.667, 82.2272 } },
+					Colors = { TileColor = { R = 0.372549019607843, G = 0.6, B = 0.125490196078431 }, },
+					UserControls = ordered() {
+						PatternIndex = {
+							INP_Integer = true,
+							INPID_InputControl = "SliderControl",
+							INP_MaxScale = 10,
+							INP_Default = 1,
+							INP_MinScale = 1,
+							INP_MinAllowed = 1,
+							LINKID_DataType = "Number",
+							ICS_ControlPage = "Controls",
+							INP_SplineType = "Default",
+							LINKS_Name = "Pattern Index",
+						},
+						NumberofPatterns = {
+							INP_MaxAllowed = 1000000,
+							INP_Integer = true,
+							INPID_InputControl = "SliderControl",
+							IC_Steps = 1,
+							INP_MaxScale = 10,
+							INP_Default = 2,
+							INP_MinScale = 2,
+							INP_MinAllowed = 2,
+							LINKID_DataType = "Number",
+							ICS_ControlPage = "Controls",
+							INP_SplineType = "Default",
+							LINKS_Name = "Number of Patterns"
+						},
+						Interval = {
+							INP_Integer = false,
+							INPID_InputControl = "SliderControl",
+							INP_SplineType = "Default",
+							INP_Default = 0,
+							INP_MinScale = 0,
+							INP_MinAllowed = 0,
+							LINKID_DataType = "Number",
+							ICS_ControlPage = "Controls",
+							LINKS_Name = "Interval (sec)",
+						},
+						IntervalFrames = {
+							INP_MaxAllowed = 1000000,
+							INP_Integer = true,
+							INPID_InputControl = "SliderControl",
+							INP_MaxScale = 1,
+							INP_Default = 0,
+							INP_MinScale = 0,
+							INP_MinAllowed = 0,
+							LINKID_DataType = "Number",
+							ICS_ControlPage = "Controls",
+							INP_SplineType = "Default",
+							LINKS_Name = "Interval Frames"
+						},
+						CurrentIndex = {
+							INP_MaxAllowed = 1000000,
+							INP_Integer = true,
+							INPID_InputControl = "SliderControl",
+							INP_MaxScale = 1,
+							INP_Default = 0,
+							INP_MinScale = 0,
+							INP_MinAllowed = 0,
+							LINKID_DataType = "Number",
+							ICS_ControlPage = "Controls",
+							INP_SplineType = "Default",
+							LINKS_Name = "Current Index"
+						}
+					}
+				}
+			},
+		}
+	},
+	ActiveTool = "PruPru"
+}
