@@ -26,6 +26,8 @@ CellInfoParams = [[
   float minDotRadius;     // 最小ドット半径
   float dotCurve;         // ドットサイズカーブ係数
   int useOriginalColor;   // 元の色を使用するかどうか
+  float positionJitter;   // 位置のジッター（ズレ）
+  float sizeJitter;       // サイズのジッター（ムラ）
   float clipRadius;       // クリッピング半径
   int invertMode;         // 輝度を反転してドットを生成するか
 ]]
@@ -72,6 +74,30 @@ __KERNEL__ void CellInfoKernel(
     if (x >= params->dstSize[0] || y >= params->dstSize[1])
         return;
 
+    // 擬似乱数生成器 (Integer Hash) - アーキテクチャ間（CUDA, Metal等）で完全一致させるため、
+    // 浮動小数点の sin() や fract() ではなく、ビット演算によるハッシュ関数を使用する。
+    const uint ux = (uint)x;
+    const uint uy = (uint)y;
+    
+    // PCGベースのシンプルハッシュ
+    uint h = ux * 374761393u + uy * 668265263u;
+    h = (h ^ (h >> 13)) * 12741261u;
+    const uint h1 = h ^ (h >> 16);
+    
+    h = ux * 2654435761u + uy * 2246822507u;
+    h = (h ^ (h >> 13)) * 12741261u;
+    const uint h2 = h ^ (h >> 16);
+
+    h = ux * 3266489909u + uy * 1360696711u;
+    h = (h ^ (h >> 13)) * 12741261u;
+    const uint h3 = h ^ (h >> 16);
+
+    // 浮動小数点の精度落ちによる差異を防ぐため24bit(0x00FFFFFF)にマスクして正規化し -1.0 〜 1.0 にする
+    const float normConst = 1.0f / (float)0x00FFFFFF;
+    const float randX = (float)(h1 & 0x00FFFFFF) * normConst * 2.0f - 1.0f;
+    const float randY = (float)(h2 & 0x00FFFFFF) * normConst * 2.0f - 1.0f;
+    const float randS = (float)(h3 & 0x00FFFFFF) * normConst * 2.0f - 1.0f;
+
     // GPU側でセルサイズを動的計算（CPU負荷削減）
     const float SIN60 = 0.866025f; // √3/2
     const float width = (float)params->srcSize[0];
@@ -90,9 +116,12 @@ __KERNEL__ void CellInfoKernel(
     const int isOddRow = (y % 2 != 0) ? 1 : 0;
     const float rowOffset = (isOddRow != 0) ? -halfPitchX : 0.0f;
 
-    // セルの中心位置をピクセル座標で計算
-    const float cellCenterX = ((float)x * cellPitchX) + halfPitchX + rowOffset;
-    const float cellCenterY = ((float)y * cellPitchY) + halfPitchY - yOffset;
+    // セルの中心位置をピクセル座標で計算し、位置ジッターを適用
+    const float jitterAmountX = params->positionJitter * halfPitchX;
+    const float jitterAmountY = params->positionJitter * halfPitchY;
+    
+    const float cellCenterX = ((float)x * cellPitchX) + halfPitchX + rowOffset + (randX * jitterAmountX);
+    const float cellCenterY = ((float)y * cellPitchY) + halfPitchY - yOffset + (randY * jitterAmountY);
 
     // dst_info1: セル位置情報を格納
     const float4 cellInfo1 = {
@@ -203,6 +232,10 @@ __KERNEL__ void CellInfoKernel(
     }
 
     // 明るさのカットオフと最小ドット半径を一括処理
+    // サイズジッターの適用
+    const float sizeVariation = 1.0f + (randS * params->sizeJitter * 0.5f); // ±50% のスケール変動
+    tonalValue = _saturatef(tonalValue * sizeVariation);
+
     const int passesBrightness = (invertMode != 0)
         ? (avgLuma >= params->brightnessCutoff ? 1 : 0)
         : (avgLuma <= params->brightnessCutoff ? 1 : 0);
@@ -566,6 +599,24 @@ function Create()
         INPS_StatusText = "Adjusts the growth curve of dot sizes (1.0 = linear)",
     })
 
+    InPositionJitter = self:AddInput("Position Jitter", "PositionJitter", {
+        LINKID_DataType = "Number",
+        INPID_InputControl = "SliderControl",
+        INP_Default = 0.0,
+        INP_MinAllowed = 0.0,
+        INP_MaxAllowed = 1.0,
+        INPS_StatusText = "Randomly shifts the position of the dots to simulate imperfect printing",
+    })
+
+    InSizeJitter = self:AddInput("Size Jitter", "SizeJitter", {
+        LINKID_DataType = "Number",
+        INPID_InputControl = "SliderControl",
+        INP_Default = 0.0,
+        INP_MinAllowed = 0.0,
+        INP_MaxAllowed = 1.0,
+        INPS_StatusText = "Randomly varies the size of the dots to simulate imperfect printing",
+    })
+
     InInvertMode = self:AddInput("Invert Brightness", "InvertMode", {
         LINKID_DataType = "Number",
         INPID_InputControl = "CheckboxControl",
@@ -793,6 +844,8 @@ function Process(req)
     local useOriginalColor = InUseOriginalColor:GetValue(req).Value
     local dotShape = InDotShape:GetValue(req).Value
     local enableDotAntialias = InEnableDotAntialias:GetValue(req).Value > 0.5
+    local positionJitter = InPositionJitter:GetValue(req).Value
+    local sizeJitter = InSizeJitter:GetValue(req).Value
     local aaEdgeSoftness = InAAEdgeSoftness:GetValue(req).Value
     local dotSizeCurve = InDotSizeCurve:GetValue(req).Value
     local brightnessCutoff = InBrightnessCutoff:GetValue(req).Value
@@ -869,6 +922,8 @@ function Process(req)
         params.dotGain = dotGain
         params.brightnessCutoff = brightnessCutoff
         params.minDotRadius = cutoffDotRadius
+        params.positionJitter = positionJitter
+        params.sizeJitter = sizeJitter
         params.dotCurve = dotSizeCurve
         params.useOriginalColor = useOriginalColor > 0.5 and 1 or 0
         params.clipRadius = maxDotRadius
