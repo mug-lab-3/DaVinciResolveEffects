@@ -12,7 +12,7 @@ FuRegisterClass("MugSimpleHalftone", CT_Tool, {
     REGS_IconID            = "Icons.Tools.Icons.SimpleHalftone",
     REG_Source_GlobalCtrls = true,
     REG_Source_SizeCtrls   = true,
-    REG_Version            = 2.80,
+    REG_Version            = 3.00,
 })
 
 -- セル情報計算用パラメータ構造体
@@ -470,12 +470,16 @@ __KERNEL__ void RenderDotsKernel(
         const float px = (float)x / intWidth;
         const float py = (float)y / intHeight;
         
-        // 色ごとにサンプリング位置をずらす
-        const float4 sR = _tex2DVecN(src_img, px + shiftROFF.x, py + shiftROFF.y, 15);
-        const float4 sG = _tex2DVecN(src_img, px, py, 15);
-        const float4 sB = _tex2DVecN(src_img, px + shiftBOFF.x, py + shiftBOFF.y, 15);
-
-        inputColor = to_float4(sR.x, sG.y, sB.z, sG.w);
+        if (shiftVal == 0.0f) {
+            // 最適化: シフトがない場合は1回のサンプリングで済ませる
+            inputColor = _tex2DVecN(src_img, px, py, 15);
+        } else {
+            // 色ごとにサンプリング位置をずらす
+            const float4 sR = _tex2DVecN(src_img, px + shiftROFF.x, py + shiftROFF.y, 15);
+            const float4 sG = _tex2DVecN(src_img, px, py, 15);
+            const float4 sB = _tex2DVecN(src_img, px + shiftBOFF.x, py + shiftBOFF.y, 15);
+            inputColor = to_float4(sR.x, sG.y, sB.z, sG.w);
+        }
     }
 
     float bestCoverage = 0.0f;
@@ -493,10 +497,15 @@ __KERNEL__ void RenderDotsKernel(
             float candidateStrength = coverageCandidate; \
             if (useOriginalColorFlag != 0) { \
                 const float2 baseUV = (candidatePos + to_float2(0.5f, 0.5f)) / cellGridNum; \
-                const float4 cR = _tex2DVecN(cell_info3, baseUV.x + cellShiftROFF.x, baseUV.y + cellShiftROFF.y, 15); \
-                const float4 cG = _tex2DVecN(cell_info3, baseUV.x, baseUV.y, 15); \
-                const float4 cB = _tex2DVecN(cell_info3, baseUV.x + cellShiftBOFF.x, baseUV.y + cellShiftBOFF.y, 15); \
-                candidateDotColor = to_float4(cR.x, cG.y, cB.z, cG.w); \
+                if (shiftVal == 0.0f) { \
+                    /* 最適化: シフトがない場合は1回のサンプリングで済ませる */ \
+                    candidateDotColor = _tex2DVecN(cell_info3, baseUV.x, baseUV.y, 15); \
+                } else { \
+                    const float4 cR = _tex2DVecN(cell_info3, baseUV.x + cellShiftROFF.x, baseUV.y + cellShiftROFF.y, 15); \
+                    const float4 cG = _tex2DVecN(cell_info3, baseUV.x, baseUV.y, 15); \
+                    const float4 cB = _tex2DVecN(cell_info3, baseUV.x + cellShiftBOFF.x, baseUV.y + cellShiftBOFF.y, 15); \
+                    candidateDotColor = to_float4(cR.x, cG.y, cB.z, cG.w); \
+                } \
                 const float candidateLuma = candidateDotColor.x * LUMA_R + candidateDotColor.y * LUMA_G + candidateDotColor.z * LUMA_B; \
                 candidateStrength *= _fmaxf(1.0f - candidateLuma, 0.0f); \
             } else if (blendWithInput != 0) { \
@@ -575,7 +584,7 @@ function Create()
     InScreenDensity = self:AddInput("Screen Density", "ScreenDensity", {
         LINKID_DataType = "Number",
         INPID_InputControl = "SliderControl",
-        INP_Default = 150.0,
+        INP_Default = 200.0,
         INP_MinAllowed = 1,
         INP_MaxAllowed = 1000.0,
         INPID_PreviewControl = "RangeControl",
@@ -592,14 +601,13 @@ function Create()
         INPS_StatusText = "Adjusts the contrast of the halftone pattern",
     })
 
-    InRGBShift = self:AddInput("RGB Shift (Registration Error)", "RGBShift", {
+    InRGBShift = self:AddInput("RGB Shift (Req. Orig Color/Blend)", "RGBShift", {
         LINKID_DataType = "Number",
         INPID_InputControl = "SliderControl",
         INP_Default = 0.0,
         INP_MinAllowed = 0.0,
         INP_MaxAllowed = 20.0,
-        IC_Visible = false, -- Default hidden until UseOriginalColor is checked
-        INPS_StatusText = "Simulates color plate misalignment (chromatic aberration) on halftone dots",
+        INPS_StatusText = "Simulates color plate misalignment. Only active when 'Use Original Color' or 'Blend With Input' is enabled.",
     })
 
     self:BeginControlNest("Dot", "Dot", true);
@@ -635,7 +643,7 @@ function Create()
     InPositionJitter = self:AddInput("Position Jitter", "PositionJitter", {
         LINKID_DataType = "Number",
         INPID_InputControl = "SliderControl",
-        INP_Default = 0.0,
+        INP_Default = 0.05,
         INP_MinAllowed = 0.0,
         INP_MaxAllowed = 1.0,
         INPS_StatusText = "Randomly shifts the position of the dots to simulate imperfect printing",
@@ -644,7 +652,7 @@ function Create()
     InSizeJitter = self:AddInput("Size Jitter", "SizeJitter", {
         LINKID_DataType = "Number",
         INPID_InputControl = "SliderControl",
-        INP_Default = 0.0,
+        INP_Default = 0.02,
         INP_MinAllowed = 0.0,
         INP_MaxAllowed = 1.0,
         INPS_StatusText = "Randomly varies the size of the dots to simulate imperfect printing",
@@ -687,14 +695,14 @@ function Create()
     InEnableDotAntialias = self:AddInput("Enable Dot Antialias", "EnableDotAntialias", {
         LINKID_DataType = "Number",
         INPID_InputControl = "CheckboxControl",
-        INP_Default = 0.0,
+        INP_Default = 1.0,
         INPS_StatusText = "Smooth dot edges when dots are very small",
     })
 
     InAAEdgeSoftness = self:AddInput("AA Edge Softness", "AAEdgeSoftness", {
         LINKID_DataType = "Number",
         INPID_InputControl = "SliderControl",
-        INP_Default = 0.25,
+        INP_Default = 0.15,
         INP_MinAllowed = 0.0,
         INP_MaxAllowed = 1.0,
         INPS_StatusText = "Controls how wide the antialias region is around each dot",
@@ -704,7 +712,6 @@ function Create()
         LINKID_DataType = "Number",
         INPID_InputControl = "CheckboxControl",
         INP_Default = 0.0,
-        INP_DoNotifyChanged = true,
         INPS_StatusText = "Preserves original colors instead of black and white",
     })
 
@@ -714,7 +721,7 @@ function Create()
         INPID_InputControl = "ColorControl",
         INP_MinScale       = 0.0,
         INP_MaxScale       = 1.0,
-        INP_Default        = 0.0,
+        INP_Default        = 0.0627,
         ICS_Name           = "Color",
         CLRC_ShowWheel     = false,
         IC_ControlGroup    = groupID,
@@ -727,7 +734,7 @@ function Create()
         INPID_InputControl = "ColorControl",
         INP_MinScale       = 0.0,
         INP_MaxScale       = 1.0,
-        INP_Default        = 0.0,
+        INP_Default        = 0.0156,
         ICS_Name           = "Color",
         CLRC_ShowWheel     = false,
         IC_ControlGroup    = groupID,
@@ -768,7 +775,6 @@ function Create()
         LINKID_DataType = "Number",
         INPID_InputControl = "CheckboxControl",
         INP_Default = 0.0,
-        INP_DoNotifyChanged = true,
         INPS_StatusText = "Blend dots over the input image instead of using paper color",
     })
 
@@ -803,7 +809,7 @@ function Create()
         INPID_InputControl = "ColorControl",
         INP_MinScale       = 0.0,
         INP_MaxScale       = 1.0,
-        INP_Default        = 1.0,
+        INP_Default        = 0.85,
         ICS_Name           = "Color",
         CLRC_ShowWheel     = false,
         IC_ControlGroup    = groupID,
@@ -816,7 +822,7 @@ function Create()
         INPID_InputControl = "ColorControl",
         INP_MinScale       = 0.0,
         INP_MaxScale       = 1.0,
-        INP_Default        = 1.0,
+        INP_Default        = 0.75,
         ICS_Name           = "Color",
         CLRC_ShowWheel     = false,
         IC_ControlGroup    = groupID,
@@ -829,7 +835,7 @@ function Create()
         INPID_InputControl = "ColorControl",
         INP_MinScale       = 0.0,
         INP_MaxScale       = 1.0,
-        INP_Default        = 1.0,
+        INP_Default        = 0.58,
         ICS_Name           = "Color",
         CLRC_ShowWheel     = false,
         IC_ControlGroup    = groupID,
@@ -1081,18 +1087,6 @@ function NotifyChanged(inp, param, time)
             InPaperColorRed:SetSource(Number(r), time)
             InPaperColorGreen:SetSource(Number(g), time)
             InPaperColorBlue:SetSource(Number(b), time)
-        end
-    elseif inp == InUseOriginalColor or inp == InBlendWithInput then
-        -- RGB Shift を表示する条件: Use Original Color または Blend With Input がオン
-        if InUseOriginalColor and InBlendWithInput and InRGBShift then
-            -- reqではなく引数のtimeを使って他のノードの値を取得します
-            local useOrgVal = InUseOriginalColor:GetSource(time)
-            local blendInpVal = InBlendWithInput:GetSource(time)
-            
-            local useOrg = useOrgVal and useOrgVal.Value > 0.5 or false
-            local blendInp = blendInpVal and blendInpVal.Value > 0.5 or false
-            
-            InRGBShift:SetAttrs({ IC_Visible = (useOrg or blendInp) })
         end
     end
 
