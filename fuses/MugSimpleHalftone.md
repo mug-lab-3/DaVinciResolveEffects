@@ -39,12 +39,12 @@ graph TD
     
     R_K --> Z["最終出力画像 (Output)"]
 
-    style CPU fill:#f3e5f5,stroke:#9c27b0
-    style C_K fill:#e1f5fe,stroke:#03a9f4
-    style R_K fill:#e1f5fe,stroke:#03a9f4
-    style B1 fill:#fff59d,stroke:#fbc02d
-    style B2 fill:#fff59d,stroke:#fbc02d
-    style B3 fill:#fff59d,stroke:#fbc02d
+    style CPU fill:#f3e5f5,stroke:#9c27b0,stroke-width:2px,color:#000000
+    style C_K fill:#e1f5fe,stroke:#03a9f4,stroke-width:2px,color:#000000
+    style R_K fill:#e1f5fe,stroke:#03a9f4,stroke-width:2px,color:#000000
+    style B1 fill:#fff59d,stroke:#fbc02d,stroke-width:2px,color:#000000
+    style B2 fill:#fff59d,stroke:#fbc02d,stroke-width:2px,color:#000000
+    style B3 fill:#fff59d,stroke:#fbc02d,stroke-width:2px,color:#000000
 ```
 
 ### 処理の2段階構造
