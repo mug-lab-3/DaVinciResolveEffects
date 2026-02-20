@@ -12,7 +12,7 @@ FuRegisterClass("MugSimpleHalftone", CT_Tool, {
     REGS_IconID            = "Icons.Tools.Icons.SimpleHalftone",
     REG_Source_GlobalCtrls = true,
     REG_Source_SizeCtrls   = true,
-    REG_Version            = 2.70,
+    REG_Version            = 2.80,
 })
 
 -- セル情報計算用パラメータ構造体
@@ -272,6 +272,7 @@ RenderParams = [[
   int enableAntialias;  // ドット境界にアンチエイリアスを適用するか
   float aaEdgeWidth;    // アンチエイリアス境界幅（ピクセル単位）
   int dotShape;         // ドットの形状 (0: 円, 1: 四角, 2: ひし形)
+  float rgbShift;       // 色収差・版ズレの強度（ピクセル単位）
 ]]
 
 RenderDotsKernel = [[
@@ -452,21 +453,36 @@ __KERNEL__ void RenderDotsKernel(
     };
     const int useOriginalColorFlag = params->useOriginalColor;
 
+    const float intWidth = (float)params->srcSize[0];
+    const float intHeight = (float)params->srcSize[1];
+    const int blendWithInput = params->blendWithInput > 0 ? 1 : 0;
+    
+    // RGBShift offsets (Red goes Top-Left, Blue goes Bottom-Right, Green stays center)
+    const float shiftVal = (blendWithInput != 0 || useOriginalColorFlag != 0) ? params->rgbShift : 0.0f;
+    const float2 shiftROFF = to_float2(-shiftVal / intWidth, -shiftVal / intHeight);
+    const float2 shiftBOFF = to_float2( shiftVal / intWidth,  shiftVal / intHeight);
+    const float2 cellShiftROFF = to_float2(-shiftVal / cellGridNum.x, -shiftVal / cellGridNum.y);
+    const float2 cellShiftBOFF = to_float2( shiftVal / cellGridNum.x,  shiftVal / cellGridNum.y);
+
     float4 inputColor = paperColor;
 
-    const int blendWithInput = params->blendWithInput > 0 ? 1 : 0;
     if (blendWithInput != 0) {
-        inputColor = _tex2DVecN(
-            src_img,
-            (float)x / (float)params->srcSize[0],
-            (float)y / (float)params->srcSize[1],
-            15
-        );
+        const float px = (float)x / intWidth;
+        const float py = (float)y / intHeight;
+        
+        // 色ごとにサンプリング位置をずらす
+        const float4 sR = _tex2DVecN(src_img, px + shiftROFF.x, py + shiftROFF.y, 15);
+        const float4 sG = _tex2DVecN(src_img, px, py, 15);
+        const float4 sB = _tex2DVecN(src_img, px + shiftBOFF.x, py + shiftBOFF.y, 15);
+
+        inputColor = to_float4(sR.x, sG.y, sB.z, sG.w);
     }
 
     float bestCoverage = 0.0f;
     float bestStrength = -1.0f;
-    float4 bestDotColor = userDotColor;
+    
+    // BlendWithInputオン、UseOriginalColorオフの場合でも、ドットの基本色はユーザー指定色にする
+    float4 bestDotColor = (blendWithInput != 0 && useOriginalColorFlag != 0) ? inputColor : userDotColor;
 
 #define UPDATE_BEST_CELL(posExpr) \
     do { \
@@ -476,10 +492,17 @@ __KERNEL__ void RenderDotsKernel(
             float4 candidateDotColor = userDotColor; \
             float candidateStrength = coverageCandidate; \
             if (useOriginalColorFlag != 0) { \
-                const float2 candidateUV = (candidatePos + to_float2(0.5f, 0.5f)) / cellGridNum; \
-                candidateDotColor = _tex2DVecN(cell_info3, candidateUV.x, candidateUV.y, 15); \
+                const float2 baseUV = (candidatePos + to_float2(0.5f, 0.5f)) / cellGridNum; \
+                const float4 cR = _tex2DVecN(cell_info3, baseUV.x + cellShiftROFF.x, baseUV.y + cellShiftROFF.y, 15); \
+                const float4 cG = _tex2DVecN(cell_info3, baseUV.x, baseUV.y, 15); \
+                const float4 cB = _tex2DVecN(cell_info3, baseUV.x + cellShiftBOFF.x, baseUV.y + cellShiftBOFF.y, 15); \
+                candidateDotColor = to_float4(cR.x, cG.y, cB.z, cG.w); \
                 const float candidateLuma = candidateDotColor.x * LUMA_R + candidateDotColor.y * LUMA_G + candidateDotColor.z * LUMA_B; \
                 candidateStrength *= _fmaxf(1.0f - candidateLuma, 0.0f); \
+            } else if (blendWithInput != 0) { \
+                /* UseOriginalColorがオフでBlendWithInputがオンの場合、 \
+                   Shiftされた inputColor で上書きして単色のドットの色をずらすのは \
+                   不自然で不透明度も壊すので行わない */ \
             } \
             const float strengthDiff = candidateStrength - bestStrength; \
             if (strengthDiff > 1e-4f || (strengthDiff >= -1e-4f && coverageCandidate > bestCoverage)) { \
@@ -567,6 +590,16 @@ function Create()
         INP_MinAllowed = 0.1,
         INP_MaxAllowed = 15.0,
         INPS_StatusText = "Adjusts the contrast of the halftone pattern",
+    })
+
+    InRGBShift = self:AddInput("RGB Shift (Registration Error)", "RGBShift", {
+        LINKID_DataType = "Number",
+        INPID_InputControl = "SliderControl",
+        INP_Default = 0.0,
+        INP_MinAllowed = 0.0,
+        INP_MaxAllowed = 20.0,
+        IC_Visible = false, -- Default hidden until UseOriginalColor is checked
+        INPS_StatusText = "Simulates color plate misalignment (chromatic aberration) on halftone dots",
     })
 
     self:BeginControlNest("Dot", "Dot", true);
@@ -671,6 +704,7 @@ function Create()
         LINKID_DataType = "Number",
         INPID_InputControl = "CheckboxControl",
         INP_Default = 0.0,
+        INP_DoNotifyChanged = true,
         INPS_StatusText = "Preserves original colors instead of black and white",
     })
 
@@ -734,6 +768,7 @@ function Create()
         LINKID_DataType = "Number",
         INPID_InputControl = "CheckboxControl",
         INP_Default = 0.0,
+        INP_DoNotifyChanged = true,
         INPS_StatusText = "Blend dots over the input image instead of using paper color",
     })
 
@@ -842,6 +877,7 @@ function Process(req)
     local dotGain = InDotGain:GetValue(req).Value
     local invertMode = InInvertMode:GetValue(req).Value
     local useOriginalColor = InUseOriginalColor:GetValue(req).Value
+    local rgbShift = InRGBShift:GetValue(req).Value
     local dotShape = InDotShape:GetValue(req).Value
     local enableDotAntialias = InEnableDotAntialias:GetValue(req).Value > 0.5
     local positionJitter = InPositionJitter:GetValue(req).Value
@@ -965,6 +1001,7 @@ function Process(req)
         params.dotColor[2] = dotColor[3]
         params.dotColor[3] = dotColor[4]
         params.useOriginalColor = useOriginalColor > 0.5 and 1 or 0
+        params.rgbShift = rgbShift
         params.dotShape = math.floor(dotShape + 0.5)
         params.screenDensity = screenDensity -- GPU側でセルピッチ計算
         params.enableAntialias = enableDotAntialias and 1 or 0
@@ -1044,6 +1081,18 @@ function NotifyChanged(inp, param, time)
             InPaperColorRed:SetSource(Number(r), time)
             InPaperColorGreen:SetSource(Number(g), time)
             InPaperColorBlue:SetSource(Number(b), time)
+        end
+    elseif inp == InUseOriginalColor or inp == InBlendWithInput then
+        -- RGB Shift を表示する条件: Use Original Color または Blend With Input がオン
+        if InUseOriginalColor and InBlendWithInput and InRGBShift then
+            -- reqではなく引数のtimeを使って他のノードの値を取得します
+            local useOrgVal = InUseOriginalColor:GetSource(time)
+            local blendInpVal = InBlendWithInput:GetSource(time)
+            
+            local useOrg = useOrgVal and useOrgVal.Value > 0.5 or false
+            local blendInp = blendInpVal and blendInpVal.Value > 0.5 or false
+            
+            InRGBShift:SetAttrs({ IC_Visible = (useOrg or blendInp) })
         end
     end
 
