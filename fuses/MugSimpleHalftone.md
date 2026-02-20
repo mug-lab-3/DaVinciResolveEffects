@@ -22,20 +22,20 @@ OpenCL を活用した強力な GPU アクセラレーションにより、4K・
 
 ```mermaid
 graph TD
-    A[入力画像 (Input Image)] --> CPU[CPU: Process<br/>パラメータ初期化・UI制御]
-    CPU --> C_K[GPU: CellInfoKernel<br/>セルごとの輝度・色・半径を計算]
+    A["入力画像 (Input Image)"] --> CPU["CPU: Process<br/>パラメータ初期化・UI制御"]
+    CPU --> C_K["GPU: CellInfoKernel<br/>セルごとの輝度・色・半径を計算"]
     
-    C_K --> B1[cell_info1<br/>セル位置情報]
-    C_K --> B2[cell_info2<br/>ドット半径・輝度情報]
-    C_K --> B3[cell_info3<br/>セル平均色情報]
+    C_K --> B1["cell_info1<br/>セル位置情報"]
+    C_K --> B2["cell_info2<br/>ドット半径・輝度情報"]
+    C_K --> B3["cell_info3<br/>セル平均色情報"]
     
-    B1 --> R_K[GPU: RenderDotsKernel<br/>各ピクセルの最終色をサンプリング・合成]
+    B1 --> R_K["GPU: RenderDotsKernel<br/>各ピクセルの最終色をサンプリング・合成"]
     B2 --> R_K
     B3 --> R_K
     A --> R_K
     CPU --> R_K
     
-    R_K --> Z[最終出力画像 (Output)]
+    R_K --> Z["最終出力画像 (Output)"]
 
     style CPU fill:#f3e5f5,stroke:#9c27b0
     style C_K fill:#e1f5fe,stroke:#03a9f4
