@@ -35,16 +35,22 @@ graph TD
     B2 --> R_K
     B3 --> R_K
     A --> R_K
-    CPU --> R_K
-    
     R_K --> Z["最終出力画像 (Output)"]
 
-    style CPU fill:#f3e5f5,stroke:#9c27b0,stroke-width:2px,color:#000000
-    style C_K fill:#e1f5fe,stroke:#03a9f4,stroke-width:2px,color:#000000
-    style R_K fill:#e1f5fe,stroke:#03a9f4,stroke-width:2px,color:#000000
-    style B1 fill:#fff59d,stroke:#fbc02d,stroke-width:2px,color:#000000
-    style B2 fill:#fff59d,stroke:#fbc02d,stroke-width:2px,color:#000000
-    style B3 fill:#fff59d,stroke:#fbc02d,stroke-width:2px,color:#000000
+    subgraph Legend ["凡例 (Legend)"]
+        direction LR
+        L1["CPU 処理"]:::cpuStyle
+        L2["GPU カーネル処理"]:::gpuStyle
+        L3["テクスチャバッファ (データ)"]:::bufStyle
+    end
+
+    classDef cpuStyle fill:#f3e5f5,stroke:#9c27b0,stroke-width:2px,color:#000000
+    classDef gpuStyle fill:#e1f5fe,stroke:#03a9f4,stroke-width:2px,color:#000000
+    classDef bufStyle fill:#fff59d,stroke:#fbc02d,stroke-width:2px,color:#000000
+
+    class CPU cpuStyle
+    class C_K,R_K gpuStyle
+    class B1,B2,B3 bufStyle
 ```
 
 ### 処理の2段階構造
