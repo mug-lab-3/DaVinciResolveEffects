@@ -12,7 +12,7 @@ FuRegisterClass("MugSimpleHalftone", CT_Tool, {
     REGS_IconID            = "Icons.Tools.Icons.SimpleHalftone",
     REG_Source_GlobalCtrls = true,
     REG_Source_SizeCtrls   = true,
-    REG_Version            = 2.60,
+    REG_Version            = 2.70,
 })
 
 -- セル情報計算用パラメータ構造体
@@ -238,6 +238,7 @@ RenderParams = [[
   int blendWithInput;   // 入力画像とブレンドするかどうか
   int enableAntialias;  // ドット境界にアンチエイリアスを適用するか
   float aaEdgeWidth;    // アンチエイリアス境界幅（ピクセル単位）
+  int dotShape;         // ドットの形状 (0: 円, 1: 四角, 2: ひし形)
 ]]
 
 RenderDotsKernel = [[
@@ -257,7 +258,8 @@ __DEVICE__ float checkCellDot(
     const float2 cellGridNum,
     __TEXTURE2D__ cell_info1,
     __TEXTURE2D__ cell_info2,
-    const float aaEdgeWidth)
+    const float aaEdgeWidth,
+    const int dotShape)
 {
     if (cellPos.x >= 0.0f && cellPos.x < cellGridNum.x &&
         cellPos.y >= 0.0f && cellPos.y < cellGridNum.y) {
@@ -283,24 +285,30 @@ __DEVICE__ float checkCellDot(
         if (absDiff.x > bbSize || absDiff.y > bbSize)
             return 0.0f;
 
-        const float distSq = diff.x * diff.x + diff.y * diff.y;
-        const float radiusSq = dotRadius * dotRadius;
+        float distSq = 0.0f;
+        float dist = 0.0f;
 
-        if (aaEdgeWidth <= 0.0f)
-            return (distSq <= radiusSq) ? 1.0f : 0.0f;
+        if (dotShape == 0) { // Circle
+            distSq = diff.x * diff.x + diff.y * diff.y;
+            dist = _sqrtf(distSq);
+        } else if (dotShape == 1) { // Square
+            dist = _fmaxf(absDiff.x, absDiff.y);
+        } else if (dotShape == 2) { // Diamond
+            dist = (absDiff.x + absDiff.y) * 0.70710678f;
+        }
 
-        if (distSq >= radiusSq)
+        if (aaEdgeWidth <= 0.0f) {
+            return (dist <= dotRadius) ? 1.0f : 0.0f;
+        }
+
+        if (dist >= dotRadius)
             return 0.0f;
 
         // 高速近似または正確な計算の選択（半径に基づく）
         const float innerRadius = _fmaxf(dotRadius - aaEdgeWidth, 0.0f);
-        const float innerRadiusSq = innerRadius * innerRadius;
 
-        if (distSq <= innerRadiusSq)
+        if (dist <= innerRadius)
             return 1.0f;
-
-        // 平方根計算を最後まで遅延
-        const float dist = _sqrtf(distSq);
 
         const float t = (dotRadius - dist) / aaEdgeWidth;
         return _saturatef(t);
@@ -430,7 +438,7 @@ __KERNEL__ void RenderDotsKernel(
 #define UPDATE_BEST_CELL(posExpr) \
     do { \
         const float2 candidatePos = (posExpr); \
-        const float coverageCandidate = checkCellDot(candidatePos, pixelPos, cellGridNum, cell_info1, cell_info2, aaEdgeWidth); \
+        const float coverageCandidate = checkCellDot(candidatePos, pixelPos, cellGridNum, cell_info1, cell_info2, aaEdgeWidth, params->dotShape); \
         if (coverageCandidate > 0.0f) { \
             float4 candidateDotColor = userDotColor; \
             float candidateStrength = coverageCandidate; \
@@ -529,6 +537,17 @@ function Create()
     })
 
     self:BeginControlNest("Dot", "Dot", true);
+    InDotShape = self:AddInput("Dot Shape", "DotShape", {
+        LINKID_DataType = "Number",
+        INPID_InputControl = "ComboControl",
+        INP_Default = 0,
+        INP_Integer = true,
+        { CCS_AddString = "Circle" },
+        { CCS_AddString = "Square" },
+        { CCS_AddString = "Diamond" },
+        INPS_StatusText = "Select the shape of the halftone dots",
+    })
+
     InDotGain = self:AddInput("Dot Gain", "DotGain", {
         LINKID_DataType = "Number",
         INPID_InputControl = "SliderControl",
@@ -772,6 +791,7 @@ function Process(req)
     local dotGain = InDotGain:GetValue(req).Value
     local invertMode = InInvertMode:GetValue(req).Value
     local useOriginalColor = InUseOriginalColor:GetValue(req).Value
+    local dotShape = InDotShape:GetValue(req).Value
     local enableDotAntialias = InEnableDotAntialias:GetValue(req).Value > 0.5
     local aaEdgeSoftness = InAAEdgeSoftness:GetValue(req).Value
     local dotSizeCurve = InDotSizeCurve:GetValue(req).Value
@@ -890,6 +910,7 @@ function Process(req)
         params.dotColor[2] = dotColor[3]
         params.dotColor[3] = dotColor[4]
         params.useOriginalColor = useOriginalColor > 0.5 and 1 or 0
+        params.dotShape = math.floor(dotShape + 0.5)
         params.screenDensity = screenDensity -- GPU側でセルピッチ計算
         params.enableAntialias = enableDotAntialias and 1 or 0
         params.aaEdgeWidth = aaEdgeWidth
