@@ -1,336 +1,197 @@
 # MugSimpleHalftone.fuse 技術仕様書
 
-## 概要
-
-MugSimpleHalftone.fuse は、DaVinci Resolve/Fusion 用の高性能なハーフトーンエフェクトプラグインです。  
-六角形グリッドベースのドット配置により、印刷物風のハーフトーン効果を生成します。  
-GPU アクセラレーション（OpenCL）を使用し、リアルタイムでの高品質なレンダリングを実現します。  
-主な機能は次の通りです。
-
-- 輝度極性を切り替えられるドット生成（Invert Brightness）
-- 画材特性を模したドットゲインおよびトーンカーブ制御
-- セル単位で動作するアンチエイリアス処理と柔軟なエッジ幅調整
-- 紙色・ドット色の個別指定と入力映像とのブレンド設定
-- 六角形グリッド密度の調整による網点サイズ管理
-
-## アーキテクチャ概要
-
-```mermaid
-graph TD
-     A[入力画像] --> B[セル情報計算カーネル]
-     B --> C[セル情報バッファ1<br/>位置情報]
-     B --> D[セル情報バッファ2<br/>ドット情報]
-     B --> E[セル情報バッファ3<br/>色情報]
-
-     C --> F[ドット描画カーネル]
-     D --> F
-     E --> F
-     A --> F
-
-     F --> G[最終出力画像]
-
-     H[パラメータ] --> B
-     H --> F
-
-     style B fill:#e1f5fe
-     style F fill:#f3e5f5
-     style G fill:#e8f5e8
-```
-
-## メイン処理フロー
-
-### 1. 全体処理フロー
-
-Fusion から渡される入力画像と UI パラメータは `Process()` に集約され、セル解析（`CellInfoKernel`）と描画（`RenderDotsKernel`）を 2 段階で実行します。  
-パラメータは処理ステージごとに評価され、値の一部は GPU カーネルへ定数としてバンドルされます。
-
-```mermaid
-sequenceDiagram
-      participant Img as Source Image
-      participant Cfg as UI Parameters
-      participant Proc as Process()
-      participant CK as CellInfoKernel
-      participant RK as RenderDotsKernel
-      participant Out as Output
-
-      Img->>Proc: Input image
-      Cfg->>Proc: Screen Density〜Paper Color
-      Proc->>Proc: セルグリッド計算 & パラメータ整形
-      Proc->>CK: CellInfoParams を渡して実行
-      CK->>Proc: cell_info1/2/3
-      Proc->>RK: Dot 描画用パラメータを渡して実行
-      RK->>Proc: Dot Coverage & 色ブレンド済み画像
-      Proc->>Out: 最終画像を出力
-```
-
-### 1-1. パラメータ駆動の処理ステージ
-
-ドット生成は次の 6 ステージで進み、各ステージが該当パラメータを順に適用します。  
-式中の $L$ はセル輝度、$R_{\max}$ はセルが取り得る最大半径です。
-
-1. **セルグリッド生成 — Screen Density**  
-   `Screen Density` は水平方向のセル数を指定し、六角グリッドのピッチ $p_x$ と $p_y$ を決定します。  
-   ピッチは `CellInfoKernel` と `RenderDotsKernel` の両方で共有され、後段のサンプリング半径やアンチエイリアス幅の基準になります。
-2. **輝度統計と正規化 — Contrast**  
-   サンプリングした平均輝度 $L$ は $L' = 0.5 + (L-0.5)\times\text{Contrast}$ でリマップし、`Contrast` が高いほどシャドウとハイライトを強調します。  
-   ここで得た $L'$ が以後のトーン計算の基礎になります。
-3. **トーン生成 — Invert Brightness / Dot Gain / Dot Size Curve**  
-   `Invert Brightness` がオフなら $T_0 = 1 - L'$, オンなら $T_0 = L'$ で極性を切り替えます。  
-   続いて `Dot Gain` で $T_1 = \mathrm{saturate}(T_0 + \text{DotGain})$ の線形オフセットを行い、`Dot Size Curve` で $T_2 = \mathrm{saturate}(T_1)^{\max(\text{DotSizeCurve},10^{-4})}$ の非線形リマップを適用してハイライト・シャドウどちらにドットを残すかを制御します。
-4. **描画許可と半径制御 — Brightness Cutoff / Cutoff Dot Radius / Clip Dot Radius**  
-   `Brightness Cutoff` は $L'$ と閾値を比較し、条件を満たさないセルをゼロ半径にします。  
-   条件を満たしたセルは $\text{radius}_\text{raw} = T_2\times R_{\max}$ を計算し、`Cutoff Dot Radius` 未満ならノイズ抑制のため描画しません。  
-   最後に `Clip Dot Radius` を掛け上限 $R_{\max}\times\text{ClipDotRadius}$ に収め、極端な肥大化を止めます。
-5. **境界サンプリング設計 — Enable Dot Antialias / AA Edge Softness**  
-   `Enable Dot Antialias` がオンの場合のみ後述のアンチエイリアス計算を有効化します。  
-   `AA Edge Softness` はセルピッチから求める幅 $w = \text{AAEdgeSoftness} \times p_\text{avg}$ を与え、半径から内側バリアを引いた上でソフトなカバレッジ関数を構築します。  
-   オフの場合はハードなステップ関数が使用されます。
-6. **色と紙の決定 — Use Original Color / Dot Color* / Blend With Input / Paper Color Preset / Paper Color***  
-   `Use Original Color` がオンなら cell_info3 の平均色を採用し、オフなら `Dot Color` の RGBA（`Dot Color Red/Green/Blue/Alpha`）を使用します。  
-   `Blend With Input` がオンの場合は入力画像が背景、オフの場合は紙色が背景になります。  
-   紙色は `Paper Color Preset` でプリセットを選ぶか、`Paper Color Red/Green/Blue/Alpha` で直接指定します。  
-   これらの値は次節のブレンド処理で使用されます。
-
-ステージ 1〜4 が `CellInfoKernel`、ステージ 5〜6 が `RenderDotsKernel` の主担当です。  
-アンチエイリアスと色処理の詳細は以下の節で掘り下げます。
-
-### 1-2. アンチエイリアス処理
-
-`Enable Dot Antialias` がオンのセルには、ピクセルとセル中心の距離 $d$ に基づいてカバレッジを計算します。  
-セルピッチから算出した幅 $w = \text{AAEdgeSoftness} \times p_\text{avg}$ を使い、次の手順で評価します。
-
-1. 内側半径を $r_{\text{inner}} = \max(r - w,\, 0)$ と定義します。
-2. $d \le r_{\text{inner}}$ ならカバレッジ 1、$d \ge r$ なら 0 とします。
-3. それ以外は $\mathrm{saturate}\Big(\dfrac{r - d}{w}\Big)$ で滑らかに減衰させます。
-
-`Enable Dot Antialias` がオフ、または半径が `DOT_RADIUS_THRESHOLD` 未満のセルはハードエッジ（0/1）のみを使用します。  
-選ばれたカバレッジは近傍セルの中で最も強いドットに限定して適用され、次節の色ブレンドに渡されます。
-
-### 1-3. 色とブレンド
-
-最終色は紙色／入力画像／ドット色の 3 者合成で決まります。
-
-1. **ドット色の選択** — `Use Original Color` がオンのときはセル平均色に $(1-L')$ を掛け、暗部ほど濃くなるよう調整します。  
-   オフのときは `Dot Color Red/Green/Blue` と `Dot Color Alpha` がそのまま使用されます。
-2. **背景ベースの決定** — `Blend With Input` がオンなら入力ピクセルの色がベースです。  
-   オフなら `Paper Color Preset` の選択値で `Paper Color Red/Green/Blue/Alpha` を上書きし、その RGBA を背景として採用します。  
-   `Paper Color Alpha` を 1 未満に設定すれば、背景と入力の合成を意図的に透過させることもできます。
-3. **合成** — `RenderDotsKernel` 内の `blendDotOver()` で $\text{Final} = (1-\alpha_\text{dot})\times\text{Base} + \alpha_\text{dot}\times\text{DotColor}$ を計算します。  
-   $\alpha_\text{dot}$ はアンチエイリアスで得たカバレッジと `Dot Color Alpha` の積です。
-
-これらの結果が GPU テクスチャとして戻り、`Process()` が Fusion へ最終画像を返します。
-
-### 2. ステージ 1: セルグリッド設計（Screen Density）
-
-ステージ 1 では `Screen Density` を核に、六角形グリッドのピッチとサンプリング範囲を決定します。  
-セル間隔は GPU 側で次の式に従って算出され、以降のステージでも共有されます。
-
-```lua
-local SIN60 = 0.866025 -- √3/2
-local cellBasePitch = floor(max(3.0, width / screenDensity))
-local cellPitchX = cellBasePitch
-local cellPitchY = floor(max(3.0, cellBasePitch * SIN60))
-```
-
-- `cellPitchX, cellPitchY` はそれぞれ横方向・縦方向のセル間隔です。  
-   六角格子の重なりを作るため縦方向のみ $p_y = \lfloor \max(3, p_x \times \sqrt{3}/2) \rfloor$ に変換します。
-- 画素座標系でのセル中心は `Process()` が奇数行を半セル左にオフセットし、`CellInfoKernel` 内でも同じロジックを再現してピクセルサンプリングとの整合性を保ちます。
-- バッファ外のアーティファクトを避けるため、グリッドサイズは `+3` 列・`+2` 行のマージンを持たせ、レンダリングステージが隣接セルを参照しても安全になるよう設計されています。
-
-```mermaid
-graph TD
-     A[Screen Density] --> B[セル数計算]
-     B --> C[Pitch X]
-     B --> D[Pitch Y]
-     C --> E[セル中心座標]
-     D --> E
-     E --> F[cell_info1]
-     style F fill:#ffecb3
-```
-
-### 3. ステージ 2: 輝度統計とトーン正規化（Contrast / Invert / Dot Gain / Dot Size Curve）
-
-ステージ 2 ではセル内サンプリングにより平均輝度と平均色を求め、トーン値を段階的に整形します。
-
-1. **円形サンプリング** — セル中心から半径 $r_s = \lfloor p_x/2 \rfloor$ の円内を走査します。  
-   半径が `SAMPLING_STEP_THRESHOLD` を超える場合はサンプリングステップを 2 に間引き、ノイズを抑えつつ高速化します。
-2. **平均輝度の抽出** — $L = \dfrac{1}{N} \sum (0.3R + 0.59G + 0.11B)$ を算出し、`Contrast` を使って $L' = 0.5 + (L-0.5) \times \text{Contrast}$ に再マップします。  
-   極端な値は `_saturatef` で 0〜1 にクリップされます。
-3. **極性切り替え** — `Invert Brightness` が Off なら $T_0 = 1 - L'$, On なら $T_0 = L'$ としてどちらを太らせるかを決定します。
-4. **ドットゲイン** — $T_1 = \mathrm{saturate}(T_0 + \text{DotGain})$ とし、印刷時の滲みを模したバイアスを全域に加えます。
-5. **ドットサイズカーブ** — 非線形リマップ $T_2 = \mathrm{saturate}(T_1)^{\max(\text{DotSizeCurve}, 10^{-4})}$ を適用します。  
-   値が 1 より大きいほどシャドウが細り、1 未満でハイライトが細ります。
-
-CellInfoKernel はこの段階で `cell_info2.x` に輝度を保持し、計算中のトーン値はレジスタ上で管理したまま次の半径判定へ進みます。
-
-### 4. ステージ 3: 描画許可と半径制御（Brightness Cutoff / Cutoff Dot Radius / Clip Dot Radius）
-
-ステージ 3 では、ステージ 2 で得たトーン値から実際の半径を確定し、閾値による描画可否を判断します。
-
-```lua
-local passes = invertMode ~= 0
-     and (avgLuma >= brightnessCutoff)
-     or  (avgLuma <= brightnessCutoff)
-
-local radius = 0.0
-if passes then
-     local raw = T2 * maxCellRadius
-     if raw >= minDotRadius then
-          radius = min(raw, maxCellRadius * clipRadius)
-     end
-end
-```
-
-- `Brightness Cutoff` はステージ 2 の $L'$ を閾値と比較し、描画するセルだけを残します。  
-   `Invert Brightness` が On の場合は比較方向が逆転します。
-- `Cutoff Dot Radius` は微細ノイズを抑制する最小半径です。  
-   0 に近づけるほど背景に散る微小ドットが復活します。
-- `Clip Dot Radius` は最大半径の上限を割合で指定し、インクが潰れたような過剰なドット拡大を抑えます。
-
-確定した半径は `cell_info2.y` として GPU に保存され、ステージ 4・5 で使用されます。
-
-### 5. ステージ 4: 境界サンプリングとアンチエイリアス（Enable Dot Antialias / AA Edge Softness）
-
-ステージ 4 ではステージ 3 で得た半径をもとにピクセルカバレッジを計算します。
-
-- `Enable Dot Antialias` はデフォルトでは Off です。  
-   半径が `DOT_RADIUS_THRESHOLD` 以下の場合も含め、条件を満たさないときは 0/1 のステップ判定のみです。
-- On の場合はセル平均ピッチ $p_{avg} = (p_x + p_y)/2$ からエッジ幅 $w = \text{AAEdgeSoftness} \times p_{avg}$ を求め、内側半径 $r_{inner} = \max(r - w, 0)$ を定義します。
-- ピクセル中心との距離 $d$ に対し、次の条件でカバレッジを決定します。
-  - $d \le r_{inner}$ → カバレッジ 1
-  - $r_{inner} < d < r$ → $\mathrm{saturate}\Big(\dfrac{r - d}{w}\Big)$
-  - $d \ge r$ → カバレッジ 0
-
-```mermaid
-graph LR
-   A[r, w, d] --> B{Inside inner radius?}
-   B -->|Yes| C[Full coverage]
-   B -->|No| D{Beyond outer radius?}
-   D -->|Yes| E[Zero coverage]
-   D -->|No| F[Gradient falloff]
-   F --> G[saturate]
-```
-
-候補セル間で最も強いカバレッジ（`coverage × (1 - luma)`）を持つものだけが採用され、RenderDotsKernel 内で `bestStrength` として保持されます。
-
-### 6. ステージ 5: 色決定とブレンド（Use Original Color / Dot Color* / Blend With Input / Paper Color*）
-
-最後のステージではドット色と背景色を決定し、アルファ合成を行います。
-
-1. **ドット色の選択** — `Use Original Color` が On の場合、`cell_info3` に格納された平均色に $(1 - L')$ を掛け合わせ、暗部ほど優先度を高くします。  
-   Off の場合は `Dot Color Red/Green/Blue/Alpha` をそのまま使用します。
-2. **背景の決定** — `Blend With Input` が On なら入力ピクセルの色がベースで、Off なら紙色がベースになります。  
-   紙色は `Paper Color Preset` でプリセット選択後、`Paper Color Red/Green/Blue/Alpha` で最終的な RGBA を確定します。
-3. **ブレンド** — `blendDotOver()` により $\text{Final} = (1-\alpha_{dot})\times\text{Base} + \alpha_{dot}\times\text{DotColor}$ を計算します。  
-   $\alpha_{dot}$ はカバレッジ値とドット色アルファの積です。
-
-```mermaid
-flowchart TD
-   A[Coverage] --> D[Alpha Dot]
-   B[Dot Color] --> E[blendDotOver]
-   C[Base Input or Paper] --> E
-   D --> E
-   E --> F[最終出力]
-```
-
-### 7. GPU カーネル詳細（ステージ対応）
-
-#### CellInfoKernel（ステージ 1〜3）
-
-```mermaid
-graph LR
-     A[ステージ1: セル座標] --> B[ステージ2: 輝度統計]
-     B --> C[ステージ3: 半径決定]
-     C --> D[cell_info1/2/3]
-```
-
-- **出力バッファ**
-  - `cell_info1` : セル座標と中心位置（ステージ 1）
-  - `cell_info2.x` : 平均輝度 $L'$、`.y` : 半径（ステージ 2〜3）
-  - `cell_info3` : 平均色 RGBA（ステージ 2）
-- **パラメータバンドル**
-  - `screenDensity` → セルピッチ計算
-  - `contrast` → 輝度リマップ
-  - `dotGain`, `dotCurve`, `brightnessCutoff`, `minDotRadius`, `clipRadius`, `invertMode` → トーン＆半径処理
-  - `useOriginalColor` → 色サンプリング継続の有無
-
-#### RenderDotsKernel（ステージ 4〜5）
-
-```mermaid
-graph TD
-     A[cell_info1/2/3] --> B[候補セル探索]
-     B --> C[カバレッジ計算]
-     C --> D[最強ドット判定]
-     D --> E[色決定]
-     E --> F[blendDotOver]
-```
-
-- `EnableDotAntialias`, `AAEdgeSoftness` はステージ 4 用の実効幅に変換されます。
-- `UseOriginalColor`, `Dot Color *`, `BlendWithInput`, `Paper Color *` はステージ 5 で展開されます。
-- 候補セルは高密度モード（セル半径が小さい場合）で 2 件までに絞り込み、不要な距離計算を避けています。
-
-### 8. パラメータリファレンス（ステージ別）
-
-| ステージ | パラメータ                       | デフォルト | 範囲       | 役割                                    |
-| -------- | -------------------------------- | ---------- | ---------- | --------------------------------------- |
-| 1        | Screen Density                   | 150.0      | 1–1000     | セルピッチとグリッド数を決定            |
-| 2        | Contrast                         | 1.0        | 0.1–15.0   | 平均輝度を強調/圧縮                     |
-| 3        | Invert Brightness                | Off        | 0/1        | トーン極性の選択                        |
-| 3        | Dot Gain                         | 0.0        | -1.0–1.0   | 線形バイアスでドット太り/痩せを調整     |
-| 3        | Dot Size Curve                   | 1.0        | 0.01–5.0   | ハイライト/シャドウの残し方を非線形制御 |
-| 3        | Brightness Cutoff                | 0.75       | 0.0–1.0    | ドット描画の有無を判定                  |
-| 3        | Cutoff Dot Radius                | 0.05       | 0.0–1.0    | 描画を許可する最小半径                  |
-| 3        | Clip Dot Radius                  | 1.0        | 0.0–1.0    | 半径の最大割合                          |
-| 4        | Enable Dot Antialias             | Off        | 0/1        | ソフトエッジを有効化                    |
-| 4        | AA Edge Softness                 | 0.25       | 0.0–1.0    | フェザー幅（セルピッチ比）              |
-| 5        | Use Original Color               | Off        | 0/1        | セル平均色を使用                        |
-| 5        | Dot Color Red/Green/Blue/Alpha   | 0,0,0,1    | 0–1        | 手動指定のドット色                      |
-| 5        | Blend With Input                 | Off        | 0/1        | 入力画像を背景に使用                    |
-| 5        | Paper Color Preset               | Custom     | プリセット | 紙色プリセットの選択                    |
-| 5        | Paper Color Red/Green/Blue/Alpha | 1,1,1,1    | 0–1        | 最終的な紙色 RGBA                       |
-
-### 9. 最適化戦略
-
-1. **ステージ 1 最適化** — グリッド計算を GPU に委譲し、CPU 側では整数化済みピッチのみを渡すことで Resolve の UI 操作を軽く保ちます。
-2. **ステージ 2/3 最適化** — サンプリング半径に応じたステップ間引きとバウンディングボックス検索で演算量を削減します。  
-   `Dot Size Curve` 適用前後で `_saturatef` を挟み、Pow 計算のオーバーフローを防止しています。
-3. **ステージ 4 最適化** — カバレッジ計算は平方根呼び出し前に二乗比較で早期終了し、AA 無効時はさらに分岐を飛ばしてステップ関数のみで評価します。
-4. **ステージ 5 最適化** — ドット色と紙色は RenderDotsKernel 開始時に一度だけ読み込み、ピクセルごとに再フェッチしないようレジスタにキャッシュします。
-
-```mermaid
-graph TD
-     A[Stage1] -->|Pitch| B[Stage2]
-     B -->|Tone| C[Stage3]
-     C -->|Radius| D[Stage4]
-     D -->|Coverage| E[Stage5]
-     E -->|Final Color| F[Output]
-     classDef focus fill:#f1f8e9,stroke:#c5e1a5;
-     class B,C,D focus;
-```
-
-### 10. 運用 Tips とプリセット指針
-
-- **新聞風（粗い網点）** — Screen Density: 80–120, Dot Gain: +0.2 前後, Cutoff Dot Radius: 0.08, Paper Preset: "Newspaper"。
-- **雑誌風（細かい網点）** — Screen Density: 160–220, Dot Size Curve: 1.4, Enable Dot Antialias: On, AA Edge Softness: 0.4。
-- **アートチックな粗粒子** — Screen Density: 60, Invert Brightness: On, Dot Gain: -0.2, Brightness Cutoff: 0.85。
-- **カラー合成の強調** — Use Original Color: On, Blend With Input: On, Paper Color Alpha: 0.6 で半透明紙を再現。
-
-リアルタイム再生を重視する場合は Enable Dot Antialias を一時的に Off にし、仕上げ時のみ On に戻すと計算量を抑えられます。
-
-### 11. 技術的制約
-
-- OpenCL 1.2 以降に対応した GPU が必要です。  
-   CPU フォールバックは提供していません。
-- 最大解像度は GPU メモリ帯域に依存します。  
-   8K クラスを超える場合は Screen Density を下げ、セル数を抑制してください。
-- Resolve のタイムライン・プロキシ機能を併用すると、Stage2/3 のサンプリング負荷を軽減できます。
-
-### 12. 拡張余地とバージョン情報
-
-- `cell_info2.w` は将来のドット形状メタデータ格納用に予約されています。
-- ブレンドモードの追加、CMYK 分離、カスタム距離関数などの拡張を視野に入れた設計です。
-- Dot Size Curve の LUT 化やステージ 5 の多層ブレンドなど、今後の実験項目を Issue Tracker で管理しています。
+## 1. 概要 (Overview)
+
+`MugSimpleHalftone.fuse` は、DaVinci Resolve/Fusion 向けの高品質なリアルタイム・ハーフトーン生成プラグイン (v2.60) です。
+六角形グリッドに基づくドットパターンを用いて、印刷物のような視覚的特徴（網点表現）をシミュレートします。
+
+OpenCL を活用した強力な GPU アクセラレーションにより、4K・8K 高解像度環境でもリアルタイムのパフォーマンスを提供します。単純な白黒のドット化にとどまらず、カラーハーフトーン、ドットゲイン（インクの滲み）、ドットの形状制御、アンチエイリアスといった高度な描画モジュールを備えています。
+
+### 主な特徴
+- **六角形ドットグリッド**: 自然で隙間の少ない、伝統的な印刷物に近いアプローチ。
+- **柔軟なトーン制御**: 輝度反転、ドットゲイン補正、非線形なドットサイズカーブによる緻密なコントラスト設計。
+- **高品質なエッジ処理**: セル距離に基づく計算とソフトネス調整が可能なアンチエイリアス処理。
+- **カラー表現の拡張**: ユーザー定義ドットカラー/背景色、入力画像への直接合成（Blend With Input）、元の色情報を用いたカラーハーフトーンのサポート。
+- **ダイナミックな最適化**: 解像度やスクリーン密度（網点の細かさ）に応じた動的なサンプリング間引きと、不要ピクセルの計算スキップ（高密度モード）。
 
 ---
 
-_このドキュメントは MugSimpleHalftone.fuse v2.60 に基づいて作成されています。_
+## 2. アーキテクチャと処理フロー (Architecture & Processing Flow)
+
+プラグインの実行プロセスは、DaVinci Resolve の UI パラメータを解釈する CPU 処理 (`Process()` 関数) と、画像処理の重い負荷を担う 2つの GPU カーネル (`CellInfoKernel`, `RenderDotsKernel`) で構成されます。
+
+```mermaid
+graph TD
+    A[入力画像 (Input Image)] --> CPU[CPU: Process<br/>パラメータ初期化・UI制御]
+    CPU --> C_K[GPU: CellInfoKernel<br/>セルごとの輝度・色・半径を計算]
+    
+    C_K --> B1[cell_info1<br/>セル位置情報]
+    C_K --> B2[cell_info2<br/>ドット半径・輝度情報]
+    C_K --> B3[cell_info3<br/>セル平均色情報]
+    
+    B1 --> R_K[GPU: RenderDotsKernel<br/>各ピクセルの最終色をサンプリング・合成]
+    B2 --> R_K
+    B3 --> R_K
+    A --> R_K
+    CPU --> R_K
+    
+    R_K --> Z[最終出力画像 (Output)]
+
+    style CPU fill:#f3e5f5,stroke:#9c27b0
+    style C_K fill:#e1f5fe,stroke:#03a9f4
+    style R_K fill:#e1f5fe,stroke:#03a9f4
+    style B1 fill:#fff59d,stroke:#fbc02d
+    style B2 fill:#fff59d,stroke:#fbc02d
+    style B3 fill:#fff59d,stroke:#fbc02d
+```
+
+### 処理の2段階構造
+1. **CellInfoKernel (セル情報の抽出)**: 
+   全ピクセルではなく「ドット1つ分（セル）」ごとにスレッドが走ります。セルが受け持つ入力画像の領域を円形サンプリングして、そのセルの平均輝度・平均色を求め、このセルに描画すべきドットの「半径」を算出します。
+2. **RenderDotsKernel (最終画像の描画)**: 
+   全ピクセルごとにスレッドが走ります。自分がどのセルのドットに含まれるか（または隣接セルのドットが自分に被ってくるか）を計算し、最終的な出力色と透明度を決定します。
+
+---
+
+## 3. GPU カーネルの設計詳細とデータ構造 (GPU Kernel Design Details)
+
+CPUからカーネルへ情報を中継し、2つのカーネル間でデータを共有するために、3つの浮動小数点テクスチャバッファ（`cell_info1, 2, 3`）を使用します。
+
+### cell_info バッファの仕様
+
+| バッファ | チャンネル | 格納されるデータ | 役割の説明 |
+| :--- | :--- | :--- | :--- |
+| **cell_info1** | `.x` | `cellIDX` | グリッド座標系でのX位置 (0〜dstSize[0]-1) |
+| | `.y` | `cellIDY` | グリッド座標系でのY位置 (0〜dstSize[1]-1) |
+| | `.z` | `cellCenterX` | ピクセル座標系でのセル中心のX座標 |
+| | `.w` | `cellCenterY` | ピクセル座標系でのセル中心のY座標 |
+| **cell_info2** | `.x` | `avgLuma` | コントラスト調整後の平均輝度 (0.0〜1.0) |
+| | `.y` | `dotRadius` | セルに描画すべきドットの半径 (ピクセル単位) |
+| | `.z` | `isOddRow` | 行オフセットフラグ。六角形グリッドの奇数行ズレ判定用 (1=オフセット) |
+| | `.w` | (予約済み) | 常に 1.0 (将来のドット形状拡張用) |
+| **cell_info3** | `.x` | `avgColor.R` | セル円形範囲内の平均色の赤成分 (0.0〜1.0) |
+| | `.y` | `avgColor.G` | 平均色の緑成分 (0.0〜1.0) |
+| | `.z` | `avgColor.B` | 平均色の青成分 (0.0〜1.0) |
+| | `.w` | `avgColor.A` | 平均色のアルファ成分 (透明度) |
+
+GPU 側でセルの幅や高さを算出し（`screenDensity` に基づく）、これらのバッファに一度書き出すことで、描画カーネル (`RenderDotsKernel`) では高負荷な画像サンプリングを再度行う必要がなく、近傍セルのデータをテクスチャフェッチするだけで済みます。
+
+---
+
+## 4. ドット生成のメカニズム (Mechanism of Dot Generation)
+
+ドットが生成されるプロセスは、5つの主要なステージに分解されます。各UIパラメータが内部でどのように数式化されているかを詳述します。
+
+### ステージ 1: セルグリッド設計 (Screen Density)
+UI からの `Screen Density` を基に、六角形グリッド構成のピッチ（間隔）をカーネル内で算出します。
+六角形を作るため、Y方向のピッチは $X \times \frac{\sqrt{3}}{2}$ となります（コード内では定数 `SIN60 = 0.866025` を乗算）。
+
+*奇数行 (`isOddRow`) は常にX方向に半セル分オフセットされ、蜂の巣状（ハニカム）の配置を実現します。*
+
+### ステージ 2: 輝度統計とトーン正規化 (Contrast / Invert / Dot Gain / Curve)
+`CellInfoKernel` はセル範囲内を「円形サンプリング」して平均輝度を算出します。
+その後、各種パラメータで補正をかけ、$T$ (Tonal Value) を生成します。
+
+1. **基本輝度**: $L = 0.3R + 0.59G + 0.11B$
+2. **Contrast**: $L_{adj} = \mathrm{saturate}(0.5 + (L - 0.5) \times \text{Contrast})$
+3. **Invert Brightness**: 反転モードの場合 $T_0 = L_{adj}$、通常は $T_0 = 1.0 - L_{adj}$
+4. **Dot Gain**: $T_1 = \mathrm{saturate}(T_0 + \text{DotGain})$
+5. **Dot Size Curve**: $T = \mathrm{saturate}(T_1)^{\max(\text{DotSizeCurve}, \, 10^{-4})}$
+
+### ステージ 3: 半径決定とカットオフ (Cutoffs & Max Radius)
+導き出された $T$ を用いて実際のドット半径 ($R_{dot}$) を算出し、`cell_info2.y` に格納します。
+
+1. **Brightness Cutoff**: 反転モードでない場合、$L_{adj} \le \text{BrightnessCutoff}$ のセルのみ描画を許可します（条件外は $R_{dot}=0$）。
+2. **Cutoff Dot Radius (MinDotRadius)**: 計算された仮の半径が $\text{MinDotRadius}$ 未満であれば、ノイズとみなして $R_{dot}=0$ にします。
+3. **最大限界値 (Clip Dot Radius)**: 極端なインク溜まりを防ぐため、物理的な最大セル半径 (`maxCellRadius`) に上限比率 (`ClipDotRadius`) を掛けた値でクランプします。
+$$ R_{dot} = \min(T \times \text{maxCellRadius},\; \text{maxCellRadius} \times \text{ClipDotRadius}) $$
+
+### ステージ 4: 描画側のピクセルカバレッジとAA (Antialias)
+今度は `RenderDotsKernel` 側の処理です。各ピクセルは、自分が属するメインセルと「周囲の隣接セル（最大6つ）」から、自分に被さるドット半径情報を取得します。
+
+最も強く被さるドット（Coverage が最大のもの）を探します。中心座標からの距離が $d$ のとき、カバレッジ $\alpha$ は以下のように計算されます。
+- `Enable Dot Antialias` **オフ**: $d \le R_{dot}$ なら $1.0$、それ以外は $0.0$。
+- `Enable Dot Antialias` **オン**: エッジの羽ばたき幅（ソフトネス）を $w = \text{AAEdgeSoftness} \times \text{averageCellPitch}$ として、
+$$ \alpha = \mathrm{saturate}\left( \frac{R_{dot} - d}{w} \right) $$
+*(半径より内側の完全な中心部は $1.0$ になります)*
+
+### ステージ 5: 最終色の合算 (Color Blending)
+最終的な描画色は「背景 (BaseColor)」と「ドット色 (DotColor)」をカバレッジでアルファ合成 (`blendDotOver`) します。
+
+- **DotColor**: `Use Original Color` がオンなら `cell_info3` の平均色($\mathrm{RGB}$) に $(1 - L)$ の重みを掛けた値を使用します。オフならUIの `Dot Color` の単色を使用します。
+- **BaseColor**: `Blend With Input` がオンなら元の入力画像をベースとし、オフなら `Paper Color`（プリセットまたはカスタム指定色）を使用します。
+
+---
+
+## 5. UI パラメータリファレンス (UI Parameter Reference)
+
+DaVinci Resolve のインスペクタに表示される全パラメータの一覧です。
+
+| セクション | パラメータ名 | デフォルト | 範囲 | 説明 |
+| :--- | :--- | :--- | :--- | :--- |
+| **Main** | Screen Density | 150.0 | 1 - 1000.0 | 画面全体のセルの細かさ。値が大きいほどドットが細密になります。 |
+| | Contrast | 1.0 | 0.1 - 15.0 | 元画像のコントラストを増減させます。ドット化のメリハリに直結します。 |
+| **Dot** | Dot Gain | 0.0 | -1.0 - 1.0 | 紙に滲んでドットが太る（またはかすれて細る）オフセットバイアスです。 |
+| | Dot Size Curve | 1.0 | 0.01 - 5.0 | ドットサイズの成長カーブです。1.0で線形。大きな値で暗部を中心にドットが付きます。 |
+| | Invert Brightness | 0 (Off) | Checkbox | オンにすると、明るい部分のドットが大きく、暗い部分のドットが小さくなります。 |
+| | Brightness Cutoff | 0.75 | 0.0 - 1.0 | ドットを配置する明度の限界値（白飛びの領域など）。 |
+| | Cutoff Dot Radius | 0.05 | 0.0 - 1.0 | 描画する最小のドット半径。これ未満のゴミのようなドットを排除します。 |
+| | Clip Dot Radius | 1.0 | 0.0 - 1.0 | ドットの最大サイズの上限クリップ値です。 |
+| | Enable Dot Antialias | 0 (Off) | Checkbox | ドットの境界を滑らかにフェザー（ぼかし）処理するかどうか。 |
+| | AA Edge Softness | 0.25 | 0.0 - 1.0 | アンチエイリアス境界の幅。セルピッチに対する比率です。 |
+| | Use Original Color | 0 (Off) | Checkbox | ドット色として、元の入力画像のピクセルカラーを採用します。 |
+| | Dot Color (R/G/B/A) | 0,0,0,1 | 0.0 - 1.0 | Use Original Color がオフの時に使用される前景色（インクの色）。 |
+| **Paper** | Blend With Input | 0 (Off) | Checkbox | 紙色を無視して、生成したドットパターンを元の入力画像に直接オーバーレイ合成します。 |
+| | Paper Color Preset | Custom | Dropdown | Newspaper, Vintage などの一般的な紙の背景色をワンクリックで適応します。 |
+| | Paper Color (R/G/B/A)| 1,1,1,1 | 0.0 - 1.0 | 背景色（紙の色）。手動で指定できます。プリセット選択時は自動上書きされます。 |
+
+---
+
+## 6. パフォーマンスと最適化戦略 (Performance & Optimization)
+
+本プラグインは、OpenCL 上でのリアルタイム駆動を大前提としており、以下の最適化アルゴリズムが組み込まれています。
+
+1. **空間サンプリングの間引き (CellInfoKernel)**
+   `Screen Density` の値が極端に低く、一つのセル半径が非常に大きくなる場合 (`SAMPLING_STEP_THRESHOLD` = 12.0 以上)、全ピクセルを走査すると非常に重くなります。この場合、サンプリングを2ピクセル（`SAMPLING_STEP_LARGE` = 2）ごとにスキップしつつ、取得ウェイトを自動補正して高速に近似値を算出します。
+
+2. **高密度モード時の走査削減 (RenderDotsKernel)**
+   描画時、ピクセルが「自分に被さるドット」を探すために隣接6方向を走査します。しかし `HIGH_DENSITY_THRESHOLD` のようにセルが非常に小さい（半径が `MIN_CHECK_RADIUS = 1.5` 以下）の環境では、隣の隣など遠くのセルまでチェックする必要がなくなります。この場合、条件分岐によって周囲全6方向ではなく、「自分の座標から一番近い最大2方向」のみをチェックし、VRAMアクセスコストを大きく引き下げています。
+
+3. **早期リターン処理**
+   `CellInfoKernel` では円形範囲外のピクセルアクセスを避けるための境界ボックスと平方根回避（二乗比較への置き換え）を導入。
+   また、ドット半径が閾値 (`DOT_RADIUS_THRESHOLD = 0.1`) 未満の描画をスキップすることでアイドルスレッドを早々に終了させます。
+
+---
+
+## 7. 実践的な使い方・Tips (Practical Use Cases & Tips)
+
+### アメリカンコミック / ポップアート風
+- **Screen Density:** `60〜80` (かなり粗め)
+- **Use Original Color:** `On`
+- **Dot Size Curve:** `1.2` 〜 `1.5` (少しコントラストを硬くする)
+- **Paper Color Preset:** `Pure White` にしつつ、必要に応じて背景にベタ塗り映像を敷く。
+
+### 古い新聞記事 (Newspaper Print)
+- **Screen Density:** `150〜180`
+- **Use Original Color:** `Off` (単色の黒インク)
+- **Dot Gain:** `0.05 〜 0.1` (インクの染み出しを模倣)
+- **Brightness Cutoff:** `0.85`
+- **Paper Color Preset:** `Newspaper` (わずかに黄ばんだ再生紙風)
+
+### 網点の「穴」を抜く表現
+黒いドットで表現するのではなく、「黒い紙から白いドットの穴を抜く」ような逆転現象を作りたい場合：
+- **Invert Brightness:** `On`
+- **Dot Color:** 白やグレー
+- **Paper Color:** 黒や暗色
+- **Clip Dot Radius:** `0.85` (最大ドットを少し抑えることで、完全に白く潰しきらず穴感を残す)
+
+---
+
+## 8. 技術的制約と今後の展望 (Constraints & Future Scope)
+
+- **GPU制約**: DaVinci Resolve の OpenCL/CUDA 環境を強く前提としたハードウェア実装です。CPUへのフォールバック機能はありません。
+- **解像度と密度の限界**: `Screen Density` を法外な数値に引き上げたり、16Kのような異常解像度で使用する場合、テクスチャメモリのフェッチ回数が並行処理の上限を突破し、フレームドロップが発生する可能性があります。
+- **将来の拡張**: 現在未使用の `cell_info2.w` チャンネルなどを活用し、単なる円形ドットだけでなく「ライン（線画）」「クロスハッチング」「カスタム図形（星型や四角形など）」へのアルゴリズムの拡張を計画できる設計基盤となっています。
+
+---
+*Generated based on source code MugSimpleHalftone.fuse v2.60*
