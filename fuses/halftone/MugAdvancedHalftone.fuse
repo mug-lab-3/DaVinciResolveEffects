@@ -347,7 +347,8 @@ __DEVICE__ float checkCellDot(
     if (cellPos.x >= 0.0f && cellPos.x < cellGridNum.x &&
         cellPos.y >= 0.0f && cellPos.y < cellGridNum.y) {
 
-        const float2 cellUV = (cellPos + to_float2(0.5f, 0.5f)) / cellGridNum;
+        // 浮動小数点誤差による境界セル（Y=0）のクランプ落ちを防ぐため、サンプリング中心座標に0.0001fの安全なオフセットを加算
+        const float2 cellUV = (cellPos + to_float2(0.5001f, 0.5001f)) / cellGridNum;
 
         const float4 cellInfo2Data = _tex2DVecN(cell_info2, cellUV.x, cellUV.y, 15);
         const float dotRadius = cellInfo2Data.y;
@@ -494,7 +495,8 @@ __DEVICE__ void updateBestCell(
         float4 candidateDotColor = userDotColor;
         float candidateStrength = coverageCandidate;
         if (useOriginalColorFlag != 0) {
-            const float2 baseUV = (candidatePos + to_float2(0.5f, 0.5f)) / cellGridNum;
+            // 誤差落ち防止の安全なUVの中心マージン
+            const float2 baseUV = (candidatePos + to_float2(0.5001f, 0.5001f)) / cellGridNum;
             if (shiftVal == 0.0f) {
                 // 最適化: シフトがない場合は1回のサンプリングで済ませる
                 candidateDotColor = _tex2DVecN(cell_info3, baseUV.x, baseUV.y, 15);
@@ -657,7 +659,6 @@ __KERNEL__ void RenderDotsKernel(
             }
             if (checkCount > 2) checkCount = 2; // 高速化版は常に最大2セルしかチェックしない想定だが四角形では斜めが必要かも。とりあえず2つで稼働。
         }
-
         for (int i = 0; i < checkCount; i++) {
             const int index = checkIndices[i];
             if (index < 0) continue;
@@ -1106,7 +1107,7 @@ function Process(req)
 
     -- セルの配列サイズを計算
     local cellGridNumX = math.ceil(width / cellPitchX) + 3
-    local cellGridNumY = math.ceil(height / cellPitchY) + 2
+    local cellGridNumY = math.ceil(height / cellPitchY) + 3
 
     -- セル情報用の中間バッファを作成
     local cellInfo1 = Image({
