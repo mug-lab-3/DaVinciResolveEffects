@@ -21,15 +21,17 @@ CellInfoParams = [[
   int dstSize[2];         // 出力サイズ(cell数)
   float screenDensity;    // スクリーン密度（GPU側でセルサイズ計算用）
   float contrast;         // コントラスト調整
+  float aspectRatio;      // ドットの縦横比
   float dotGain;          // ドットゲイン効果
-  float brightnessCutoff; // 明るさの閾値
-  float minDotRadius;     // 最小ドット半径
   float dotCurve;         // ドットサイズカーブ係数
-  int useOriginalColor;   // 元の色を使用するかどうか
+  float minDotRadius;     // 最小ドット半径
+  float clipRadius;       // クリッピング半径
   float positionJitter;   // 位置のジッター（ズレ）
   float sizeJitter;       // サイズのジッター（ムラ）
-  float clipRadius;       // クリッピング半径
+  float aspectJitter;     // アスペクト比のジッター（ブレ幅）
   int invertMode;         // 輝度を反転してドットを生成するか
+  float brightnessCutoff; // 明るさの閾値
+  int useOriginalColor;   // 元の色を使用するかどうか
 ]]
 
 -- セル情報計算カーネル
@@ -78,12 +80,12 @@ __KERNEL__ void CellInfoKernel(
     // 浮動小数点の sin() や fract() ではなく、ビット演算によるハッシュ関数を使用する。
     const uint ux = (uint)x;
     const uint uy = (uint)y;
-    
+
     // PCGベースのシンプルハッシュ
     uint h = ux * 374761393u + uy * 668265263u;
     h = (h ^ (h >> 13)) * 12741261u;
     const uint h1 = h ^ (h >> 16);
-    
+
     h = ux * 2654435761u + uy * 2246822507u;
     h = (h ^ (h >> 13)) * 12741261u;
     const uint h2 = h ^ (h >> 16);
@@ -92,11 +94,18 @@ __KERNEL__ void CellInfoKernel(
     h = (h ^ (h >> 13)) * 12741261u;
     const uint h3 = h ^ (h >> 16);
 
+    h = ux * 1045330811u + uy * 2191590403u; // 4th hash for Aspect Jitter
+    h = (h ^ (h >> 13)) * 12741261u;
+    const uint h4 = h ^ (h >> 16);
+
     // 浮動小数点の精度落ちによる差異を防ぐため24bit(0x00FFFFFF)にマスクして正規化し -1.0 〜 1.0 にする
     const float normConst = 1.0f / (float)0x00FFFFFF;
     const float randX = (float)(h1 & 0x00FFFFFF) * normConst * 2.0f - 1.0f;
     const float randY = (float)(h2 & 0x00FFFFFF) * normConst * 2.0f - 1.0f;
     const float randS = (float)(h3 & 0x00FFFFFF) * normConst * 2.0f - 1.0f;
+    const float randAspect = (float)(h4 & 0x00FFFFFF) * normConst * 2.0f - 1.0f;
+
+    const float finalAspect = _fmaxf(0.1f, params->aspectRatio * (1.0f + params->aspectJitter * randAspect));
 
     // GPU側でセルサイズを動的計算（CPU負荷削減）
     const float SIN60 = 0.866025f; // √3/2
@@ -119,7 +128,7 @@ __KERNEL__ void CellInfoKernel(
     // セルの中心位置をピクセル座標で計算し、位置ジッターを適用
     const float jitterAmountX = params->positionJitter * halfPitchX;
     const float jitterAmountY = params->positionJitter * halfPitchY;
-    
+
     const float cellCenterX = ((float)x * cellPitchX) + halfPitchX + rowOffset + (randX * jitterAmountX);
     const float cellCenterY = ((float)y * cellPitchY) + halfPitchY - yOffset + (randY * jitterAmountY);
 
@@ -153,7 +162,7 @@ __KERNEL__ void CellInfoKernel(
     // 無効な範囲の早期リターン（GPU効率向上）
     if (minX > maxX || minY > maxY) {
         _tex2DVec4Write(dst_info1, x, y, cellInfo1);
-        _tex2DVec4Write(dst_info2, x, y, to_float4(0.5f, 0.0f, (float)isOddRow, 1.0f));
+        _tex2DVec4Write(dst_info2, x, y, to_float4(0.5f, 0.0f, (float)isOddRow, finalAspect));
         _tex2DVec4Write(dst_info3, x, y, to_float4(0.0f, 0.0f, 0.0f, 1.0f));
         return;
     }
@@ -250,7 +259,7 @@ __KERNEL__ void CellInfoKernel(
         avgLuma,         // セル輝度値
         dotRadius,       // ドット半径
         (float)isOddRow, // 行オフセットフラグ
-        1.0f             // 予約済み
+        finalAspect      // アスペクト比
     };
 
     // 結果を書き込み
@@ -302,6 +311,7 @@ __DEVICE__ float checkCellDot(
 
         const float4 cellInfo2Data = _tex2DVecN(cell_info2, cellUV.x, cellUV.y, 15);
         const float dotRadius = cellInfo2Data.y;
+        const float finalAspect = cellInfo2Data.w;
 
         if (dotRadius <= 0.0f)
             return 0.0f;
@@ -319,16 +329,24 @@ __DEVICE__ float checkCellDot(
         if (absDiff.x > bbSize || absDiff.y > bbSize)
             return 0.0f;
 
+        // アスペクト比の適用（ドットがセル外にはみ出してクリップされないよう、常に縮小方向へスケールする）
+        float2 measureDiff = absDiff;
+        if (finalAspect > 1.0f) {
+            measureDiff.x *= finalAspect; // X方向を縮小（縦長になる）
+        } else if (finalAspect < 1.0f) {
+            measureDiff.y /= _fmaxf(0.01f, finalAspect); // Y方向を縮小（横長になる）
+        }
+
         float distSq = 0.0f;
         float dist = 0.0f;
 
         if (dotShape == 0) { // Circle
-            distSq = diff.x * diff.x + diff.y * diff.y;
+            distSq = measureDiff.x * measureDiff.x + measureDiff.y * measureDiff.y;
             dist = _sqrtf(distSq);
         } else if (dotShape == 1) { // Square
-            dist = _fmaxf(absDiff.x, absDiff.y);
+            dist = _fmaxf(measureDiff.x, measureDiff.y);
         } else if (dotShape == 2) { // Diamond
-            dist = (absDiff.x + absDiff.y) * 0.70710678f;
+            dist = (measureDiff.x + measureDiff.y) * 0.70710678f;
         }
 
         if (aaEdgeWidth <= 0.0f) {
@@ -456,7 +474,7 @@ __KERNEL__ void RenderDotsKernel(
     const float intWidth = (float)params->srcSize[0];
     const float intHeight = (float)params->srcSize[1];
     const int blendWithInput = params->blendWithInput > 0 ? 1 : 0;
-    
+
     // RGBShift offsets (Red goes Top-Left, Blue goes Bottom-Right, Green stays center)
     const float shiftVal = (blendWithInput != 0 || useOriginalColorFlag != 0) ? params->rgbShift : 0.0f;
     const float2 shiftROFF = to_float2(-shiftVal / intWidth, -shiftVal / intHeight);
@@ -469,7 +487,7 @@ __KERNEL__ void RenderDotsKernel(
     if (blendWithInput != 0) {
         const float px = (float)x / intWidth;
         const float py = (float)y / intHeight;
-        
+
         if (shiftVal == 0.0f) {
             // 最適化: シフトがない場合は1回のサンプリングで済ませる
             inputColor = _tex2DVecN(src_img, px, py, 15);
@@ -484,7 +502,7 @@ __KERNEL__ void RenderDotsKernel(
 
     float bestCoverage = 0.0f;
     float bestStrength = -1.0f;
-    
+
     // BlendWithInputオン、UseOriginalColorオフの場合でも、ドットの基本色はユーザー指定色にする
     float4 bestDotColor = (blendWithInput != 0 && useOriginalColorFlag != 0) ? inputColor : userDotColor;
 
@@ -607,7 +625,8 @@ function Create()
         INP_Default = 0.0,
         INP_MinAllowed = 0.0,
         INP_MaxAllowed = 20.0,
-        INPS_StatusText = "Simulates color plate misalignment. Only active when 'Use Original Color' or 'Blend With Input' is enabled.",
+        INPS_StatusText =
+        "Simulates color plate misalignment. Only active when 'Use Original Color' or 'Blend With Input' is enabled.",
     })
 
     self:BeginControlNest("Dot", "Dot", true);
@@ -620,6 +639,15 @@ function Create()
         { CCS_AddString = "Square" },
         { CCS_AddString = "Diamond" },
         INPS_StatusText = "Select the shape of the halftone dots",
+    })
+
+    InAspectRatio = self:AddInput("Dot Aspect Ratio", "AspectRatio", {
+        LINKID_DataType = "Number",
+        INPID_InputControl = "SliderControl",
+        INP_Default = 0.0,
+        INP_MinAllowed = -1.0,
+        INP_MaxAllowed = 1.0,
+        INPS_StatusText = "Adjusts the base aspect ratio of the dots (-1.0 to 1.0 mapped to 0.25x to 4x)",
     })
 
     InDotGain = self:AddInput("Dot Gain", "DotGain", {
@@ -640,6 +668,24 @@ function Create()
         INPS_StatusText = "Adjusts the growth curve of dot sizes (1.0 = linear)",
     })
 
+    InCutoffDotRadius = self:AddInput("Cutoff Dot Radius", "MinDotRadius", {
+        LINKID_DataType = "Number",
+        INPID_InputControl = "SliderControl",
+        INP_Default = 0.05,
+        INP_MinAllowed = 0.0,
+        INP_MaxAllowed = 1.0,
+        INPS_StatusText = "Dots smaller than this radius are not drawn",
+    })
+
+    InClipDotRadius = self:AddInput("Clip Dot Radius", "ClipDotRadius", {
+        LINKID_DataType = "Number",
+        INPID_InputControl = "SliderControl",
+        INP_Default = 1.0,
+        INP_MinAllowed = 0.0,
+        INP_MaxAllowed = 1.0,
+        INPS_StatusText = "Controls the maximum size of dots in the halftone pattern",
+    })
+
     InPositionJitter = self:AddInput("Position Jitter", "PositionJitter", {
         LINKID_DataType = "Number",
         INPID_InputControl = "SliderControl",
@@ -658,6 +704,15 @@ function Create()
         INPS_StatusText = "Randomly varies the size of the dots to simulate imperfect printing",
     })
 
+    InAspectJitter = self:AddInput("Aspect Jitter", "AspectJitter", {
+        LINKID_DataType = "Number",
+        INPID_InputControl = "SliderControl",
+        INP_Default = 0.0,
+        INP_MinAllowed = 0.0,
+        INP_MaxAllowed = 1.0,
+        INPS_StatusText = "Randomly varies the aspect ratio of each dot to simulate paper grain or print roller slip",
+    })
+
     InInvertMode = self:AddInput("Invert Brightness", "InvertMode", {
         LINKID_DataType = "Number",
         INPID_InputControl = "CheckboxControl",
@@ -672,24 +727,6 @@ function Create()
         INP_MinAllowed = 0.0,
         INP_MaxAllowed = 1.0,
         INPS_StatusText = "Brightness threshold controlling dot placement; flips when Invert Brightness is enabled",
-    })
-
-    InCutoffDotRadius = self:AddInput("Cutoff Dot Radius", "MinDotRadius", {
-        LINKID_DataType = "Number",
-        INPID_InputControl = "SliderControl",
-        INP_Default = 0.05,
-        INP_MinAllowed = 0.0,
-        INP_MaxAllowed = 1.0,
-        INPS_StatusText = "Dots smaller than this radius are not drawn",
-    })
-
-    InClipDotRadius = self:AddInput("Clip Dot Radius", "ClipDotRadius", {
-        LINKID_DataType = "Number",
-        INPID_InputControl = "SliderControl",
-        INP_Default = 1.0,
-        INP_MinAllowed = 0.0,
-        INP_MaxAllowed = 1.0,
-        INPS_StatusText = "Controls the maximum size of dots in the halftone pattern",
     })
 
     InEnableDotAntialias = self:AddInput("Enable Dot Antialias", "EnableDotAntialias", {
@@ -880,19 +917,32 @@ function Process(req)
     -- 入力パラメータの取得
     local contrast = InContrast:GetValue(req).Value
     local screenDensity = InScreenDensity:GetValue(req).Value
-    local dotGain = InDotGain:GetValue(req).Value
-    local invertMode = InInvertMode:GetValue(req).Value
-    local useOriginalColor = InUseOriginalColor:GetValue(req).Value
     local rgbShift = InRGBShift:GetValue(req).Value
+
     local dotShape = InDotShape:GetValue(req).Value
-    local enableDotAntialias = InEnableDotAntialias:GetValue(req).Value > 0.5
-    local positionJitter = InPositionJitter:GetValue(req).Value
-    local sizeJitter = InSizeJitter:GetValue(req).Value
-    local aaEdgeSoftness = InAAEdgeSoftness:GetValue(req).Value
+    local aspectRatioSlider = InAspectRatio:GetValue(req).Value
+    -- Convert UI linear range (-1.0 to 1.0) into exponential scaling multiplier (0.25 to 4.0)
+    -- This provides symmetric visual scaling behavior.
+    -- +1.0 -> 2^2 = 4 (tall)
+    --  0.0 -> 2^0 = 1 (circle)
+    -- -1.0 -> 2^-2 = 0.25 (wide)
+    local aspectRatio = math.pow(2.0, aspectRatioSlider * 2.0)
+    local dotGain = InDotGain:GetValue(req).Value
     local dotSizeCurve = InDotSizeCurve:GetValue(req).Value
-    local brightnessCutoff = InBrightnessCutoff:GetValue(req).Value
     local cutoffDotRadius = InCutoffDotRadius:GetValue(req).Value
     local maxDotRadius = InClipDotRadius:GetValue(req).Value
+
+    local positionJitter = InPositionJitter:GetValue(req).Value
+    local sizeJitter = InSizeJitter:GetValue(req).Value
+    local aspectJitter = InAspectJitter:GetValue(req).Value
+
+    local invertMode = InInvertMode:GetValue(req).Value
+    local brightnessCutoff = InBrightnessCutoff:GetValue(req).Value
+
+    local enableDotAntialias = InEnableDotAntialias:GetValue(req).Value > 0.5
+    local aaEdgeSoftness = InAAEdgeSoftness:GetValue(req).Value
+    local useOriginalColor = InUseOriginalColor:GetValue(req).Value
+
     local blendWithInput = InBlendWithInput:GetValue(req).Value
     local paperColor = {
         InPaperColorRed:GetValue(req).Value,
@@ -961,15 +1011,17 @@ function Process(req)
         params.dstSize[1] = cellGridNumY
         params.screenDensity = screenDensity -- GPU側でセルサイズ計算
         params.contrast = contrast
+        params.aspectRatio = aspectRatio
         params.dotGain = dotGain
-        params.brightnessCutoff = brightnessCutoff
+        params.dotCurve = dotSizeCurve
         params.minDotRadius = cutoffDotRadius
+        params.clipRadius = maxDotRadius
         params.positionJitter = positionJitter
         params.sizeJitter = sizeJitter
-        params.dotCurve = dotSizeCurve
-        params.useOriginalColor = useOriginalColor > 0.5 and 1 or 0
-        params.clipRadius = maxDotRadius
+        params.aspectJitter = aspectJitter
         params.invertMode = invertMode > 0.5 and 1 or 0
+        params.brightnessCutoff = brightnessCutoff
+        params.useOriginalColor = useOriginalColor > 0.5 and 1 or 0
 
         cellInfoNode:SetParamBlock(params)
         cellInfoNode:AddSampler("RowSampler", TEX_FILTER_MODE_POINT, TEX_ADDRESS_MODE_CLAMP,
