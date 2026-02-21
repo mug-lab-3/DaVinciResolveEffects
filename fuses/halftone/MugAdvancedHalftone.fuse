@@ -12,7 +12,7 @@ FuRegisterClass("MugAdvancedHalftone", CT_Tool, {
     REGS_IconID            = "Icons.Tools.Icons.AdvancedHalftone",
     REG_Source_GlobalCtrls = true,
     REG_Source_SizeCtrls   = true,
-    REG_Version            = 3.20,
+    REG_Version            = 1.00,
 })
 
 -- セル情報計算用パラメータ構造体
@@ -561,8 +561,9 @@ __KERNEL__ void RenderDotsKernel(
     const float shiftVal = (blendWithInput != 0 || useOriginalColorFlag != 0) ? params->rgbShift : 0.0f;
     const float2 shiftROFF = to_float2(-shiftVal / intWidth, -shiftVal / intHeight);
     const float2 shiftBOFF = to_float2( shiftVal / intWidth,  shiftVal / intHeight);
-    const float2 cellShiftROFF = to_float2(-shiftVal / cellGridNum.x, -shiftVal / cellGridNum.y);
-    const float2 cellShiftBOFF = to_float2( shiftVal / cellGridNum.x,  shiftVal / cellGridNum.y);
+    // cellInfo3 は画像全体（UV空間 0.0〜1.0）と同じ領域をマッピングしているため、ピクセル単位のズレ量は src と全く同じ UV オフセットになります
+    const float2 cellShiftROFF = shiftROFF;
+    const float2 cellShiftBOFF = shiftBOFF;
 
     float4 inputColor = paperColor;
 
