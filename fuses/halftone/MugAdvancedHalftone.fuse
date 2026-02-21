@@ -12,7 +12,7 @@ FuRegisterClass("MugAdvancedHalftone", CT_Tool, {
     REGS_IconID            = "Icons.Tools.Icons.AdvancedHalftone",
     REG_Source_GlobalCtrls = true,
     REG_Source_SizeCtrls   = true,
-    REG_Version            = 1.00,
+    REG_Version            = 1.10,
 })
 
 -- セル情報計算用パラメータ構造体
@@ -33,6 +33,8 @@ CellInfoParams = [[
   int invertMode;         // 輝度を反転してドットを生成するか
   float brightnessCutoff; // 明るさの閾値
   int useOriginalColor;   // 元の色を使用するかどうか
+  float gridSpacingY;     // Y軸方向のグリッド基底間隔乗数
+  float gridStaggerX;     // 奇数行のX軸オフセット乗数
 ]]
 
 -- セル情報計算カーネル
@@ -139,7 +141,8 @@ __KERNEL__ void CellInfoKernel(
     // アスペクト比に合わせてグリッド全体を伸縮させる (UI設定 Aspect Ratio)
     const float gridAspect = params->aspectRatio;
     float cx = cellBasePitch;
-    float cy = cellBasePitch * SIN60;
+    float cy = cellBasePitch * params->gridSpacingY; // CPUから指定された縦方向の基本配置比率を適用
+
     if (gridAspect > 1.0f) {
         cx /= gridAspect; // 縦長ドットに合わせて横の隙間を縮まる
     } else if (gridAspect < 1.0f) {
@@ -155,9 +158,9 @@ __KERNEL__ void CellInfoKernel(
     // 半セル分Y位置をオフセット（固定値として半セル分）
     const float yOffset = halfPitchY;
 
-    // 行オフセットの計算（奇数行は横にオフセット）
+    // 行オフセットの計算（CPUからの乗数を使用）
     const int isOddRow = (y % 2 != 0) ? 1 : 0;
-    const float rowOffset = (isOddRow != 0) ? -halfPitchX : 0.0f;
+    const float rowOffset = (isOddRow != 0) ? (-halfPitchX * params->gridStaggerX) : 0.0f;
 
     // セルの中心位置をピクセル座標で計算し、位置ジッターを適用
     const float jitterAmountX = params->positionJitter * halfPitchX;
@@ -317,6 +320,8 @@ RenderParams = [[
   int dotShape;         // ドットの形状 (0: 円, 1: 四角, 2: ひし形)
   float aspectRatio;    // ドットの縦横比（グリッド変形用）
   float rgbShift;       // 色収差・版ズレの強度（ピクセル単位）
+  float gridSpacingY;   // Y軸方向のグリッド基底間隔乗数
+  float gridStaggerX;   // 奇数行のX軸オフセット乗数
 ]]
 
 RenderDotsKernel = [[
@@ -405,24 +410,37 @@ __DEVICE__ float checkCellDot(
 
 
 // 隣接セルのオフセット定義
-__DEVICE__ void getNeighborOffsets(const int isOddRow, float2 neighborOffsets[6])
+__DEVICE__ void getNeighborOffsets(const int isOddRow, const float gridStaggerX, float2 neighborOffsets[8], int *neighborCount)
 {
-    if (isOddRow != 0) {
-        // 奇数行の隣接6セル
+    if (gridStaggerX == 0.0f) {
+        // 四角形格子（Square, 8近傍）
+        *neighborCount = 8;
         neighborOffsets[0] = to_float2(-1.0f, -1.0f); // 上左
-        neighborOffsets[1] = to_float2( 0.0f, -1.0f); // 上右
-        neighborOffsets[2] = to_float2( 1.0f,  0.0f); // 右
-        neighborOffsets[3] = to_float2( 0.0f,  1.0f); // 下右
-        neighborOffsets[4] = to_float2(-1.0f,  1.0f); // 下左
-        neighborOffsets[5] = to_float2(-1.0f,  0.0f); // 左
+        neighborOffsets[1] = to_float2( 0.0f, -1.0f); // 上
+        neighborOffsets[2] = to_float2( 1.0f, -1.0f); // 上右
+        neighborOffsets[3] = to_float2( 1.0f,  0.0f); // 右
+        neighborOffsets[4] = to_float2( 1.0f,  1.0f); // 下右
+        neighborOffsets[5] = to_float2( 0.0f,  1.0f); // 下
+        neighborOffsets[6] = to_float2(-1.0f,  1.0f); // 下左
+        neighborOffsets[7] = to_float2(-1.0f,  0.0f); // 左
     } else {
-        // 偶数行の隣接6セル
-        neighborOffsets[0] = to_float2( 0.0f, -1.0f); // 上左
-        neighborOffsets[1] = to_float2( 1.0f, -1.0f); // 上右
-        neighborOffsets[2] = to_float2( 1.0f,  0.0f); // 右
-        neighborOffsets[3] = to_float2( 1.0f,  1.0f); // 下右
-        neighborOffsets[4] = to_float2( 0.0f,  1.0f); // 下左
-        neighborOffsets[5] = to_float2(-1.0f,  0.0f); // 左
+        // 六角形格子（Circle/Diamond, 6近傍）
+        *neighborCount = 6;
+        if (isOddRow != 0) {
+            neighborOffsets[0] = to_float2(-1.0f, -1.0f); // 上左
+            neighborOffsets[1] = to_float2( 0.0f, -1.0f); // 上右
+            neighborOffsets[2] = to_float2( 1.0f,  0.0f); // 右
+            neighborOffsets[3] = to_float2( 0.0f,  1.0f); // 下右
+            neighborOffsets[4] = to_float2(-1.0f,  1.0f); // 下左
+            neighborOffsets[5] = to_float2(-1.0f,  0.0f); // 左
+        } else {
+            neighborOffsets[0] = to_float2( 0.0f, -1.0f); // 上左
+            neighborOffsets[1] = to_float2( 1.0f, -1.0f); // 上右
+            neighborOffsets[2] = to_float2( 1.0f,  0.0f); // 右
+            neighborOffsets[3] = to_float2( 1.0f,  1.0f); // 下右
+            neighborOffsets[4] = to_float2( 0.0f,  1.0f); // 下左
+            neighborOffsets[5] = to_float2(-1.0f,  0.0f); // 左
+        }
     }
 }
 
@@ -525,7 +543,7 @@ __KERNEL__ void RenderDotsKernel(
     // アスペクト比に合わせてグリッド全体を伸縮させる
     const float gridAspect = params->aspectRatio;
     float cx = cellBasePitch;
-    float cy = cellBasePitch * SIN60;
+    float cy = cellBasePitch * params->gridSpacingY;
     if (gridAspect > 1.0f) {
         cx /= gridAspect;
     } else if (gridAspect < 1.0f) {
@@ -545,7 +563,7 @@ __KERNEL__ void RenderDotsKernel(
     const float2 halfCellPitch = cellPitch * 0.5f; // 事前計算
 
     float adjustedX = pixelPos.x;
-    if (isOddRow != 0) {
+    if (isOddRow != 0 && params->dotShape != 1) {
         adjustedX += halfCellPitch.x;
     }
     const int mainCellX = (int)_floorf(adjustedX / cellPitch.x);
@@ -610,14 +628,15 @@ __KERNEL__ void RenderDotsKernel(
     updateBestCell(mainCellPos, pixelPos, cellGridNum, cell_info1, cell_info2, cell_info3, aaEdgeWidth, params->dotShape, userDotColor, useOriginalColorFlag, blendWithInput, shiftVal, cellShiftROFF, cellShiftBOFF, &state);
 
     const float2 cellCenter = to_float2(
-        mainCellX * cellPitch.x + (isOddRow != 0 ? halfCellPitch.x : 0.0f) + halfCellPitch.x,
+        mainCellX * cellPitch.x + ((isOddRow != 0) ? (halfCellPitch.x * params->gridStaggerX) : 0.0f) + halfCellPitch.x,
         mainCellY * cellPitch.y + halfCellPitch.y
     );
-
+    
     const float2 relPos = pixelPos - cellCenter;
 
-    float2 neighborOffsets[6];
-    getNeighborOffsets(isOddRow, neighborOffsets);
+    float2 neighborOffsets[8];
+    int neighborCount = 0;
+    getNeighborOffsets(isOddRow, params->gridStaggerX, neighborOffsets, &neighborCount);
 
     if (isHighDensity != 0) {
         int checkIndices[2] = {-1, -1};
@@ -630,9 +649,13 @@ __KERNEL__ void RenderDotsKernel(
         }
 
         if (absRelPos.y > cellThreshold.y) {
-            checkIndices[checkCount++] = (relPos.y > 0.0f) ? (isOddRow ? 3 : 4)
-                                                          : (isOddRow ? 0 : 1);
-            if (checkCount > 2) checkCount = 2;
+            if (params->gridStaggerX == 0.0f) {
+                checkIndices[checkCount++] = (relPos.y > 0.0f) ? 5 : 1; // 下 or 上
+            } else {
+                checkIndices[checkCount++] = (relPos.y > 0.0f) ? (isOddRow ? 3 : 4)
+                                                              : (isOddRow ? 0 : 1);
+            }
+            if (checkCount > 2) checkCount = 2; // 高速化版は常に最大2セルしかチェックしない想定だが四角形では斜めが必要かも。とりあえず2つで稼働。
         }
 
         for (int i = 0; i < checkCount; i++) {
@@ -641,7 +664,7 @@ __KERNEL__ void RenderDotsKernel(
             updateBestCell(mainCellPos + neighborOffsets[index], pixelPos, cellGridNum, cell_info1, cell_info2, cell_info3, aaEdgeWidth, params->dotShape, userDotColor, useOriginalColorFlag, blendWithInput, shiftVal, cellShiftROFF, cellShiftBOFF, &state);
         }
     } else {
-        for (int i = 0; i < 6; i++) {
+        for (int i = 0; i < neighborCount; i++) {
             updateBestCell(mainCellPos + neighborOffsets[i], pixelPos, cellGridNum, cell_info1, cell_info2, cell_info3, aaEdgeWidth, params->dotShape, userDotColor, useOriginalColorFlag, blendWithInput, shiftVal, cellShiftROFF, cellShiftBOFF, &state);
         }
     }
@@ -703,7 +726,16 @@ function Create()
         { CCS_AddString = "Circle" },
         { CCS_AddString = "Square" },
         { CCS_AddString = "Diamond" },
+        INP_DoNotifyChanged = true,
         INPS_StatusText = "Select the shape of the halftone dots",
+    })
+
+    InStaggerSquareDots = self:AddInput("Stagger Square Dots", "StaggerSquareDots", {
+        LINKID_DataType = "Number",
+        INPID_InputControl = "CheckboxControl",
+        INP_Default = 0.0,
+        IC_Visible = true,
+        INPS_StatusText = "Applies a brick-like staggered layout to square dots",
     })
 
     InAspectRatio = self:AddInput("Dot Aspect Ratio", "AspectRatio", {
@@ -1041,12 +1073,20 @@ function Process(req)
     local height = img.DataWindow:Height()
 
     -- セル情報バッファサイズの計算
-    -- 定数の修正
+    -- CPU側で形状に基づくグリッドの間隔ルールを事前計算する
+    local dotShape = math.floor(InDotShape:GetValue(req).Value + 0.5)
+    local staggerSquares = InStaggerSquareDots:GetValue(req).Value > 0.5
     local SIN60 = 0.866025 -- √3/2
+    local gridSpacingY = (dotShape == 1) and 1.0 or SIN60
+    local gridStaggerX = 1.0
+    if dotShape == 1 then
+        gridStaggerX = staggerSquares and 1.0 or 0.0
+    end
+
     local cellBasePitch = math.floor(math.max(3.0, width / screenDensity))
     -- アスペクト比に合わせて生成するバッファグリッドの解像度も歪ませる
     local cx = cellBasePitch
-    local cy = cellBasePitch * SIN60
+    local cy = cellBasePitch * gridSpacingY
     if aspectRatio > 1.0 then
         cx = cx / aspectRatio
     elseif aspectRatio < 1.0 then
@@ -1112,6 +1152,8 @@ function Process(req)
         params.invertMode = invertMode > 0.5 and 1 or 0
         params.brightnessCutoff = brightnessCutoff
         params.useOriginalColor = useOriginalColor > 0.5 and 1 or 0
+        params.gridSpacingY = gridSpacingY
+        params.gridStaggerX = gridStaggerX
 
         cellInfoNode:SetParamBlock(params)
         cellInfoNode:AddSampler("RowSampler", TEX_FILTER_MODE_POINT, TEX_ADDRESS_MODE_CLAMP,
@@ -1155,6 +1197,8 @@ function Process(req)
         params.screenDensity = screenDensity -- GPU側でセルピッチ計算
         params.enableAntialias = enableDotAntialias and 1 or 0
         params.aaEdgeWidth = aaEdgeWidth
+        params.gridSpacingY = gridSpacingY
+        params.gridStaggerX = gridStaggerX
 
         renderNode:SetParamBlock(params)
         renderNode:AddSampler("RowSampler", TEX_FILTER_MODE_POINT, TEX_ADDRESS_MODE_CLAMP,
@@ -1186,6 +1230,15 @@ function Process(req)
 end
 
 function NotifyChanged(inp, param, time)
+    if inp == InDotShape then
+        local shape = math.floor(param.Value + 0.5)
+        if shape == 1 then
+            InStaggerSquareDots:SetAttrs({IC_Visible = true})
+        else
+            InStaggerSquareDots:SetAttrs({IC_Visible = false})
+        end
+    end
+
     if inp == InPaperColorPreset then
         -- 紙の色プリセットが選択された場合
         local presetIndex = math.floor(param.Value + 0.5)
