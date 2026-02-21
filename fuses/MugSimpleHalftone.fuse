@@ -12,7 +12,7 @@ FuRegisterClass("MugSimpleHalftone", CT_Tool, {
     REGS_IconID            = "Icons.Tools.Icons.SimpleHalftone",
     REG_Source_GlobalCtrls = true,
     REG_Source_SizeCtrls   = true,
-    REG_Version            = 3.00,
+    REG_Version            = 3.20,
 })
 
 -- セル情報計算用パラメータ構造体
