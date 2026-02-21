@@ -26,6 +26,7 @@ CellInfoParams = [[
   float dotCurve;         // ドットサイズカーブ係数
   float minDotRadius;     // 最小ドット半径
   float clipRadius;       // クリッピング半径
+  float jitterPhase;      // ジッターの連続的なノイズフェーズ（滑らかなアニメーション用）
   float positionJitter;   // 位置のジッター（ズレ）
   float sizeJitter;       // サイズのジッター（ムラ）
   float aspectJitter;     // アスペクト比のジッター（ブレ幅）
@@ -63,6 +64,25 @@ CellInfoKernel = [[
 #define SAMPLING_STEP_THRESHOLD 12.0f  // この値以上の半径でステップを増やす
 #define SAMPLING_STEP_LARGE 2          // 大きな半径での間引き率
 
+// -- ヘルパー関数: PCG Hash ベースの3Dハッシュ関数
+// アーキテクチャ間（CUDA, Metal等）で完全一致させるため、ビット演算を使用
+// 浮落小数の精度落ちによる差異を防ぐため24bit(0x00FFFFFF)にマスクして -1.0 〜 1.0 に正規化
+__DEVICE__ float hash3D(uint x, uint y, uint z, uint seedOffset) {
+    // 周期性を排除するための強力な非線形ハッシュ (Jenkins Hashベース)
+    uint h = x + y * 374761393u + z * 668265263u + seedOffset;
+    h += h << 10;
+    h ^= h >> 6;
+    h += h << 3;
+    h ^= h >> 11;
+    h += h << 15;
+    
+    // PCG系の最終ミックス
+    h = (h ^ (h >> 16)) * 2654435761u;
+    h = h ^ (h >> 16);
+    
+    return (float)(h & 0x00FFFFFF) * (1.0f / (float)0x00FFFFFF) * 2.0f - 1.0f;
+}
+
 __KERNEL__ void CellInfoKernel(
     __CONSTANTREF__ CellInfoParams *params,
     __TEXTURE2D__ src,
@@ -76,34 +96,36 @@ __KERNEL__ void CellInfoKernel(
     if (x >= params->dstSize[0] || y >= params->dstSize[1])
         return;
 
-    // 擬似乱数生成器 (Integer Hash) - アーキテクチャ間（CUDA, Metal等）で完全一致させるため、
-    // 浮動小数点の sin() や fract() ではなく、ビット演算によるハッシュ関数を使用する。
     const uint ux = (uint)x;
     const uint uy = (uint)y;
+    
+    // Jitter Phase から整数部（前と次のフレーム）と小数部（割合）を取得
+    const float phase = params->jitterPhase;
+    const float phaseBaseF = _floorf(phase);
+    const uint basePhase0 = (uint)phaseBaseF;
+    const uint basePhase1 = basePhase0 + 1;
+    
+    // 滑らかな補間のための Smoothstep カーブ (3t^2 - 2t^3)
+    const float fraction = phase - phaseBaseF;
+    const float t = fraction * fraction * (3.0f - 2.0f * fraction);
 
-    // PCGベースのシンプルハッシュ
-    uint h = ux * 374761393u + uy * 668265263u;
-    h = (h ^ (h >> 13)) * 12741261u;
-    const uint h1 = h ^ (h >> 16);
+    // 各ランダムパラメータについて、現在の整数フェーズと次の整数フェーズの値を算出し、t で線形補間する
+    // seedOffsetを変えることで、X, Y, S, Aspect それぞれに全く違うランダム系列を持たせる
+    const float randX0 = hash3D(ux, uy, basePhase0, 0u);
+    const float randX1 = hash3D(ux, uy, basePhase1, 0u);
+    const float randX = _mix(randX0, randX1, t);
 
-    h = ux * 2654435761u + uy * 2246822507u;
-    h = (h ^ (h >> 13)) * 12741261u;
-    const uint h2 = h ^ (h >> 16);
+    const float randY0 = hash3D(ux, uy, basePhase0, 10007u);
+    const float randY1 = hash3D(ux, uy, basePhase1, 10007u);
+    const float randY = _mix(randY0, randY1, t);
 
-    h = ux * 3266489909u + uy * 1360696711u;
-    h = (h ^ (h >> 13)) * 12741261u;
-    const uint h3 = h ^ (h >> 16);
+    const float randS0 = hash3D(ux, uy, basePhase0, 9973u);
+    const float randS1 = hash3D(ux, uy, basePhase1, 9973u);
+    const float randS = _mix(randS0, randS1, t);
 
-    h = ux * 1045330811u + uy * 2191590403u; // 4th hash for Aspect Jitter
-    h = (h ^ (h >> 13)) * 12741261u;
-    const uint h4 = h ^ (h >> 16);
-
-    // 浮動小数点の精度落ちによる差異を防ぐため24bit(0x00FFFFFF)にマスクして正規化し -1.0 〜 1.0 にする
-    const float normConst = 1.0f / (float)0x00FFFFFF;
-    const float randX = (float)(h1 & 0x00FFFFFF) * normConst * 2.0f - 1.0f;
-    const float randY = (float)(h2 & 0x00FFFFFF) * normConst * 2.0f - 1.0f;
-    const float randS = (float)(h3 & 0x00FFFFFF) * normConst * 2.0f - 1.0f;
-    const float randAspect = (float)(h4 & 0x00FFFFFF) * normConst * 2.0f - 1.0f;
+    const float randAspect0 = hash3D(ux, uy, basePhase0, 2191590403u);
+    const float randAspect1 = hash3D(ux, uy, basePhase1, 2191590403u);
+    const float randAspect = _mix(randAspect0, randAspect1, t);
 
     const float finalAspect = _fmaxf(0.1f, params->aspectRatio * (1.0f + params->aspectJitter * randAspect));
 
@@ -686,6 +708,15 @@ function Create()
         INPS_StatusText = "Controls the maximum size of dots in the halftone pattern",
     })
 
+    InJitterPhase = self:AddInput("Jitter Noise Phase", "JitterPhase", {
+        LINKID_DataType = "Number",
+        INPID_InputControl = "SliderControl",
+        INP_Default = 0.0,
+        INP_Integer = false,
+        INP_MinAllowed = 0.0,
+        INPS_StatusText = "Smoothly evolves the random pattern used for all jitters",
+    })
+
     InPositionJitter = self:AddInput("Position Jitter", "PositionJitter", {
         LINKID_DataType = "Number",
         INPID_InputControl = "SliderControl",
@@ -937,6 +968,7 @@ function Process(req)
     local cutoffDotRadius = InCutoffDotRadius:GetValue(req).Value
     local maxDotRadius = InClipDotRadius:GetValue(req).Value
 
+    local jitterPhase = InJitterPhase:GetValue(req).Value
     local positionJitter = InPositionJitter:GetValue(req).Value
     local sizeJitter = InSizeJitter:GetValue(req).Value
     local aspectJitter = InAspectJitter:GetValue(req).Value
@@ -1021,6 +1053,7 @@ function Process(req)
         params.dotCurve = dotSizeCurve
         params.minDotRadius = cutoffDotRadius
         params.clipRadius = maxDotRadius
+        params.jitterPhase = jitterPhase
         params.positionJitter = positionJitter
         params.sizeJitter = sizeJitter
         params.aspectJitter = aspectJitter
