@@ -15,62 +15,67 @@ FuRegisterClass("MugAdvancedHalftone", CT_Tool, {
     REG_Version            = 1.10,
 })
 
--- セル情報計算用パラメータ構造体
+-- Cell Information Calculation Parameters Structure
 CellInfoParams = [[
-  int srcSize[2];         // ソース画像のサイズ // TEX_NORMALIZED_COORDS_FALSE
-  int dstSize[2];         // 出力サイズ(cell数)
-  float screenDensity;    // スクリーン密度（GPU側でセルサイズ計算用）
-  float contrast;         // コントラスト調整
-  float aspectRatio;      // ドットの縦横比
-  float dotGain;          // ドットゲイン効果
-  float dotCurve;         // ドットサイズカーブ係数
-  float minDotRadius;     // 最小ドット半径
-  float clipRadius;       // クリッピング半径
-  float jitterPhase;      // ジッターの連続的なノイズフェーズ（滑らかなアニメーション用）
-  float positionJitter;   // 位置のジッター（ズレ）
-  float sizeJitter;       // サイズのジッター（ムラ）
-  float aspectJitter;     // アスペクト比のジッター（ブレ幅）
-  int invertMode;         // 輝度を反転してドットを生成するか
-  float brightnessCutoff; // 明るさの閾値
-  int useOriginalColor;   // 元の色を使用するかどうか
-  float gridSpacingY;     // Y軸方向のグリッド基底間隔乗数
-  float gridStaggerX;     // 奇数行のX軸オフセット乗数
+  int srcSize[2];         // Source image size // TEX_NORMALIZED_COORDS_FALSE
+  int dstSize[2];         // Output grid size (number of cells)
+  float screenDensity;    // Screen density (calculates cell size on GPU)
+  float contrast;         // Contrast adjustment applied to sampled luminance
+  float aspectRatio;      // Dot aspect ratio
+  float dotGain;          // Dot gain effect (ink spread simulation)
+  float dotCurve;         // Dot size growth curve coefficient
+  float minDotRadius;     // Minimum dot radius to draw
+  float clipRadius;       // Maximum allowed dot radius (clipping radius)
+  float jitterPhase;      // Continuous noise phase for jitter (for smooth animation)
+  float positionJitter;   // Position jitter (random offset)
+  float sizeJitter;       // Size jitter (random scale variation)
+  float aspectJitter;     // Aspect ratio jitter (random ratio variation)
+  int invertMode;         // Subtractive mode switch (inverts how luminance maps to dot size)
+  float brightnessCutoff; // Brightness threshold for generating dots
+  int useOriginalColor;   // Whether to use the original input color for dots
+  float gridSpacingY;     // Base spacing multiplier for Y-axis grid
+  float gridStaggerX;     // X-axis offset multiplier for odd rows
 ]]
 
--- セル情報計算カーネル
--- 中間バッファのフォーマット:
+-- Cell Information Calculation Kernel
+-- Intermediate buffer format:
 -- float4 cellInfo1:
---   x: セルIDX - グリッド座標系でのX位置 (整数値: 0 - dstSize[0]-1)
---   y: セルIDY - グリッド座標系でのY位置 (整数値: 0 - dstSize[1]-1)
---   z: セル中心位置X - ピクセル座標系でのX位置 (整数値: 0 - srcSize[0]-1)
---   w: セル中心位置Y - ピクセル座標系でのY位置 (整数値: 0 - srcSize[1]-1)
+--   x: Cell ID X - X position in grid coordinate system (Integer: 0 to dstSize[0]-1)
+--   y: Cell ID Y - Y position in grid coordinate system (Integer: 0 to dstSize[1]-1)
+--   z: Cell Center X - X position in pixel coordinate system (Integer: 0 to srcSize[0]-1)
+--   w: Cell Center Y - Y position in pixel coordinate system (Integer: 0 to srcSize[1]-1)
 --
 -- float4 cellInfo2:
---   x: セル輝度値 (0.0-1.0)
---   y: ドット半径 - 半径ドット数 (整数値: 0 - maxCellRadius)
---   z: 行オフセットフラグ - このセルの行はオフセットするか (整数値: 0=通常行, 1=オフセット行)
---   w: 予約済み - 将来拡張用 (常に1.0)
+--   x: Cell Luminance Value (0.0 to 1.0)
+--   y: Dot Radius - Number of pixels for radius (0 to maxCellRadius)
+--   z: Row Offset Flag - Whether this cell's row is offset (Integer: 0=Normal row, 1=Offset row)
+--   w: Final Aspect Ratio - The calculated local aspect ratio for this cell
 --
 -- float4 cellInfo3:
---   x: 元の色R成分 - オリジナルカラーモード用 (0.0 - 1.0)
---   y: 元の色G成分 - オリジナルカラーモード用 (0.0 - 1.0)
---   z: 元の色B成分 - オリジナルカラーモード用 (0.0 - 1.0)
---   w: 元の色Aチャンネル - 透明度 (0.0 - 1.0)
+--   x: Original Color R component - For Original Color Mode (0.0 to 1.0)
+--   y: Original Color G component - For Original Color Mode (0.0 to 1.0)
+--   z: Original Color B component - For Original Color Mode (0.0 to 1.0)
+--   w: Original Color A channel - Transparency (0.0 to 1.0)
 --
 --
--- ※レンダリングカーネルでは、各ピクセルが属するセルとその周辺セルの情報を参照して描画
+-- * Note: In the rendering kernel, each pixel samples its enclosing cell and neighboring cells for accurate overlap rendering.
 CellInfoKernel = [[
 #define LUMA_R 0.3f
 #define LUMA_G 0.59f
 #define LUMA_B 0.11f
-#define SAMPLING_STEP_THRESHOLD 12.0f  // この値以上の半径でステップを増やす
-#define SAMPLING_STEP_LARGE 2          // 大きな半径での間引き率
+#define SAMPLING_STEP_THRESHOLD 12.0f  // Increase step size for sampling radius larger than this value
+#define SAMPLING_STEP_LARGE 2          // Decimation rate (step size multiplier) for large radii
 
-// -- ヘルパー関数: PCG Hash ベースの3Dハッシュ関数
-// アーキテクチャ間（CUDA, Metal等）で完全一致させるため、ビット演算を使用
-// 浮落小数の精度落ちによる差異を防ぐため24bit(0x00FFFFFF)にマスクして -1.0 〜 1.0 に正規化
+// -- Helper Function: PCG Hash based 3D Hash Function
+// The rendering requires deterministic pseudo-random noise that matches exactly identically across 
+// different GPU APIs (CUDA, Metal, OpenCL, etc). Standard random implementations often drift due 
+// to floating-point precision differences across vendor hardware architectures.
+// Therefore, we use strictly integer-based bitwise operations for the initial high-entropy 
+// avalanching, before mathematically normalizing back into a -1.0 to 1.0 float space.
 __DEVICE__ float hash3D(uint x, uint y, uint z, uint seedOffset) {
-    // 周期性を排除するための強力な非線形ハッシュ (Jenkins Hashベース)
+    // Strong non-linear hash to eliminate periodicity (Based on Jenkins Hash/PCG patterns)
+    // The seedOffset allows us to reuse the same function for Position, Size, and Aspect, 
+    // yielding completely uncorrelated noise fields for each property.
     uint h = x + y * 374761393u + z * 668265263u + seedOffset;
     h += h << 10;
     h ^= h >> 6;
@@ -78,7 +83,7 @@ __DEVICE__ float hash3D(uint x, uint y, uint z, uint seedOffset) {
     h ^= h >> 11;
     h += h << 15;
     
-    // PCG系の最終ミックス
+    // Final mix (PCG style)
     h = (h ^ (h >> 16)) * 2654435761u;
     h = h ^ (h >> 16);
     
@@ -94,25 +99,28 @@ __KERNEL__ void CellInfoKernel(
 {
     DEFINE_KERNEL_ITERATORS_XY(x, y);
 
-    // 画像範囲外なら処理しない
+    // Do not process out-of-bounds pixels
     if (x >= params->dstSize[0] || y >= params->dstSize[1])
         return;
 
     const uint ux = (uint)x;
     const uint uy = (uint)y;
     
-    // Jitter Phase から整数部（前と次のフレーム）と小数部（割合）を取得
+    // Extract integer part (current/next frame) and fractional part (interpolation ratio) from Jitter Phase.
+    // This allows smoothly animating the random jitter by blending the calculated hash of the current 
+    // integer timeline phase and the next upcoming timeline phase.
     const float phase = params->jitterPhase;
     const float phaseBaseF = _floorf(phase);
     const uint basePhase0 = (uint)phaseBaseF;
     const uint basePhase1 = basePhase0 + 1;
     
-    // 滑らかな補間のための Smoothstep カーブ (3t^2 - 2t^3)
+    // Smoothstep curve (3t^2 - 2t^3) for seamless interpolation of random properties.
+    // Using a non-linear cubic curve prevents sudden velocity changes at integer keyframes.
     const float fraction = phase - phaseBaseF;
     const float t = fraction * fraction * (3.0f - 2.0f * fraction);
 
-    // 各ランダムパラメータについて、現在の整数フェーズと次の整数フェーズの値を算出し、t で線形補間する
-    // seedOffsetを変えることで、X, Y, S, Aspect それぞれに全く違うランダム系列を持たせる
+    // For each random parameter, calculate values at the current and next integer phases, and linearly interpolate them using t
+    // Changing the seedOffset gives completely different random sequences for Position (X, Y), Size (S), and Aspect (Aspect)
     const float randX0 = hash3D(ux, uy, basePhase0, 0u);
     const float randX1 = hash3D(ux, uy, basePhase1, 0u);
     const float randX = _mix(randX0, randX1, t);
@@ -129,74 +137,77 @@ __KERNEL__ void CellInfoKernel(
     const float randAspect1 = hash3D(ux, uy, basePhase1, 2191590403u);
     const float randAspect = _mix(randAspect0, randAspect1, t);
 
-    // Dot Aspect Ratio のUIスライダーと同じ指数スケール(2乗ベース)を使用し、
-    // アスペクト比の変動幅が縦横で完全に対称的(例：0.25倍 ～ 4.0倍)になるように修正
+    // Uses the same exponential scale (base 2) as the UI slider for Dot Aspect Ratio
+    // Modified so the fluctuation range of aspect ratio is completely symmetric vertically and horizontally (e.g. 0.25x to 4.0x)
     const float aspectMultiplier = _exp2f(params->aspectJitter * randAspect * 2.0f);
     const float finalAspect = _fmaxf(0.01f, params->aspectRatio * aspectMultiplier);
 
-    // GPU側でセルサイズを動的計算（CPU負荷削減）
+    // Dynamically calculate cell pitch/size on the GPU to reduce CPU overhead
     const float SIN60 = 0.866025f; // √3/2
     const float width = (float)params->srcSize[0];
     const float cellBasePitch = _fmaxf(3.0f, _floorf(width / params->screenDensity));
-    // アスペクト比に合わせてグリッド全体を伸縮させる (UI設定 Aspect Ratio)
+    // Stretch or shrink the entire underlying coordinate grid to match the aspect ratio.
+    // Rather than stretching each individual dot geometrically (which distorts the circular gradients
+    // and causes overlap artifacts), we instead universally squash/stretch the cell placement pitch.
+    // Then later, the sampling logic squashes the distance checks appropriately.
     const float gridAspect = params->aspectRatio;
     float cx = cellBasePitch;
-    float cy = cellBasePitch * params->gridSpacingY; // CPUから指定された縦方向の基本配置比率を適用
+    float cy = cellBasePitch * params->gridSpacingY; // Apply base vertical placement ratio driven from CPU
 
     if (gridAspect > 1.0f) {
-        cx /= gridAspect; // 縦長ドットに合わせて横の隙間を縮まる
+        cx /= gridAspect; // Squish horizontal gaps for tall dots
     } else if (gridAspect < 1.0f) {
-        cy *= gridAspect; // 横長ドットに合わせて縦の隙間を縮まる
+        cy *= gridAspect; // Squish vertical gaps for wide dots
     }
     const float cellPitchX = _fmaxf(3.0f, _floorf(cx));
     const float cellPitchY = _fmaxf(3.0f, _floorf(cy));
     const float2 cellPitch = to_float2(cellPitchX, cellPitchY);
     const float halfPitchX = cellPitchX * 0.5f;
-    const float halfPitchY = cellPitchY * 0.5f; // 事前計算
+    const float halfPitchY = cellPitchY * 0.5f; // Pre-calculated
     const float maxCellRadius = (cellBasePitch * 0.5f) * 1.5f;
 
-    // 半セル分Y位置をオフセット（固定値として半セル分）
+    // Offset Y position by half a cell (Fixed offset for standard staggering)
     const float yOffset = halfPitchY;
 
-    // 行オフセットの計算（CPUからの乗数を使用）
+    // Calculate row offset based on multiplier matching dot shape (provided by CPU)
     const int isOddRow = (y % 2 != 0) ? 1 : 0;
     const float rowOffset = (isOddRow != 0) ? (-halfPitchX * params->gridStaggerX) : 0.0f;
 
-    // セルの中心位置をピクセル座標で計算し、位置ジッターを適用
+    // Calculate cell center in pixel coordinates and apply randomized position jitter
     const float jitterAmountX = params->positionJitter * halfPitchX;
     const float jitterAmountY = params->positionJitter * halfPitchY;
 
     const float cellCenterX = ((float)x * cellPitchX) + halfPitchX + rowOffset + (randX * jitterAmountX);
     const float cellCenterY = ((float)y * cellPitchY) + halfPitchY - yOffset + (randY * jitterAmountY);
 
-    // dst_info1: セル位置情報を格納
+    // dst_info1: Store cell position information
     const float4 cellInfo1 = {
-        (float)x,      // セルIDX
-        (float)y,      // セルIDY
-        cellCenterX,   // セル中心X位置
-        cellCenterY    // セル中心Y位置
+        (float)x,      // Cell ID X
+        (float)y,      // Cell ID Y
+        cellCenterX,   // Cell Center X
+        cellCenterY    // Cell Center Y
     };
 
-    // セルの周辺範囲を定義して平均輝度を計算
+    // Define sampling region around the cell to compute average luminance
     const int samplingRadius = (int)(halfPitchX);
     const float radiusSquared = (float)(samplingRadius * samplingRadius);
 
-    // サンプリングステップの動的調整（閾値との比較を事前計算）
+    // Dynamic adjustment of sampling step size (pre-calculated comparison with threshold)
     const int sampleStep = ((float)samplingRadius > SAMPLING_STEP_THRESHOLD) ? SAMPLING_STEP_LARGE : 1;
-    const float sampleStepSquared = (float)(sampleStep * sampleStep); // 事前計算
+    const float sampleStepSquared = (float)(sampleStep * sampleStep); // Pre-calculated
 
     float totalLuma = 0.0f;
     int sampleCount = 0;
     float4 avgColor = to_float4(0.0f, 0.0f, 0.0f, 0.0f);
 
-    // ループ範囲の計算（境界チェック）- 事前計算で効率化
+    // Compute loop bounds with image boundary checks for efficiency
     const float fSamplingRadius = (float)samplingRadius;
     const int minX = max(0, (int)(cellCenterX - fSamplingRadius));
     const int maxX = min(params->srcSize[0] - 1, (int)(cellCenterX + fSamplingRadius));
     const int minY = max(0, (int)(cellCenterY - fSamplingRadius));
     const int maxY = min(params->srcSize[1] - 1, (int)(cellCenterY + fSamplingRadius));
 
-    // 無効な範囲の早期リターン（GPU効率向上）
+    // Early Return for invalid ranges to improve GPU thread utilization
     if (minX > maxX || minY > maxY) {
         _tex2DVec4Write(dst_info1, x, y, cellInfo1);
         _tex2DVec4Write(dst_info2, x, y, to_float4(0.5f, 0.0f, (float)isOddRow, finalAspect));
@@ -204,17 +215,19 @@ __KERNEL__ void CellInfoKernel(
         return;
     }
 
-    // セル範囲内のピクセルをサンプリング - 円形サンプリング（高速化版）
-    const int sampleStepInt = sampleStep * sampleStep; // 整数版で高速化
+    // Sample pixels within the cell bounding box using a faster circular sampling logic (optimized version)
+    const int sampleStepInt = sampleStep * sampleStep; // Integer version for optimization
 
+    // Loop dynamically over the bounding box calculated from the cell center
     for (int pixelY = minY; pixelY <= maxY; pixelY += sampleStep) {
         const float dy = (float)pixelY - cellCenterY;
         const float dySquared = dy * dy;
 
-        // Y方向での早期カットオフ（円形範囲チェック）
+        // Early vertical distance cutoff checking (Circular bound check)
+        // If the current row's perpendicular distance is already further than the radius, skip horizontal checks.
         if (dySquared > radiusSquared) continue;
 
-        // X方向の最大範囲を事前計算（円形範囲内）
+        // Pre-calculate maximum horizontal range within the circular bounds
         const float maxDxSq = radiusSquared - dySquared;
         const float maxDx = _sqrtf(maxDxSq);
         const int localMinX = max(minX, (int)(cellCenterX - maxDx));
@@ -224,27 +237,27 @@ __KERNEL__ void CellInfoKernel(
             const float dx = (float)pixelX - cellCenterX;
             const float distSq = dx*dx + dySquared;
 
-            // 円形範囲内のみをサンプリング
+            // Check if current sample point falls strictly inside the circular radius
             if (distSq <= radiusSquared) {
-                // ピクセル値を取得
+                // Retrieve pixel color
                 const float4 color = _tex2DVecN(src, pixelX, pixelY, 15);
 
-                // 輝度計算
+                // Compute perceptual luminance
                 const float luma = color.x * LUMA_R + color.y * LUMA_G + color.z * LUMA_B;
 
-                // サンプリングステップの補正（事前計算した値を使用）
+                // Adjust for sampling step (apply pre-calculated weighting factor)
                 const float lumaWeighted = luma * sampleStepSquared;
                 totalLuma += lumaWeighted;
                 sampleCount += sampleStepInt;
 
-                // 色成分の累積（ベクトル演算で効率化）
+                // Accumulate color components efficiently using vector addition
                 const float4 colorWeighted = color * sampleStepSquared;
                 avgColor += colorWeighted;
             }
         }
     }
 
-    // サンプル数が0の場合の高速パス
+    // Fast path execution if no valid samples were found
     if (sampleCount == 0) {
         _tex2DVec4Write(dst_info1, x, y, cellInfo1);
         _tex2DVec4Write(dst_info2, x, y, to_float4(0.5f, 0.0f, (float)isOddRow, 1.0f));
@@ -252,34 +265,34 @@ __KERNEL__ void CellInfoKernel(
         return;
     }
 
-    // 平均輝度と色の計算
+    // Calculate average luminance and color
     const float invSampleCount = (sampleCount > 0) ? (1.0f / (float)sampleCount) : 0.0f;
     float avgLuma = totalLuma * invSampleCount;
 
-    // 色成分の平均値計算（ベクトル演算で効率化）
+    // Average color calculation (Vectorized for optimization)
     avgColor *= invSampleCount;
 
-    // コントラスト調整
+    // Apply user contrast enhancement
     avgLuma = 0.5f + (avgLuma - 0.5f) * params->contrast;
-    avgLuma = _saturatef(avgLuma);  // 0.0-1.0に制限
+    avgLuma = _saturatef(avgLuma);  // Clamp between 0.0 and 1.0
 
     const int invertMode = params->invertMode;
 
-    // 輝度からドットの強度を計算（反転モードに対応）
+    // Compute preliminary dot tonal strength based on luminance (Adjusts for invert mode)
     float tonalValue = (invertMode != 0) ? avgLuma : (1.0f - avgLuma);
 
-    // ドットゲイン適用
+    // Apply dot gain (ink spread simulation)
     tonalValue = _saturatef(tonalValue + params->dotGain);
 
-    // ドットサイズカーブ補正（1.0でリニア）
+    // Dot size curve correction (1.0 = linear)
     if (params->dotCurve != 1.0f) {
         const float curveFactor = _fmaxf(params->dotCurve, 1e-4f);
         tonalValue = _powf(_saturatef(tonalValue), curveFactor);
     }
 
-    // 明るさのカットオフと最小ドット半径を一括処理
-    // サイズジッターの適用
-    const float sizeVariation = 1.0f + (randS * params->sizeJitter * 0.5f); // ±50% のスケール変動
+    // Batch process combined sizing operations: Brightness cutoff and minimum radius limit
+    // Apply local size jitter
+    const float sizeVariation = 1.0f + (randS * params->sizeJitter * 0.5f); // ±50% scale variation
     tonalValue = _saturatef(tonalValue * sizeVariation);
 
     const int passesBrightness = (invertMode != 0)
@@ -291,50 +304,50 @@ __KERNEL__ void CellInfoKernel(
         dotRadius = _fminf(tonalValue * maxCellRadius, maxCellRadius * params->clipRadius);
     }
 
-    // dst_info2: ドット情報を格納
+    // dst_info2: Store calculated dot attributes
     const float4 cellInfo2 = {
-        avgLuma,         // セル輝度値
-        dotRadius,       // ドット半径
-        (float)isOddRow, // 行オフセットフラグ
-        finalAspect      // アスペクト比
+        avgLuma,         // Cell Luminance Value
+        dotRadius,       // Calculated final dot radius
+        (float)isOddRow, // Row Offset Flag
+        finalAspect      // Final Aspect Ratio for this cell
     };
 
-    // 結果を書き込み
+    // Write final information to intermediate texture buffers
     _tex2DVec4Write(dst_info1, x, y, cellInfo1);
     _tex2DVec4Write(dst_info2, x, y, cellInfo2);
     _tex2DVec4Write(dst_info3, x, y, avgColor);
 }
 ]]
 
--- レンダリングパラメータ構造体
+-- Rendering Parameters Structure
 RenderParams = [[
-  int srcSize[2];       // 入力画像のサイズ
-  int cellGridNum[2];   // セルグリッド数 [X, Y]
-  float paperColor[4];  // 紙の色（背景色）[R,G,B,A]
-  float dotColor[4];    // ドットの色（前景色）[R,G,B,A]
-  int useOriginalColor; // 元の色を使用するかどうか
-  float screenDensity;  // スクリーン密度（GPU側でセルピッチ計算用）
-  int blendWithInput;   // 入力画像とブレンドするかどうか
-  int enableAntialias;  // ドット境界にアンチエイリアスを適用するか
-  float aaEdgeWidth;    // アンチエイリアス境界幅（ピクセル単位）
-  int dotShape;         // ドットの形状 (0: 円, 1: 四角, 2: ひし形)
-  float aspectRatio;    // ドットの縦横比（グリッド変形用）
-  float rgbShift;       // 色収差・版ズレの強度（ピクセル単位）
-  float gridSpacingY;   // Y軸方向のグリッド基底間隔乗数
-  float gridStaggerX;   // 奇数行のX軸オフセット乗数
+  int srcSize[2];       // Input image size
+  int cellGridNum[2];   // Number of cell grids [X, Y]
+  float paperColor[4];  // Paper color (Background) [R,G,B,A]
+  float dotColor[4];    // Dot color (Foreground) [R,G,B,A]
+  int useOriginalColor; // Whether to use the original input color for dots
+  float screenDensity;  // Screen density (calculates cell pitch on GPU)
+  int blendWithInput;   // Boolean flag: blend dots over input image instead of paper color
+  int enableAntialias;  // Boolean flag: apply structural antialiasing to dot edges
+  float aaEdgeWidth;    // Antialiasing edge blend width (in pixels)
+  int dotShape;         // Dot shape enum (0: Circle, 1: Square, 2: Diamond)
+  float aspectRatio;    // Dot aspect ratio (used for grid deformation)
+  float rgbShift;       // Color plate misalignment/chromatic aberration strength (in pixels)
+  float gridSpacingY;   // Base spacing multiplier for Y-axis grid
+  float gridStaggerX;   // X-axis offset multiplier for odd rows
 ]]
 
 RenderDotsKernel = [[
-// 定数定義
+// Constant definitions
 #define LUMA_R 0.3f
 #define LUMA_G 0.59f
 #define LUMA_B 0.11f
 #define DOT_RADIUS_THRESHOLD 0.1f
 #define BOUNDING_BOX_MARGIN 1.0f
-#define HIGH_DENSITY_THRESHOLD 100.0f  // この値以上の密度は高密度と判断
-#define MIN_CHECK_RADIUS 1.5f  // 最小チェック半径
+#define HIGH_DENSITY_THRESHOLD 100.0f  // Screen density values above this trigger high-density fast execution path
+#define MIN_CHECK_RADIUS 1.5f  // Minimum radius size necessary for comprehensive checking
 
-// セルのドットチェック
+// Checks presence and geometry of a dot within a cell, returning coverage factor
 __DEVICE__ float checkCellDot(
     const float2 cellPos,
     const float2 pixelPos,
@@ -369,12 +382,12 @@ __DEVICE__ float checkCellDot(
         if (absDiff.x > bbSize || absDiff.y > bbSize)
             return 0.0f;
 
-        // アスペクト比の適用（ドットがセル外にはみ出してクリップされないよう、常に縮小方向へスケールする）
+        // Scale distance to enforce aspect ratio constraints (Scaling inwards prevents dots from clipping out of bounds)
         float2 measureDiff = absDiff;
         if (finalAspect > 1.0f) {
-            measureDiff.x *= finalAspect; // X方向を縮小（縦長になる）
+            measureDiff.x *= finalAspect; // Compress X-axis for tall dots
         } else if (finalAspect < 1.0f) {
-            measureDiff.y /= _fmaxf(0.01f, finalAspect); // Y方向を縮小（横長になる）
+            measureDiff.y /= _fmaxf(0.01f, finalAspect); // Compress Y-axis for wide dots
         }
 
         float distSq = 0.0f;
@@ -396,7 +409,7 @@ __DEVICE__ float checkCellDot(
         if (dist >= dotRadius)
             return 0.0f;
 
-        // 高速近似または正確な計算の選択（半径に基づく）
+        // Select between fast approximation or precise calculation based on inner radius
         const float innerRadius = _fmaxf(dotRadius - aaEdgeWidth, 0.0f);
 
         if (dist <= innerRadius)
@@ -409,43 +422,43 @@ __DEVICE__ float checkCellDot(
 }
 
 
-// 隣接セルのオフセット定義
+// Neighbor cell relative offset definitions
 __DEVICE__ void getNeighborOffsets(const int isOddRow, const float gridStaggerX, float2 neighborOffsets[8], int *neighborCount)
 {
     if (gridStaggerX == 0.0f) {
-        // 四角形格子（Square, 8近傍）
+        // Orthogonal grid (Square arrangement, 8 neighbors)
         *neighborCount = 8;
-        neighborOffsets[0] = to_float2(-1.0f, -1.0f); // 上左
-        neighborOffsets[1] = to_float2( 0.0f, -1.0f); // 上
-        neighborOffsets[2] = to_float2( 1.0f, -1.0f); // 上右
-        neighborOffsets[3] = to_float2( 1.0f,  0.0f); // 右
-        neighborOffsets[4] = to_float2( 1.0f,  1.0f); // 下右
-        neighborOffsets[5] = to_float2( 0.0f,  1.0f); // 下
-        neighborOffsets[6] = to_float2(-1.0f,  1.0f); // 下左
-        neighborOffsets[7] = to_float2(-1.0f,  0.0f); // 左
+        neighborOffsets[0] = to_float2(-1.0f, -1.0f); // Top Left
+        neighborOffsets[1] = to_float2( 0.0f, -1.0f); // Top
+        neighborOffsets[2] = to_float2( 1.0f, -1.0f); // Top Right
+        neighborOffsets[3] = to_float2( 1.0f,  0.0f); // Right
+        neighborOffsets[4] = to_float2( 1.0f,  1.0f); // Bottom Right
+        neighborOffsets[5] = to_float2( 0.0f,  1.0f); // Bottom
+        neighborOffsets[6] = to_float2(-1.0f,  1.0f); // Bottom Left
+        neighborOffsets[7] = to_float2(-1.0f,  0.0f); // Left
     } else {
-        // 六角形格子（Circle/Diamond, 6近傍）
+        // Hexagonal grid commonly used in print (Circle/Diamond arrangement, 6 neighbors)
         *neighborCount = 6;
         if (isOddRow != 0) {
-            neighborOffsets[0] = to_float2(-1.0f, -1.0f); // 上左
-            neighborOffsets[1] = to_float2( 0.0f, -1.0f); // 上右
-            neighborOffsets[2] = to_float2( 1.0f,  0.0f); // 右
-            neighborOffsets[3] = to_float2( 0.0f,  1.0f); // 下右
-            neighborOffsets[4] = to_float2(-1.0f,  1.0f); // 下左
-            neighborOffsets[5] = to_float2(-1.0f,  0.0f); // 左
+            neighborOffsets[0] = to_float2(-1.0f, -1.0f); // Top Left
+            neighborOffsets[1] = to_float2( 0.0f, -1.0f); // Top Right
+            neighborOffsets[2] = to_float2( 1.0f,  0.0f); // Right
+            neighborOffsets[3] = to_float2( 0.0f,  1.0f); // Bottom Right
+            neighborOffsets[4] = to_float2(-1.0f,  1.0f); // Bottom Left
+            neighborOffsets[5] = to_float2(-1.0f,  0.0f); // Left
         } else {
-            neighborOffsets[0] = to_float2( 0.0f, -1.0f); // 上左
-            neighborOffsets[1] = to_float2( 1.0f, -1.0f); // 上右
-            neighborOffsets[2] = to_float2( 1.0f,  0.0f); // 右
-            neighborOffsets[3] = to_float2( 1.0f,  1.0f); // 下右
-            neighborOffsets[4] = to_float2( 0.0f,  1.0f); // 下左
-            neighborOffsets[5] = to_float2(-1.0f,  0.0f); // 左
+            neighborOffsets[0] = to_float2( 0.0f, -1.0f); // Top Left
+            neighborOffsets[1] = to_float2( 1.0f, -1.0f); // Top Right
+            neighborOffsets[2] = to_float2( 1.0f,  0.0f); // Right
+            neighborOffsets[3] = to_float2( 1.0f,  1.0f); // Bottom Right
+            neighborOffsets[4] = to_float2( 0.0f,  1.0f); // Bottom Left
+            neighborOffsets[5] = to_float2(-1.0f,  0.0f); // Left
         }
     }
 }
 
-// 高密度モード用の処理関数
-// 通常密度モード用の処理関数
+// Fallback function for high-density execution
+// Sub-pixel compositing / Alpha blend overlay function for computing dot coverage
 __DEVICE__ float4 blendDotOver(
     const float4 baseColor,
     const float4 dotColor,
@@ -464,14 +477,14 @@ __DEVICE__ float4 blendDotOver(
 }
 
 // --- [UPDATE_BEST_CELL Refactoring] ---
-// 最適なセルの探索状態を保持する構造体 (typedefを避ける)
+// Structure to hold state of optimal cell search (avoids typedef for OpenCL compatibility)
 struct BestCellState {
     float bestStrength;
     float bestCoverage;
     float4 bestDotColor;
 };
 
-// 最適なセル候補を評価して状態を更新する関数
+// Evaluate a neighbor cell candidate and update the tracking state object
 __DEVICE__ void updateBestCell(
     const float2 candidatePos,
     const float2 pixelPos,
@@ -496,7 +509,7 @@ __DEVICE__ void updateBestCell(
         if (useOriginalColorFlag != 0) {
             const float2 baseUV = (candidatePos + to_float2(0.5f, 0.5f)) / cellGridNum;
             if (shiftVal == 0.0f) {
-                // 最適化: シフトがない場合は1回のサンプリングで済ませる
+                // Optimization: Avoid redundant separated sampling if Shift is disabled
                 candidateDotColor = _tex2DVecN(cell_info3, baseUV.x, baseUV.y, 15);
             } else {
                 const float4 cR = _tex2DVecN(cell_info3, baseUV.x + cellShiftROFF.x, baseUV.y + cellShiftROFF.y, 15);
@@ -507,9 +520,9 @@ __DEVICE__ void updateBestCell(
             const float candidateLuma = candidateDotColor.x * LUMA_R + candidateDotColor.y * LUMA_G + candidateDotColor.z * LUMA_B;
             candidateStrength *= _fmaxf(1.0f - candidateLuma, 0.0f);
         } else if (blendWithInput != 0) {
-            // UseOriginalColorがオフでBlendWithInputがオンの場合、
-            // Shiftされた inputColor で上書きして単色のドットの色をずらすのは
-            // 不自然で不透明度も壊すので行わない
+            // If UseOriginalColor is off and BlendWithInput is on,
+            // we should not sample shifted input color to override the solid userDotColor,
+            // because it would shift a solid color unnaturally and break opacity mappings.
         }
         const float strengthDiff = candidateStrength - state->bestStrength;
         if (strengthDiff > 1e-4f || (strengthDiff >= -1e-4f && coverageCandidate > state->bestCoverage)) {
@@ -536,11 +549,11 @@ __KERNEL__ void RenderDotsKernel(
 
     const float2 pixelPos = to_float2((float)x, (float)y);
 
-    // GPU側でセルピッチを計算（CPU負荷削減）
+    // Compute cell dimensions dynamically to offset CPU overhead
     const float SIN60 = 0.866025f;
     const float width = (float)params->srcSize[0];
     const float cellBasePitch = _fmaxf(3.0f, _floorf(width / params->screenDensity));
-    // アスペクト比に合わせてグリッド全体を伸縮させる
+    // Distort entire grid resolution appropriately for the target aspect ratio
     const float gridAspect = params->aspectRatio;
     float cx = cellBasePitch;
     float cy = cellBasePitch * params->gridSpacingY;
@@ -560,7 +573,7 @@ __KERNEL__ void RenderDotsKernel(
     const int baseRowY = (int)((pixelPos.y + yOffset) / cellPitch.y);
     const int isOddRow = (baseRowY % 2 != 0) ? 1 : 0;
 
-    const float2 halfCellPitch = cellPitch * 0.5f; // 事前計算
+    const float2 halfCellPitch = cellPitch * 0.5f; // Pre-calculated
 
     float adjustedX = pixelPos.x;
     if (isOddRow != 0 && params->dotShape != 1) {
@@ -598,7 +611,7 @@ __KERNEL__ void RenderDotsKernel(
     const float shiftVal = (blendWithInput != 0 || useOriginalColorFlag != 0) ? params->rgbShift : 0.0f;
     const float2 shiftROFF = to_float2(-shiftVal / intWidth, -shiftVal / intHeight);
     const float2 shiftBOFF = to_float2( shiftVal / intWidth,  shiftVal / intHeight);
-    // cellInfo3 は画像全体（UV空間 0.0〜1.0）と同じ領域をマッピングしているため、ピクセル単位のズレ量は src と全く同じ UV オフセットになります
+    // cellInfo3 maps exactly to the image region (UV space 0.0~1.0), so pixel shift amount is identical to the offset used for src
     const float2 cellShiftROFF = shiftROFF;
     const float2 cellShiftBOFF = shiftBOFF;
 
@@ -609,10 +622,10 @@ __KERNEL__ void RenderDotsKernel(
         const float py = (float)y / intHeight;
 
         if (shiftVal == 0.0f) {
-            // 最適化: シフトがない場合は1回のサンプリングで済ませる
+            // Optimization: Avoid redundant separated sampling if Shift is disabled
             inputColor = _tex2DVecN(src_img, px, py, 15);
         } else {
-            // 色ごとにサンプリング位置をずらす
+            // Independent RGB offset sampling to simulate misaligned print plates
             const float4 sR = _tex2DVecN(src_img, px + shiftROFF.x, py + shiftROFF.y, 15);
             const float4 sG = _tex2DVecN(src_img, px, py, 15);
             const float4 sB = _tex2DVecN(src_img, px + shiftBOFF.x, py + shiftBOFF.y, 15);
@@ -639,9 +652,13 @@ __KERNEL__ void RenderDotsKernel(
     getNeighborOffsets(isOddRow, params->gridStaggerX, neighborOffsets, &neighborCount);
 
     if (isHighDensity != 0) {
+        // High Density Fast-Path execution:
+        // When resolving tiny dots (like 2x2 pixels), iterating through all 6-8 neighbor cells is overly expensive.
+        // Based on the localized sub-pixel fraction of 'relPos' (which quadrant the pixel is in relative to cell center),
+        // we can mathematically deduce that it only needs to check at most 2 specific adjacent neighbors.
         int checkIndices[2] = {-1, -1};
         int checkCount = 0;
-        const float2 cellThreshold = halfCellPitch * 0.5f; // cellPitch * 0.25f と同等
+        const float2 cellThreshold = halfCellPitch * 0.5f; // Boundary threshold (quarter pitch)
         const float2 absRelPos = to_float2(_fabs(relPos.x), _fabs(relPos.y));
 
         if (absRelPos.x > cellThreshold.x) {
@@ -650,12 +667,12 @@ __KERNEL__ void RenderDotsKernel(
 
         if (absRelPos.y > cellThreshold.y) {
             if (params->gridStaggerX == 0.0f) {
-                checkIndices[checkCount++] = (relPos.y > 0.0f) ? 5 : 1; // 下 or 上
+                checkIndices[checkCount++] = (relPos.y > 0.0f) ? 5 : 1; // Bottom or Top
             } else {
                 checkIndices[checkCount++] = (relPos.y > 0.0f) ? (isOddRow ? 3 : 4)
                                                               : (isOddRow ? 0 : 1);
             }
-            if (checkCount > 2) checkCount = 2; // 高速化版は常に最大2セルしかチェックしない想定だが四角形では斜めが必要かも。とりあえず2つで稼働。
+            if (checkCount > 2) checkCount = 2; // For performance, restricted neighbor check to 2 adjacent. Orthogonal shapes occasionally need diagonals, but primarily 2 suffices here.
         }
 
         for (int i = 0; i < checkCount; i++) {
@@ -695,7 +712,7 @@ function Create()
         INP_MaxAllowed = 1000.0,
         INPID_PreviewControl = "RangeControl",
         INP_Integer = false,
-        INPS_StatusText = "Controls the density of the halftone pattern in CMYK mode",
+        INPS_StatusText = "Controls the density of the halftone pattern (similar to LPI in print)",
     })
 
     InContrast = self:AddInput("Contrast", "Contrast", {
@@ -799,7 +816,7 @@ function Create()
         INP_Default = 0.05,
         INP_MinAllowed = 0.0,
         INP_MaxAllowed = 1.0,
-        INPS_StatusText = "Randomly shifts the position of the dots to simulate imperfect printing",
+        INPS_StatusText = "Randomly shifts dot positions to simulate imperfect printing registration",
     })
 
     InSizeJitter = self:AddInput("Size Jitter", "SizeJitter", {
@@ -808,7 +825,7 @@ function Create()
         INP_Default = 0.02,
         INP_MinAllowed = 0.0,
         INP_MaxAllowed = 1.0,
-        INPS_StatusText = "Randomly varies the size of the dots to simulate imperfect printing",
+        INPS_StatusText = "Randomly varies dot sizes to simulate ink bleed or paper texture irregularities",
     })
 
     InAspectJitter = self:AddInput("Aspect Jitter", "AspectJitter", {
@@ -817,14 +834,14 @@ function Create()
         INP_Default = 0.0,
         INP_MinAllowed = 0.0,
         INP_MaxAllowed = 1.0,
-        INPS_StatusText = "Randomly varies the aspect ratio of each dot to simulate paper grain or print roller slip",
+        INPS_StatusText = "Randomly varies the aspect ratio of each dot to simulate paper grain or print roller slippage",
     })
 
     InInvertMode = self:AddInput("Invert Brightness", "InvertMode", {
         LINKID_DataType = "Number",
         INPID_InputControl = "CheckboxControl",
         INP_Default = 0.0,
-        INPS_StatusText = "When enabled, brighter areas generate larger dots",
+        INPS_StatusText = "When enabled, brighter areas of the image generate larger dots (Subtractive Mode)",
     })
 
     InBrightnessCutoff = self:AddInput("Brightness Cutoff", "BrightnessCutoff", {
@@ -833,7 +850,7 @@ function Create()
         INP_Default = 0.75,
         INP_MinAllowed = 0.0,
         INP_MaxAllowed = 1.0,
-        INPS_StatusText = "Brightness threshold controlling dot placement; flips when Invert Brightness is enabled",
+        INPS_StatusText = "Luminance threshold controlling where dots appear; behavior flips if Invert Brightness is enabled",
     })
 
     InEnableDotAntialias = self:AddInput("Enable Dot Antialias", "EnableDotAntialias", {
@@ -1014,14 +1031,14 @@ function Create()
 end
 
 function Process(req)
-    -- 入力画像が無い場合は何もしない
+    -- Make no changes and pass-through if no input image is found
     local img = InImage:GetValue(req)
     if img == nil then
         OutImage:Set(req, nil)
         return
     end
 
-    -- 入力パラメータの取得
+    -- Retrieve input parameters
     local contrastSlider = InContrast:GetValue(req).Value
     local contrast = math.pow(4.0, contrastSlider)
     
@@ -1038,7 +1055,7 @@ function Process(req)
     local aspectRatio = math.pow(2.0, aspectRatioSlider * 2.0)
     local dotGain = InDotGain:GetValue(req).Value
     local dotSizeCurveSlider = InDotSizeCurve:GetValue(req).Value
-    -- 正の値でカーブを持ち上げ（白くしやすく/ドットを太く）、負の数でカーブを沈める（黒くしやすく/ドットを細く）ために反転
+    -- Positive values elevate curve (brighter/larger dots); negative values sink curve (darker/smaller dots), hence negation
     local dotSizeCurve = math.pow(4.0, -dotSizeCurveSlider)
     
     local cutoffDotRadius = InCutoffDotRadius:GetValue(req).Value
@@ -1073,8 +1090,8 @@ function Process(req)
     local width = img.DataWindow:Width()
     local height = img.DataWindow:Height()
 
-    -- セル情報バッファサイズの計算
-    -- CPU側で形状に基づくグリッドの間隔ルールを事前計算する
+    -- Calculate buffer sizes for cell information
+    -- Pre-evaluate layout spacing rules based on the chosen grid shape on CPU side
     local dotShape = math.floor(InDotShape:GetValue(req).Value + 0.5)
     local staggerSquares = InStaggerSquareDots:GetValue(req).Value > 0.5
     local SIN60 = 0.866025 -- √3/2
@@ -1085,7 +1102,7 @@ function Process(req)
     end
 
     local cellBasePitch = math.floor(math.max(3.0, width / screenDensity))
-    -- アスペクト比に合わせて生成するバッファグリッドの解像度も歪ませる
+    -- Distort the buffer grid resolution proportionately alongside the aspect ratio
     local cx = cellBasePitch
     local cy = cellBasePitch * gridSpacingY
     if aspectRatio > 1.0 then
@@ -1104,11 +1121,11 @@ function Process(req)
         aaEdgeWidth = aaEdgeSoftness * averageCellPitch
     end
 
-    -- セルの配列サイズを計算
+    -- Calculate grid layout limits
     local cellGridNumX = math.ceil(width / cellPitchX) + 3
     local cellGridNumY = math.ceil(height / cellPitchY) + 3
 
-    -- セル情報用の中間バッファを作成
+    -- Initialize intermediate buffers for passing data to the rendering kernel
     local cellInfo1 = Image({
         IMG_Width = cellGridNumX,
         IMG_Height = cellGridNumY,
@@ -1129,17 +1146,17 @@ function Process(req)
 
     local out = Image({ IMG_Like = img })
 
-    -- ステップ1: セル情報計算カーネル実行
+    -- Step 1: Execute kernel for cell information accumulation
     local cellInfoNode = DVIPComputeNode(req, "CellInfoKernel", CellInfoKernel, "CellInfoParams", CellInfoParams)
 
     if cellInfoNode then
-        -- パラメータをカーネルに設定
+        -- Mount kernel parameters
         local params = cellInfoNode:GetParamBlock(CellInfoParams)
         params.srcSize[0] = width
         params.srcSize[1] = height
         params.dstSize[0] = cellGridNumX
         params.dstSize[1] = cellGridNumY
-        params.screenDensity = screenDensity -- GPU側でセルサイズ計算
+        params.screenDensity = screenDensity -- Calculated natively on GPU
         params.contrast = contrast
         params.aspectRatio = aspectRatio
         params.dotGain = dotGain
@@ -1166,17 +1183,17 @@ function Process(req)
 
         local success = cellInfoNode:RunSession(req)
         if not success then
-            -- エラーがあれば元の画像を返却
+            -- Fail-safe passthrough to output
             OutImage:Set(req, img)
             return
         end
     end
 
-    -- ステップ2: ドット描画カーネル実行
+    -- Step 2: Execute dot rendering compositor kernel
     local renderNode = DVIPComputeNode(req, "RenderDotsKernel", RenderDotsKernel, "RenderParams", RenderParams)
 
     if renderNode then
-        -- パラメータをカーネルに設定
+        -- Mount kernel parameters
         local params = renderNode:GetParamBlock(RenderParams)
         params.srcSize[0] = width
         params.srcSize[1] = height
@@ -1195,7 +1212,7 @@ function Process(req)
         params.rgbShift = rgbShift
         params.aspectRatio = aspectRatio
         params.dotShape = math.floor(dotShape + 0.5)
-        params.screenDensity = screenDensity -- GPU側でセルピッチ計算
+        params.screenDensity = screenDensity -- Calculated natively on GPU
         params.enableAntialias = enableDotAntialias and 1 or 0
         params.aaEdgeWidth = aaEdgeWidth
         params.gridSpacingY = gridSpacingY
@@ -1214,7 +1231,7 @@ function Process(req)
 
         local success = renderNode:RunSession(req)
         if not success then
-            -- エラーがあれば元の画像を返却
+            -- Fail-safe passthrough to output
             OutImage:Set(req, img)
             return
         end
@@ -1222,7 +1239,7 @@ function Process(req)
         out = img
     end
 
-    -- 最終出力
+    -- Final Pipeline Output Return
     -- OutImage:Set(req, cellInfo1)
     -- OutImage:Set(req, cellInfo2)
     -- OutImage:Set(req, cellInfo3)
@@ -1241,11 +1258,11 @@ function NotifyChanged(inp, param, time)
     end
 
     if inp == InPaperColorPreset then
-        -- 紙の色プリセットが選択された場合
+        -- Resolve chosen paper color presets
         local presetIndex = math.floor(param.Value + 0.5)
 
-        -- プリセット値の設定
-        local r, g, b = 1.0, 1.0, 1.0 -- デフォルト値（白）
+        -- Establish primitive RGB assignment
+        local r, g, b = 1.0, 1.0, 1.0 -- White default
 
         if presetIndex == 1 then      -- Pure White
             r, g, b = 1.00, 1.00, 1.00
@@ -1279,7 +1296,7 @@ function NotifyChanged(inp, param, time)
             r, g, b = 1.00, 1.00, 0.88
         end
 
-        -- カラーコントロールに値をセット
+        -- Forward parsed values down to unified primitive colors
         if presetIndex > 0 then
             InPaperColorRed:SetSource(Number(r), time)
             InPaperColorGreen:SetSource(Number(g), time)
