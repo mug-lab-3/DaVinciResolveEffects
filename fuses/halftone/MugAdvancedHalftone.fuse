@@ -1,0 +1,1204 @@
+--[[--
+Mug Advanced Halftone
+--]] --
+
+--******************************************************************************************************
+FuRegisterClass("MugAdvancedHalftone", CT_Tool, {
+    REGS_Category          = "Fuses\\Mug",
+    REGS_OpIconString      = "MAH",
+    REGS_OpDescription     = "Mug Advanced Halftone",
+    REGS_HelpTopic         = "https://x.com/MugLab3",
+    REGS_URL               = "https://www.youtube.com/@MugLabVideoEditing",
+    REGS_IconID            = "Icons.Tools.Icons.AdvancedHalftone",
+    REG_Source_GlobalCtrls = true,
+    REG_Source_SizeCtrls   = true,
+    REG_Version            = 3.20,
+})
+
+-- セル情報計算用パラメータ構造体
+CellInfoParams = [[
+  int srcSize[2];         // ソース画像のサイズ // TEX_NORMALIZED_COORDS_FALSE
+  int dstSize[2];         // 出力サイズ(cell数)
+  float screenDensity;    // スクリーン密度（GPU側でセルサイズ計算用）
+  float contrast;         // コントラスト調整
+  float aspectRatio;      // ドットの縦横比
+  float dotGain;          // ドットゲイン効果
+  float dotCurve;         // ドットサイズカーブ係数
+  float minDotRadius;     // 最小ドット半径
+  float clipRadius;       // クリッピング半径
+  float jitterPhase;      // ジッターの連続的なノイズフェーズ（滑らかなアニメーション用）
+  float positionJitter;   // 位置のジッター（ズレ）
+  float sizeJitter;       // サイズのジッター（ムラ）
+  float aspectJitter;     // アスペクト比のジッター（ブレ幅）
+  int invertMode;         // 輝度を反転してドットを生成するか
+  float brightnessCutoff; // 明るさの閾値
+  int useOriginalColor;   // 元の色を使用するかどうか
+]]
+
+-- セル情報計算カーネル
+-- 中間バッファのフォーマット:
+-- float4 cellInfo1:
+--   x: セルIDX - グリッド座標系でのX位置 (整数値: 0 - dstSize[0]-1)
+--   y: セルIDY - グリッド座標系でのY位置 (整数値: 0 - dstSize[1]-1)
+--   z: セル中心位置X - ピクセル座標系でのX位置 (整数値: 0 - srcSize[0]-1)
+--   w: セル中心位置Y - ピクセル座標系でのY位置 (整数値: 0 - srcSize[1]-1)
+--
+-- float4 cellInfo2:
+--   x: セル輝度値 (0.0-1.0)
+--   y: ドット半径 - 半径ドット数 (整数値: 0 - maxCellRadius)
+--   z: 行オフセットフラグ - このセルの行はオフセットするか (整数値: 0=通常行, 1=オフセット行)
+--   w: 予約済み - 将来拡張用 (常に1.0)
+--
+-- float4 cellInfo3:
+--   x: 元の色R成分 - オリジナルカラーモード用 (0.0 - 1.0)
+--   y: 元の色G成分 - オリジナルカラーモード用 (0.0 - 1.0)
+--   z: 元の色B成分 - オリジナルカラーモード用 (0.0 - 1.0)
+--   w: 元の色Aチャンネル - 透明度 (0.0 - 1.0)
+--
+--
+-- ※レンダリングカーネルでは、各ピクセルが属するセルとその周辺セルの情報を参照して描画
+CellInfoKernel = [[
+#define LUMA_R 0.3f
+#define LUMA_G 0.59f
+#define LUMA_B 0.11f
+#define SAMPLING_STEP_THRESHOLD 12.0f  // この値以上の半径でステップを増やす
+#define SAMPLING_STEP_LARGE 2          // 大きな半径での間引き率
+
+// -- ヘルパー関数: PCG Hash ベースの3Dハッシュ関数
+// アーキテクチャ間（CUDA, Metal等）で完全一致させるため、ビット演算を使用
+// 浮落小数の精度落ちによる差異を防ぐため24bit(0x00FFFFFF)にマスクして -1.0 〜 1.0 に正規化
+__DEVICE__ float hash3D(uint x, uint y, uint z, uint seedOffset) {
+    // 周期性を排除するための強力な非線形ハッシュ (Jenkins Hashベース)
+    uint h = x + y * 374761393u + z * 668265263u + seedOffset;
+    h += h << 10;
+    h ^= h >> 6;
+    h += h << 3;
+    h ^= h >> 11;
+    h += h << 15;
+    
+    // PCG系の最終ミックス
+    h = (h ^ (h >> 16)) * 2654435761u;
+    h = h ^ (h >> 16);
+    
+    return (float)(h & 0x00FFFFFF) * (1.0f / (float)0x00FFFFFF) * 2.0f - 1.0f;
+}
+
+__KERNEL__ void CellInfoKernel(
+    __CONSTANTREF__ CellInfoParams *params,
+    __TEXTURE2D__ src,
+    __TEXTURE2D_WRITE__ dst_info1,
+    __TEXTURE2D_WRITE__ dst_info2,
+    __TEXTURE2D_WRITE__ dst_info3)
+{
+    DEFINE_KERNEL_ITERATORS_XY(x, y);
+
+    // 画像範囲外なら処理しない
+    if (x >= params->dstSize[0] || y >= params->dstSize[1])
+        return;
+
+    const uint ux = (uint)x;
+    const uint uy = (uint)y;
+    
+    // Jitter Phase から整数部（前と次のフレーム）と小数部（割合）を取得
+    const float phase = params->jitterPhase;
+    const float phaseBaseF = _floorf(phase);
+    const uint basePhase0 = (uint)phaseBaseF;
+    const uint basePhase1 = basePhase0 + 1;
+    
+    // 滑らかな補間のための Smoothstep カーブ (3t^2 - 2t^3)
+    const float fraction = phase - phaseBaseF;
+    const float t = fraction * fraction * (3.0f - 2.0f * fraction);
+
+    // 各ランダムパラメータについて、現在の整数フェーズと次の整数フェーズの値を算出し、t で線形補間する
+    // seedOffsetを変えることで、X, Y, S, Aspect それぞれに全く違うランダム系列を持たせる
+    const float randX0 = hash3D(ux, uy, basePhase0, 0u);
+    const float randX1 = hash3D(ux, uy, basePhase1, 0u);
+    const float randX = _mix(randX0, randX1, t);
+
+    const float randY0 = hash3D(ux, uy, basePhase0, 10007u);
+    const float randY1 = hash3D(ux, uy, basePhase1, 10007u);
+    const float randY = _mix(randY0, randY1, t);
+
+    const float randS0 = hash3D(ux, uy, basePhase0, 9973u);
+    const float randS1 = hash3D(ux, uy, basePhase1, 9973u);
+    const float randS = _mix(randS0, randS1, t);
+
+    const float randAspect0 = hash3D(ux, uy, basePhase0, 2191590403u);
+    const float randAspect1 = hash3D(ux, uy, basePhase1, 2191590403u);
+    const float randAspect = _mix(randAspect0, randAspect1, t);
+
+    const float finalAspect = _fmaxf(0.1f, params->aspectRatio * (1.0f + params->aspectJitter * randAspect));
+
+    // GPU側でセルサイズを動的計算（CPU負荷削減）
+    const float SIN60 = 0.866025f; // √3/2
+    const float width = (float)params->srcSize[0];
+    const float cellBasePitch = _fmaxf(3.0f, _floorf(width / params->screenDensity));
+    const float cellPitchX = cellBasePitch;
+    const float cellPitchY = _fmaxf(3.0f, _floorf(cellBasePitch * SIN60));
+    const float2 cellPitch = to_float2(cellPitchX, cellPitchY);
+    const float halfPitchX = cellPitchX * 0.5f;
+    const float halfPitchY = cellPitchY * 0.5f; // 事前計算
+    const float maxCellRadius = (cellBasePitch * 0.5f) * 1.5f;
+
+    // 半セル分Y位置をオフセット（固定値として半セル分）
+    const float yOffset = halfPitchY;
+
+    // 行オフセットの計算（奇数行は横にオフセット）
+    const int isOddRow = (y % 2 != 0) ? 1 : 0;
+    const float rowOffset = (isOddRow != 0) ? -halfPitchX : 0.0f;
+
+    // セルの中心位置をピクセル座標で計算し、位置ジッターを適用
+    const float jitterAmountX = params->positionJitter * halfPitchX;
+    const float jitterAmountY = params->positionJitter * halfPitchY;
+
+    const float cellCenterX = ((float)x * cellPitchX) + halfPitchX + rowOffset + (randX * jitterAmountX);
+    const float cellCenterY = ((float)y * cellPitchY) + halfPitchY - yOffset + (randY * jitterAmountY);
+
+    // dst_info1: セル位置情報を格納
+    const float4 cellInfo1 = {
+        (float)x,      // セルIDX
+        (float)y,      // セルIDY
+        cellCenterX,   // セル中心X位置
+        cellCenterY    // セル中心Y位置
+    };
+
+    // セルの周辺範囲を定義して平均輝度を計算
+    const int samplingRadius = (int)(halfPitchX);
+    const float radiusSquared = (float)(samplingRadius * samplingRadius);
+
+    // サンプリングステップの動的調整（閾値との比較を事前計算）
+    const int sampleStep = ((float)samplingRadius > SAMPLING_STEP_THRESHOLD) ? SAMPLING_STEP_LARGE : 1;
+    const float sampleStepSquared = (float)(sampleStep * sampleStep); // 事前計算
+
+    float totalLuma = 0.0f;
+    int sampleCount = 0;
+    float4 avgColor = to_float4(0.0f, 0.0f, 0.0f, 0.0f);
+
+    // ループ範囲の計算（境界チェック）- 事前計算で効率化
+    const float fSamplingRadius = (float)samplingRadius;
+    const int minX = max(0, (int)(cellCenterX - fSamplingRadius));
+    const int maxX = min(params->srcSize[0] - 1, (int)(cellCenterX + fSamplingRadius));
+    const int minY = max(0, (int)(cellCenterY - fSamplingRadius));
+    const int maxY = min(params->srcSize[1] - 1, (int)(cellCenterY + fSamplingRadius));
+
+    // 無効な範囲の早期リターン（GPU効率向上）
+    if (minX > maxX || minY > maxY) {
+        _tex2DVec4Write(dst_info1, x, y, cellInfo1);
+        _tex2DVec4Write(dst_info2, x, y, to_float4(0.5f, 0.0f, (float)isOddRow, finalAspect));
+        _tex2DVec4Write(dst_info3, x, y, to_float4(0.0f, 0.0f, 0.0f, 1.0f));
+        return;
+    }
+
+    // セル範囲内のピクセルをサンプリング - 円形サンプリング（高速化版）
+    const int sampleStepInt = sampleStep * sampleStep; // 整数版で高速化
+
+    for (int pixelY = minY; pixelY <= maxY; pixelY += sampleStep) {
+        const float dy = (float)pixelY - cellCenterY;
+        const float dySquared = dy * dy;
+
+        // Y方向での早期カットオフ（円形範囲チェック）
+        if (dySquared > radiusSquared) continue;
+
+        // X方向の最大範囲を事前計算（円形範囲内）
+        const float maxDxSq = radiusSquared - dySquared;
+        const float maxDx = _sqrtf(maxDxSq);
+        const int localMinX = max(minX, (int)(cellCenterX - maxDx));
+        const int localMaxX = min(maxX, (int)(cellCenterX + maxDx));
+
+        for (int pixelX = localMinX; pixelX <= localMaxX; pixelX += sampleStep) {
+            const float dx = (float)pixelX - cellCenterX;
+            const float distSq = dx*dx + dySquared;
+
+            // 円形範囲内のみをサンプリング
+            if (distSq <= radiusSquared) {
+                // ピクセル値を取得
+                const float4 color = _tex2DVecN(src, pixelX, pixelY, 15);
+
+                // 輝度計算
+                const float luma = color.x * LUMA_R + color.y * LUMA_G + color.z * LUMA_B;
+
+                // サンプリングステップの補正（事前計算した値を使用）
+                const float lumaWeighted = luma * sampleStepSquared;
+                totalLuma += lumaWeighted;
+                sampleCount += sampleStepInt;
+
+                // 色成分の累積（ベクトル演算で効率化）
+                const float4 colorWeighted = color * sampleStepSquared;
+                avgColor += colorWeighted;
+            }
+        }
+    }
+
+    // サンプル数が0の場合の高速パス
+    if (sampleCount == 0) {
+        _tex2DVec4Write(dst_info1, x, y, cellInfo1);
+        _tex2DVec4Write(dst_info2, x, y, to_float4(0.5f, 0.0f, (float)isOddRow, 1.0f));
+        _tex2DVec4Write(dst_info3, x, y, to_float4(0.0f, 0.0f, 0.0f, 1.0f));
+        return;
+    }
+
+    // 平均輝度と色の計算
+    const float invSampleCount = (sampleCount > 0) ? (1.0f / (float)sampleCount) : 0.0f;
+    float avgLuma = totalLuma * invSampleCount;
+
+    // 色成分の平均値計算（ベクトル演算で効率化）
+    avgColor *= invSampleCount;
+
+    // コントラスト調整
+    avgLuma = 0.5f + (avgLuma - 0.5f) * params->contrast;
+    avgLuma = _saturatef(avgLuma);  // 0.0-1.0に制限
+
+    const int invertMode = params->invertMode;
+
+    // 輝度からドットの強度を計算（反転モードに対応）
+    float tonalValue = (invertMode != 0) ? avgLuma : (1.0f - avgLuma);
+
+    // ドットゲイン適用
+    tonalValue = _saturatef(tonalValue + params->dotGain);
+
+    // ドットサイズカーブ補正（1.0でリニア）
+    if (params->dotCurve != 1.0f) {
+        const float curveFactor = _fmaxf(params->dotCurve, 1e-4f);
+        tonalValue = _powf(_saturatef(tonalValue), curveFactor);
+    }
+
+    // 明るさのカットオフと最小ドット半径を一括処理
+    // サイズジッターの適用
+    const float sizeVariation = 1.0f + (randS * params->sizeJitter * 0.5f); // ±50% のスケール変動
+    tonalValue = _saturatef(tonalValue * sizeVariation);
+
+    const int passesBrightness = (invertMode != 0)
+        ? (avgLuma >= params->brightnessCutoff ? 1 : 0)
+        : (avgLuma <= params->brightnessCutoff ? 1 : 0);
+
+    float dotRadius = 0.0f;
+    if (passesBrightness && tonalValue >= params->minDotRadius) {
+        dotRadius = _fminf(tonalValue * maxCellRadius, maxCellRadius * params->clipRadius);
+    }
+
+    // dst_info2: ドット情報を格納
+    const float4 cellInfo2 = {
+        avgLuma,         // セル輝度値
+        dotRadius,       // ドット半径
+        (float)isOddRow, // 行オフセットフラグ
+        finalAspect      // アスペクト比
+    };
+
+    // 結果を書き込み
+    _tex2DVec4Write(dst_info1, x, y, cellInfo1);
+    _tex2DVec4Write(dst_info2, x, y, cellInfo2);
+    _tex2DVec4Write(dst_info3, x, y, avgColor);
+}
+]]
+
+-- レンダリングパラメータ構造体
+RenderParams = [[
+  int srcSize[2];       // 入力画像のサイズ
+  int cellGridNum[2];   // セルグリッド数 [X, Y]
+  float paperColor[4];  // 紙の色（背景色）[R,G,B,A]
+  float dotColor[4];    // ドットの色（前景色）[R,G,B,A]
+  int useOriginalColor; // 元の色を使用するかどうか
+  float screenDensity;  // スクリーン密度（GPU側でセルピッチ計算用）
+  int blendWithInput;   // 入力画像とブレンドするかどうか
+  int enableAntialias;  // ドット境界にアンチエイリアスを適用するか
+  float aaEdgeWidth;    // アンチエイリアス境界幅（ピクセル単位）
+  int dotShape;         // ドットの形状 (0: 円, 1: 四角, 2: ひし形)
+  float rgbShift;       // 色収差・版ズレの強度（ピクセル単位）
+]]
+
+RenderDotsKernel = [[
+// 定数定義
+#define LUMA_R 0.3f
+#define LUMA_G 0.59f
+#define LUMA_B 0.11f
+#define DOT_RADIUS_THRESHOLD 0.1f
+#define BOUNDING_BOX_MARGIN 1.0f
+#define HIGH_DENSITY_THRESHOLD 100.0f  // この値以上の密度は高密度と判断
+#define MIN_CHECK_RADIUS 1.5f  // 最小チェック半径
+
+// セルのドットチェック
+__DEVICE__ float checkCellDot(
+    const float2 cellPos,
+    const float2 pixelPos,
+    const float2 cellGridNum,
+    __TEXTURE2D__ cell_info1,
+    __TEXTURE2D__ cell_info2,
+    const float aaEdgeWidth,
+    const int dotShape)
+{
+    if (cellPos.x >= 0.0f && cellPos.x < cellGridNum.x &&
+        cellPos.y >= 0.0f && cellPos.y < cellGridNum.y) {
+
+        const float2 cellUV = (cellPos + to_float2(0.5f, 0.5f)) / cellGridNum;
+
+        const float4 cellInfo2Data = _tex2DVecN(cell_info2, cellUV.x, cellUV.y, 15);
+        const float dotRadius = cellInfo2Data.y;
+        const float finalAspect = cellInfo2Data.w;
+
+        if (dotRadius <= 0.0f)
+            return 0.0f;
+
+        if (dotRadius <= DOT_RADIUS_THRESHOLD && aaEdgeWidth <= 0.0f)
+            return 0.0f;
+
+        const float4 cellInfo1Data = _tex2DVecN(cell_info1, cellUV.x, cellUV.y, 15);
+        const float2 cellCenter = to_float2(cellInfo1Data.z, cellInfo1Data.w);
+
+        const float bbSize = dotRadius + BOUNDING_BOX_MARGIN + aaEdgeWidth;
+        const float2 diff = pixelPos - cellCenter;
+        const float2 absDiff = to_float2(_fabs(diff.x), _fabs(diff.y));
+
+        if (absDiff.x > bbSize || absDiff.y > bbSize)
+            return 0.0f;
+
+        // アスペクト比の適用（ドットがセル外にはみ出してクリップされないよう、常に縮小方向へスケールする）
+        float2 measureDiff = absDiff;
+        if (finalAspect > 1.0f) {
+            measureDiff.x *= finalAspect; // X方向を縮小（縦長になる）
+        } else if (finalAspect < 1.0f) {
+            measureDiff.y /= _fmaxf(0.01f, finalAspect); // Y方向を縮小（横長になる）
+        }
+
+        float distSq = 0.0f;
+        float dist = 0.0f;
+
+        if (dotShape == 0) { // Circle
+            distSq = measureDiff.x * measureDiff.x + measureDiff.y * measureDiff.y;
+            dist = _sqrtf(distSq);
+        } else if (dotShape == 1) { // Square
+            dist = _fmaxf(measureDiff.x, measureDiff.y);
+        } else if (dotShape == 2) { // Diamond
+            dist = (measureDiff.x + measureDiff.y) * 0.70710678f;
+        }
+
+        if (aaEdgeWidth <= 0.0f) {
+            return (dist <= dotRadius) ? 1.0f : 0.0f;
+        }
+
+        if (dist >= dotRadius)
+            return 0.0f;
+
+        // 高速近似または正確な計算の選択（半径に基づく）
+        const float innerRadius = _fmaxf(dotRadius - aaEdgeWidth, 0.0f);
+
+        if (dist <= innerRadius)
+            return 1.0f;
+
+        const float t = (dotRadius - dist) / aaEdgeWidth;
+        return _saturatef(t);
+    }
+    return 0.0f;
+}
+
+
+// 隣接セルのオフセット定義
+__DEVICE__ void getNeighborOffsets(const int isOddRow, float2 neighborOffsets[6])
+{
+    if (isOddRow != 0) {
+        // 奇数行の隣接6セル
+        neighborOffsets[0] = to_float2(-1.0f, -1.0f); // 上左
+        neighborOffsets[1] = to_float2( 0.0f, -1.0f); // 上右
+        neighborOffsets[2] = to_float2( 1.0f,  0.0f); // 右
+        neighborOffsets[3] = to_float2( 0.0f,  1.0f); // 下右
+        neighborOffsets[4] = to_float2(-1.0f,  1.0f); // 下左
+        neighborOffsets[5] = to_float2(-1.0f,  0.0f); // 左
+    } else {
+        // 偶数行の隣接6セル
+        neighborOffsets[0] = to_float2( 0.0f, -1.0f); // 上左
+        neighborOffsets[1] = to_float2( 1.0f, -1.0f); // 上右
+        neighborOffsets[2] = to_float2( 1.0f,  0.0f); // 右
+        neighborOffsets[3] = to_float2( 1.0f,  1.0f); // 下右
+        neighborOffsets[4] = to_float2( 0.0f,  1.0f); // 下左
+        neighborOffsets[5] = to_float2(-1.0f,  0.0f); // 左
+    }
+}
+
+// 高密度モード用の処理関数
+// 通常密度モード用の処理関数
+__DEVICE__ float4 blendDotOver(
+    const float4 baseColor,
+    const float4 dotColor,
+    const float coverage)
+{
+    const float blendFactor = _saturatef(dotColor.w * coverage);
+    if (blendFactor <= 0.0f)
+        return baseColor;
+
+    return to_float4(
+        baseColor.x * (1.0f - blendFactor) + dotColor.x * blendFactor,
+        baseColor.y * (1.0f - blendFactor) + dotColor.y * blendFactor,
+        baseColor.z * (1.0f - blendFactor) + dotColor.z * blendFactor,
+        _fmaxf(baseColor.w, blendFactor)
+    );
+}
+
+// --- [UPDATE_BEST_CELL Refactoring] ---
+// 最適なセルの探索状態を保持する構造体 (typedefを避ける)
+struct BestCellState {
+    float bestStrength;
+    float bestCoverage;
+    float4 bestDotColor;
+};
+
+// 最適なセル候補を評価して状態を更新する関数
+__DEVICE__ void updateBestCell(
+    const float2 candidatePos,
+    const float2 pixelPos,
+    const float2 cellGridNum,
+    __TEXTURE2D__ cell_info1,
+    __TEXTURE2D__ cell_info2,
+    __TEXTURE2D__ cell_info3,
+    const float aaEdgeWidth,
+    const int dotShape,
+    const float4 userDotColor,
+    const int useOriginalColorFlag,
+    const int blendWithInput,
+    const float shiftVal,
+    const float2 cellShiftROFF,
+    const float2 cellShiftBOFF,
+    struct BestCellState *state)
+{
+    const float coverageCandidate = checkCellDot(candidatePos, pixelPos, cellGridNum, cell_info1, cell_info2, aaEdgeWidth, dotShape);
+    if (coverageCandidate > 0.0f) {
+        float4 candidateDotColor = userDotColor;
+        float candidateStrength = coverageCandidate;
+        if (useOriginalColorFlag != 0) {
+            const float2 baseUV = (candidatePos + to_float2(0.5f, 0.5f)) / cellGridNum;
+            if (shiftVal == 0.0f) {
+                // 最適化: シフトがない場合は1回のサンプリングで済ませる
+                candidateDotColor = _tex2DVecN(cell_info3, baseUV.x, baseUV.y, 15);
+            } else {
+                const float4 cR = _tex2DVecN(cell_info3, baseUV.x + cellShiftROFF.x, baseUV.y + cellShiftROFF.y, 15);
+                const float4 cG = _tex2DVecN(cell_info3, baseUV.x, baseUV.y, 15);
+                const float4 cB = _tex2DVecN(cell_info3, baseUV.x + cellShiftBOFF.x, baseUV.y + cellShiftBOFF.y, 15);
+                candidateDotColor = to_float4(cR.x, cG.y, cB.z, cG.w);
+            }
+            const float candidateLuma = candidateDotColor.x * LUMA_R + candidateDotColor.y * LUMA_G + candidateDotColor.z * LUMA_B;
+            candidateStrength *= _fmaxf(1.0f - candidateLuma, 0.0f);
+        } else if (blendWithInput != 0) {
+            // UseOriginalColorがオフでBlendWithInputがオンの場合、
+            // Shiftされた inputColor で上書きして単色のドットの色をずらすのは
+            // 不自然で不透明度も壊すので行わない
+        }
+        const float strengthDiff = candidateStrength - state->bestStrength;
+        if (strengthDiff > 1e-4f || (strengthDiff >= -1e-4f && coverageCandidate > state->bestCoverage)) {
+            state->bestStrength = candidateStrength;
+            state->bestCoverage = coverageCandidate;
+            state->bestDotColor = candidateDotColor;
+        }
+    }
+}
+
+
+__KERNEL__ void RenderDotsKernel(
+    __CONSTANTREF__ RenderParams *params,
+    __TEXTURE2D__ cell_info1,
+    __TEXTURE2D__ cell_info2,
+    __TEXTURE2D__ cell_info3,
+    __TEXTURE2D__ src_img,
+    __TEXTURE2D_WRITE__ dst)
+{
+    DEFINE_KERNEL_ITERATORS_XY(x, y);
+
+    if (x >= params->srcSize[0] || y >= params->srcSize[1])
+        return;
+
+    const float2 pixelPos = to_float2((float)x, (float)y);
+
+    // GPU側でセルピッチを計算（CPU負荷削減）
+    const float SIN60 = 0.866025f;
+    const float width = (float)params->srcSize[0];
+    const float cellBasePitch = _fmaxf(3.0f, _floorf(width / params->screenDensity));
+    const float2 cellPitch = to_float2(cellBasePitch, _fmaxf(3.0f, _floorf(cellBasePitch * SIN60)));
+
+    const float aaEdgeWidth = (params->enableAntialias != 0) ? params->aaEdgeWidth : 0.0f;
+
+    const float yOffset = cellPitch.y * 0.5f;
+    const float avgCellSize = (cellPitch.x + cellPitch.y) * 0.5f;
+    const int isHighDensity = avgCellSize < MIN_CHECK_RADIUS ? 1 : 0;
+
+    const int baseRowY = (int)((pixelPos.y + yOffset) / cellPitch.y);
+    const int isOddRow = (baseRowY % 2 != 0) ? 1 : 0;
+
+    const float2 halfCellPitch = cellPitch * 0.5f; // 事前計算
+
+    float adjustedX = pixelPos.x;
+    if (isOddRow != 0) {
+        adjustedX += halfCellPitch.x;
+    }
+    const int mainCellX = (int)_floorf(adjustedX / cellPitch.x);
+    const int mainCellY = baseRowY;
+    const float2 mainCellPos = to_float2((float)mainCellX, (float)mainCellY);
+
+    const float2 cellGridNum = to_float2(
+        (float)params->cellGridNum[0],
+        (float)params->cellGridNum[1]
+    );
+
+    const float4 paperColor = {
+        params->paperColor[0],
+        params->paperColor[1],
+        params->paperColor[2],
+        params->paperColor[3]
+    };
+
+    const float4 userDotColor = {
+        params->dotColor[0],
+        params->dotColor[1],
+        params->dotColor[2],
+        params->dotColor[3]
+    };
+    const int useOriginalColorFlag = params->useOriginalColor;
+
+    const float intWidth = (float)params->srcSize[0];
+    const float intHeight = (float)params->srcSize[1];
+    const int blendWithInput = params->blendWithInput > 0 ? 1 : 0;
+
+    // RGBShift offsets (Red goes Top-Left, Blue goes Bottom-Right, Green stays center)
+    const float shiftVal = (blendWithInput != 0 || useOriginalColorFlag != 0) ? params->rgbShift : 0.0f;
+    const float2 shiftROFF = to_float2(-shiftVal / intWidth, -shiftVal / intHeight);
+    const float2 shiftBOFF = to_float2( shiftVal / intWidth,  shiftVal / intHeight);
+    const float2 cellShiftROFF = to_float2(-shiftVal / cellGridNum.x, -shiftVal / cellGridNum.y);
+    const float2 cellShiftBOFF = to_float2( shiftVal / cellGridNum.x,  shiftVal / cellGridNum.y);
+
+    float4 inputColor = paperColor;
+
+    if (blendWithInput != 0) {
+        const float px = (float)x / intWidth;
+        const float py = (float)y / intHeight;
+
+        if (shiftVal == 0.0f) {
+            // 最適化: シフトがない場合は1回のサンプリングで済ませる
+            inputColor = _tex2DVecN(src_img, px, py, 15);
+        } else {
+            // 色ごとにサンプリング位置をずらす
+            const float4 sR = _tex2DVecN(src_img, px + shiftROFF.x, py + shiftROFF.y, 15);
+            const float4 sG = _tex2DVecN(src_img, px, py, 15);
+            const float4 sB = _tex2DVecN(src_img, px + shiftBOFF.x, py + shiftBOFF.y, 15);
+            inputColor = to_float4(sR.x, sG.y, sB.z, sG.w);
+        }
+    }
+
+    struct BestCellState state;
+    state.bestCoverage = 0.0f;
+    state.bestStrength = -1.0f;
+    state.bestDotColor = (blendWithInput != 0 && useOriginalColorFlag != 0) ? inputColor : userDotColor;
+
+    updateBestCell(mainCellPos, pixelPos, cellGridNum, cell_info1, cell_info2, cell_info3, aaEdgeWidth, params->dotShape, userDotColor, useOriginalColorFlag, blendWithInput, shiftVal, cellShiftROFF, cellShiftBOFF, &state);
+
+    const float2 cellCenter = to_float2(
+        mainCellX * cellPitch.x + (isOddRow != 0 ? halfCellPitch.x : 0.0f) + halfCellPitch.x,
+        mainCellY * cellPitch.y + halfCellPitch.y
+    );
+
+    const float2 relPos = pixelPos - cellCenter;
+
+    float2 neighborOffsets[6];
+    getNeighborOffsets(isOddRow, neighborOffsets);
+
+    if (isHighDensity != 0) {
+        int checkIndices[2] = {-1, -1};
+        int checkCount = 0;
+        const float2 cellThreshold = halfCellPitch * 0.5f; // cellPitch * 0.25f と同等
+        const float2 absRelPos = to_float2(_fabs(relPos.x), _fabs(relPos.y));
+
+        if (absRelPos.x > cellThreshold.x) {
+            checkIndices[checkCount++] = (relPos.x > 0.0f) ? 2 : 5;
+        }
+
+        if (absRelPos.y > cellThreshold.y) {
+            checkIndices[checkCount++] = (relPos.y > 0.0f) ? (isOddRow ? 3 : 4)
+                                                          : (isOddRow ? 0 : 1);
+            if (checkCount > 2) checkCount = 2;
+        }
+
+        for (int i = 0; i < checkCount; i++) {
+            const int index = checkIndices[i];
+            if (index < 0) continue;
+            updateBestCell(mainCellPos + neighborOffsets[index], pixelPos, cellGridNum, cell_info1, cell_info2, cell_info3, aaEdgeWidth, params->dotShape, userDotColor, useOriginalColorFlag, blendWithInput, shiftVal, cellShiftROFF, cellShiftBOFF, &state);
+        }
+    } else {
+        for (int i = 0; i < 6; i++) {
+            updateBestCell(mainCellPos + neighborOffsets[i], pixelPos, cellGridNum, cell_info1, cell_info2, cell_info3, aaEdgeWidth, params->dotShape, userDotColor, useOriginalColorFlag, blendWithInput, shiftVal, cellShiftROFF, cellShiftBOFF, &state);
+        }
+    }
+
+    if (state.bestCoverage > 0.0f) {
+        const float4 baseColor = (blendWithInput != 0) ? inputColor : paperColor;
+        const float4 finalColor = blendDotOver(baseColor, state.bestDotColor, state.bestCoverage);
+        _tex2DVec4Write(dst, x, y, finalColor);
+        return;
+    }
+
+    if (blendWithInput != 0) {
+        _tex2DVec4Write(dst, x, y, inputColor);
+    } else {
+        _tex2DVec4Write(dst, x, y, paperColor);
+    }
+}
+]]
+
+function Create()
+    local groupID = 0
+
+    InScreenDensity = self:AddInput("Screen Density", "ScreenDensity", {
+        LINKID_DataType = "Number",
+        INPID_InputControl = "SliderControl",
+        INP_Default = 200.0,
+        INP_MinAllowed = 1,
+        INP_MaxAllowed = 1000.0,
+        INPID_PreviewControl = "RangeControl",
+        INP_Integer = false,
+        INPS_StatusText = "Controls the density of the halftone pattern in CMYK mode",
+    })
+
+    InContrast = self:AddInput("Contrast", "Contrast", {
+        LINKID_DataType = "Number",
+        INPID_InputControl = "SliderControl",
+        INP_Default = 0.0,
+        INP_MinAllowed = -1.0,
+        INP_MaxAllowed = 1.0,
+        INPS_StatusText = "Adjusts the contrast of the halftone pattern (-1.0 to 1.0 mapped to 0.25x to 4x)",
+    })
+
+    InRGBShift = self:AddInput("RGB Shift (Req. Orig Color/Blend)", "RGBShift", {
+        LINKID_DataType = "Number",
+        INPID_InputControl = "SliderControl",
+        INP_Default = 0.0,
+        INP_MinAllowed = 0.0,
+        INP_MaxAllowed = 20.0,
+        INPS_StatusText =
+        "Simulates color plate misalignment. Only active when 'Use Original Color' or 'Blend With Input' is enabled.",
+    })
+
+    self:BeginControlNest("Dot", "Dot", true);
+    InDotShape = self:AddInput("Dot Shape", "DotShape", {
+        LINKID_DataType = "Number",
+        INPID_InputControl = "ComboControl",
+        INP_Default = 0,
+        INP_Integer = true,
+        { CCS_AddString = "Circle" },
+        { CCS_AddString = "Square" },
+        { CCS_AddString = "Diamond" },
+        INPS_StatusText = "Select the shape of the halftone dots",
+    })
+
+    InAspectRatio = self:AddInput("Dot Aspect Ratio", "AspectRatio", {
+        LINKID_DataType = "Number",
+        INPID_InputControl = "SliderControl",
+        INP_Default = 0.0,
+        INP_MinAllowed = -1.0,
+        INP_MaxAllowed = 1.0,
+        INPS_StatusText = "Adjusts the base aspect ratio of the dots (-1.0 to 1.0 mapped to 0.25x to 4x)",
+    })
+
+    InDotGain = self:AddInput("Dot Gain", "DotGain", {
+        LINKID_DataType = "Number",
+        INPID_InputControl = "SliderControl",
+        INP_Default = 0.00,
+        INP_MinAllowed = -1.0,
+        INP_MaxAllowed = 1.0,
+        INPS_StatusText = "Simulates ink spread on paper",
+    })
+
+    InDotSizeCurve = self:AddInput("Dot Size Curve", "DotSizeCurve", {
+        LINKID_DataType = "Number",
+        INPID_InputControl = "SliderControl",
+        INP_Default = 0.0,
+        INP_MinAllowed = -1.0,
+        INP_MaxAllowed = 1.0,
+        INPS_StatusText = "Adjusts the growth curve of dot sizes (-1.0 to 1.0 mapped to 0.25x to 4x)",
+    })
+
+    InCutoffDotRadius = self:AddInput("Cutoff Dot Radius", "MinDotRadius", {
+        LINKID_DataType = "Number",
+        INPID_InputControl = "SliderControl",
+        INP_Default = 0.05,
+        INP_MinAllowed = 0.0,
+        INP_MaxAllowed = 1.0,
+        INPS_StatusText = "Dots smaller than this radius are not drawn",
+    })
+
+    InClipDotRadius = self:AddInput("Clip Dot Radius", "ClipDotRadius", {
+        LINKID_DataType = "Number",
+        INPID_InputControl = "SliderControl",
+        INP_Default = 1.0,
+        INP_MinAllowed = 0.0,
+        INP_MaxAllowed = 1.0,
+        INPS_StatusText = "Controls the maximum size of dots in the halftone pattern",
+    })
+
+    InJitterPhase = self:AddInput("Jitter Noise Phase", "JitterPhase", {
+        LINKID_DataType = "Number",
+        INPID_InputControl = "SliderControl",
+        INP_Default = 0.0,
+        INP_Integer = false,
+        INP_MinAllowed = 0.0,
+        INPS_StatusText = "Smoothly evolves the random pattern used for all jitters",
+    })
+
+    InPositionJitter = self:AddInput("Position Jitter", "PositionJitter", {
+        LINKID_DataType = "Number",
+        INPID_InputControl = "SliderControl",
+        INP_Default = 0.05,
+        INP_MinAllowed = 0.0,
+        INP_MaxAllowed = 1.0,
+        INPS_StatusText = "Randomly shifts the position of the dots to simulate imperfect printing",
+    })
+
+    InSizeJitter = self:AddInput("Size Jitter", "SizeJitter", {
+        LINKID_DataType = "Number",
+        INPID_InputControl = "SliderControl",
+        INP_Default = 0.02,
+        INP_MinAllowed = 0.0,
+        INP_MaxAllowed = 1.0,
+        INPS_StatusText = "Randomly varies the size of the dots to simulate imperfect printing",
+    })
+
+    InAspectJitter = self:AddInput("Aspect Jitter", "AspectJitter", {
+        LINKID_DataType = "Number",
+        INPID_InputControl = "SliderControl",
+        INP_Default = 0.0,
+        INP_MinAllowed = 0.0,
+        INP_MaxAllowed = 1.0,
+        INPS_StatusText = "Randomly varies the aspect ratio of each dot to simulate paper grain or print roller slip",
+    })
+
+    InInvertMode = self:AddInput("Invert Brightness", "InvertMode", {
+        LINKID_DataType = "Number",
+        INPID_InputControl = "CheckboxControl",
+        INP_Default = 0.0,
+        INPS_StatusText = "When enabled, brighter areas generate larger dots",
+    })
+
+    InBrightnessCutoff = self:AddInput("Brightness Cutoff", "BrightnessCutoff", {
+        LINKID_DataType = "Number",
+        INPID_InputControl = "SliderControl",
+        INP_Default = 0.75,
+        INP_MinAllowed = 0.0,
+        INP_MaxAllowed = 1.0,
+        INPS_StatusText = "Brightness threshold controlling dot placement; flips when Invert Brightness is enabled",
+    })
+
+    InEnableDotAntialias = self:AddInput("Enable Dot Antialias", "EnableDotAntialias", {
+        LINKID_DataType = "Number",
+        INPID_InputControl = "CheckboxControl",
+        INP_Default = 1.0,
+        INPS_StatusText = "Smooth dot edges when dots are very small",
+    })
+
+    InAAEdgeSoftness = self:AddInput("AA Edge Softness", "AAEdgeSoftness", {
+        LINKID_DataType = "Number",
+        INPID_InputControl = "SliderControl",
+        INP_Default = 0.15,
+        INP_MinAllowed = 0.0,
+        INP_MaxAllowed = 1.0,
+        INPS_StatusText = "Controls how wide the antialias region is around each dot",
+    })
+
+    InUseOriginalColor = self:AddInput("Use Original Color", "UseOriginalColor", {
+        LINKID_DataType = "Number",
+        INPID_InputControl = "CheckboxControl",
+        INP_Default = 0.0,
+        INPS_StatusText = "Preserves original colors instead of black and white",
+    })
+
+    groupID = groupID + 1
+    InDotColorRed = self:AddInput("Dot Color Red", "DotColorRed", {
+        LINKID_DataType    = "Number",
+        INPID_InputControl = "ColorControl",
+        INP_MinScale       = 0.0,
+        INP_MaxScale       = 1.0,
+        INP_Default        = 0.0627,
+        ICS_Name           = "Color",
+        CLRC_ShowWheel     = false,
+        IC_ControlGroup    = groupID,
+        IC_ControlID       = 0, -- Red ID
+        INPS_StatusText    = "Sets the dot color (foreground)",
+    })
+
+    InDotColorGreen = self:AddInput("Dot Color Green", "DotColorGreen", {
+        LINKID_DataType    = "Number",
+        INPID_InputControl = "ColorControl",
+        INP_MinScale       = 0.0,
+        INP_MaxScale       = 1.0,
+        INP_Default        = 0.0156,
+        ICS_Name           = "Color",
+        CLRC_ShowWheel     = false,
+        IC_ControlGroup    = groupID,
+        IC_ControlID       = 1, -- Green ID
+        INPS_StatusText    = "Sets the dot color (foreground)",
+    })
+
+    InDotColorBlue = self:AddInput("Dot Color Blue", "DotColorBlue", {
+        LINKID_DataType    = "Number",
+        INPID_InputControl = "ColorControl",
+        INP_MinScale       = 0.0,
+        INP_MaxScale       = 1.0,
+        INP_Default        = 0.0,
+        ICS_Name           = "Color",
+        CLRC_ShowWheel     = false,
+        IC_ControlGroup    = groupID,
+        IC_ControlID       = 2, -- Blue ID
+        INPS_StatusText    = "Sets the dot color (foreground)",
+    })
+
+    InDotColorAlpha = self:AddInput("Dot Color Alpha", "DotColorAlpha", {
+        LINKID_DataType    = "Number",
+        INPID_InputControl = "ColorControl",
+        INP_MinScale       = 0.0,
+        INP_MaxScale       = 1.0,
+        INP_Default        = 1.0,
+        ICS_Name           = "Color",
+        CLRC_ShowWheel     = false,
+        IC_ControlGroup    = groupID,
+        IC_ControlID       = 3, -- Alpha ID
+        INPS_StatusText    = "Sets the dot color (foreground)",
+    })
+    self:EndControlNest()
+
+    self:BeginControlNest("Paper", "Paper", true);
+
+    InBlendWithInput = self:AddInput("Blend With Input", "BlendWithInput", {
+        LINKID_DataType = "Number",
+        INPID_InputControl = "CheckboxControl",
+        INP_Default = 0.0,
+        INPS_StatusText = "Blend dots over the input image instead of using paper color",
+    })
+
+    InPaperColorPreset = self:AddInput("Paper Color Preset", "PaperColorPreset", {
+        LINKID_DataType = "Number",
+        INPID_InputControl = "ComboControl",
+        INP_Default = 0,
+        INP_Integer = true,
+        INP_DoNotifyChanged = true,
+        { CCS_AddString = "Custom" },
+        { CCS_AddString = "Pure White" },
+        { CCS_AddString = "Warm White" },
+        { CCS_AddString = "Cool White" },
+        { CCS_AddString = "Natural White" },
+        { CCS_AddString = "Cream" },
+        { CCS_AddString = "Ivory" },
+        { CCS_AddString = "Light Gray" },
+        { CCS_AddString = "Newspaper" },
+        { CCS_AddString = "Vintage" },
+        { CCS_AddString = "Kraft" },
+        { CCS_AddString = "Recycled" },
+        { CCS_AddString = "Light Blue" },
+        { CCS_AddString = "Light Green" },
+        { CCS_AddString = "Light Pink" },
+        { CCS_AddString = "Light Yellow" },
+        INPS_StatusText = "Select from common paper color presets",
+    })
+
+    groupID = groupID + 1
+    InPaperColorRed = self:AddInput("Paper Color Red", "PaperColorRed", {
+        LINKID_DataType    = "Number",
+        INPID_InputControl = "ColorControl",
+        INP_MinScale       = 0.0,
+        INP_MaxScale       = 1.0,
+        INP_Default        = 0.85,
+        ICS_Name           = "Color",
+        CLRC_ShowWheel     = false,
+        IC_ControlGroup    = groupID,
+        IC_ControlID       = 0, -- Red ID
+        INPS_StatusText    = "Sets the paper color (background)",
+    })
+
+    InPaperColorGreen = self:AddInput("Paper Color Green", "PaperColorGreen", {
+        LINKID_DataType    = "Number",
+        INPID_InputControl = "ColorControl",
+        INP_MinScale       = 0.0,
+        INP_MaxScale       = 1.0,
+        INP_Default        = 0.75,
+        ICS_Name           = "Color",
+        CLRC_ShowWheel     = false,
+        IC_ControlGroup    = groupID,
+        IC_ControlID       = 1, -- Green ID
+        INPS_StatusText    = "Sets the paper color (background)",
+    })
+
+    InPaperColorBlue = self:AddInput("Paper Color Blue", "PaperColorBlue", {
+        LINKID_DataType    = "Number",
+        INPID_InputControl = "ColorControl",
+        INP_MinScale       = 0.0,
+        INP_MaxScale       = 1.0,
+        INP_Default        = 0.58,
+        ICS_Name           = "Color",
+        CLRC_ShowWheel     = false,
+        IC_ControlGroup    = groupID,
+        IC_ControlID       = 2, -- Blue ID
+        INPS_StatusText    = "Sets the paper color (background)",
+    })
+
+    InPaperColorAlpha = self:AddInput("Paper Color Alpha", "PaperColorAlpha", {
+        LINKID_DataType    = "Number",
+        INPID_InputControl = "ColorControl",
+        INP_MinScale       = 0.0,
+        INP_MaxScale       = 1.0,
+        INP_Default        = 1.0,
+        ICS_Name           = "Color",
+        CLRC_ShowWheel     = false,
+        IC_ControlGroup    = groupID,
+        IC_ControlID       = 3, -- Alpha ID
+        INPS_StatusText    = "Sets the paper color (background)",
+    })
+    self:EndControlNest()
+
+    InImage = self:AddInput("Input Image", "Image", {
+        LINKID_DataType = "Image",
+        LINK_Main = 1,
+        INPS_StatusText = "Input image to be processed",
+    })
+
+    OutImage = self:AddOutput("Output", "Output", {
+        LINKID_DataType = "Image",
+        LINK_Main = 1,
+    })
+end
+
+function Process(req)
+    -- 入力画像が無い場合は何もしない
+    local img = InImage:GetValue(req)
+    if img == nil then
+        OutImage:Set(req, nil)
+        return
+    end
+
+    -- 入力パラメータの取得
+    local contrastSlider = InContrast:GetValue(req).Value
+    local contrast = math.pow(4.0, contrastSlider)
+    
+    local screenDensity = InScreenDensity:GetValue(req).Value
+    local rgbShift = InRGBShift:GetValue(req).Value
+
+    local dotShape = InDotShape:GetValue(req).Value
+    local aspectRatioSlider = InAspectRatio:GetValue(req).Value
+    -- Convert UI linear range (-1.0 to 1.0) into exponential scaling multiplier (0.25 to 4.0)
+    -- This provides symmetric visual scaling behavior.
+    -- +1.0 -> 2^2 = 4 (tall)
+    --  0.0 -> 2^0 = 1 (circle)
+    -- -1.0 -> 2^-2 = 0.25 (wide)
+    local aspectRatio = math.pow(2.0, aspectRatioSlider * 2.0)
+    local dotGain = InDotGain:GetValue(req).Value
+    local dotSizeCurveSlider = InDotSizeCurve:GetValue(req).Value
+    -- 正の値でカーブを持ち上げ（白くしやすく/ドットを太く）、負の数でカーブを沈める（黒くしやすく/ドットを細く）ために反転
+    local dotSizeCurve = math.pow(4.0, -dotSizeCurveSlider)
+    
+    local cutoffDotRadius = InCutoffDotRadius:GetValue(req).Value
+    local maxDotRadius = InClipDotRadius:GetValue(req).Value
+
+    local jitterPhase = InJitterPhase:GetValue(req).Value
+    local positionJitter = InPositionJitter:GetValue(req).Value
+    local sizeJitter = InSizeJitter:GetValue(req).Value
+    local aspectJitter = InAspectJitter:GetValue(req).Value
+
+    local invertMode = InInvertMode:GetValue(req).Value
+    local brightnessCutoff = InBrightnessCutoff:GetValue(req).Value
+
+    local enableDotAntialias = InEnableDotAntialias:GetValue(req).Value > 0.5
+    local aaEdgeSoftness = InAAEdgeSoftness:GetValue(req).Value
+    local useOriginalColor = InUseOriginalColor:GetValue(req).Value
+
+    local blendWithInput = InBlendWithInput:GetValue(req).Value
+    local paperColor = {
+        InPaperColorRed:GetValue(req).Value,
+        InPaperColorGreen:GetValue(req).Value,
+        InPaperColorBlue:GetValue(req).Value,
+        InPaperColorAlpha:GetValue(req).Value,
+    }
+    local dotColor = {
+        InDotColorRed:GetValue(req).Value,
+        InDotColorGreen:GetValue(req).Value,
+        InDotColorBlue:GetValue(req).Value,
+        InDotColorAlpha:GetValue(req).Value,
+    }
+
+    local width = img.DataWindow:Width()
+    local height = img.DataWindow:Height()
+
+    -- セル情報バッファサイズの計算
+    -- 定数の修正
+    local SIN60 = 0.866025 -- √3/2
+    local cellBasePitch = math.floor(math.max(3.0, width / screenDensity))
+    local cellPitchX = cellBasePitch
+    local cellPitchY = math.floor(math.max(3.0, cellBasePitch * SIN60))
+    local MAX_CELL_RADIUS = (cellBasePitch * 0.5) * 1.5
+
+    local averageCellPitch = (cellPitchX + cellPitchY) * 0.5
+    local aaEdgeWidth = 0.0
+    if enableDotAntialias then
+        aaEdgeWidth = aaEdgeSoftness * averageCellPitch
+    end
+
+    -- セルの配列サイズを計算
+    local cellGridNumX = math.ceil(width / cellPitchX) + 3
+    local cellGridNumY = math.ceil(height / cellPitchY) + 2
+
+    -- セル情報用の中間バッファを作成
+    local cellInfo1 = Image({
+        IMG_Width = cellGridNumX,
+        IMG_Height = cellGridNumY,
+        IMG_Depth = 8,
+    })
+
+    local cellInfo2 = Image({
+        IMG_Width = cellGridNumX,
+        IMG_Height = cellGridNumY,
+        IMG_Depth = 8,
+    })
+
+    local cellInfo3 = Image({
+        IMG_Width = cellGridNumX,
+        IMG_Height = cellGridNumY,
+        IMG_Depth = 8,
+    })
+
+    local out = Image({ IMG_Like = img })
+
+    -- ステップ1: セル情報計算カーネル実行
+    local cellInfoNode = DVIPComputeNode(req, "CellInfoKernel", CellInfoKernel, "CellInfoParams", CellInfoParams)
+
+    if cellInfoNode then
+        -- パラメータをカーネルに設定
+        local params = cellInfoNode:GetParamBlock(CellInfoParams)
+        params.srcSize[0] = width
+        params.srcSize[1] = height
+        params.dstSize[0] = cellGridNumX
+        params.dstSize[1] = cellGridNumY
+        params.screenDensity = screenDensity -- GPU側でセルサイズ計算
+        params.contrast = contrast
+        params.aspectRatio = aspectRatio
+        params.dotGain = dotGain
+        params.dotCurve = dotSizeCurve
+        params.minDotRadius = cutoffDotRadius
+        params.clipRadius = maxDotRadius
+        params.jitterPhase = jitterPhase
+        params.positionJitter = positionJitter
+        params.sizeJitter = sizeJitter
+        params.aspectJitter = aspectJitter
+        params.invertMode = invertMode > 0.5 and 1 or 0
+        params.brightnessCutoff = brightnessCutoff
+        params.useOriginalColor = useOriginalColor > 0.5 and 1 or 0
+
+        cellInfoNode:SetParamBlock(params)
+        cellInfoNode:AddSampler("RowSampler", TEX_FILTER_MODE_POINT, TEX_ADDRESS_MODE_CLAMP,
+            TEX_NORMALIZED_COORDS_FALSE)
+        cellInfoNode:AddInput("src", img)
+        cellInfoNode:AddOutput("dst_info1", cellInfo1)
+        cellInfoNode:AddOutput("dst_info2", cellInfo2)
+        cellInfoNode:AddOutput("dst_info3", cellInfo3)
+
+        local success = cellInfoNode:RunSession(req)
+        if not success then
+            -- エラーがあれば元の画像を返却
+            OutImage:Set(req, img)
+            return
+        end
+    end
+
+    -- ステップ2: ドット描画カーネル実行
+    local renderNode = DVIPComputeNode(req, "RenderDotsKernel", RenderDotsKernel, "RenderParams", RenderParams)
+
+    if renderNode then
+        -- パラメータをカーネルに設定
+        local params = renderNode:GetParamBlock(RenderParams)
+        params.srcSize[0] = width
+        params.srcSize[1] = height
+        params.blendWithInput = blendWithInput > 0.5 and 1 or 0
+        params.paperColor[0] = paperColor[1]
+        params.paperColor[1] = paperColor[2]
+        params.paperColor[2] = paperColor[3]
+        params.paperColor[3] = paperColor[4]
+        params.cellGridNum[0] = cellGridNumX
+        params.cellGridNum[1] = cellGridNumY
+        params.dotColor[0] = dotColor[1]
+        params.dotColor[1] = dotColor[2]
+        params.dotColor[2] = dotColor[3]
+        params.dotColor[3] = dotColor[4]
+        params.useOriginalColor = useOriginalColor > 0.5 and 1 or 0
+        params.rgbShift = rgbShift
+        params.dotShape = math.floor(dotShape + 0.5)
+        params.screenDensity = screenDensity -- GPU側でセルピッチ計算
+        params.enableAntialias = enableDotAntialias and 1 or 0
+        params.aaEdgeWidth = aaEdgeWidth
+
+        renderNode:SetParamBlock(params)
+        renderNode:AddSampler("RowSampler", TEX_FILTER_MODE_POINT, TEX_ADDRESS_MODE_CLAMP,
+            TEX_NORMALIZED_COORDS_TRUE)
+        --  renderNode:AddSampler("CellCenterSampler", TEX_FILTER_MODE_POINT, TEX_ADDRESS_MODE_CLAMP,
+        --      TEX_NORMALIZED_COORDS_FALSE)
+        renderNode:AddInput("cell_info1", cellInfo1)
+        renderNode:AddInput("cell_info2", cellInfo2)
+        renderNode:AddInput("cell_info3", cellInfo3)
+        renderNode:AddInput("src_img", img)
+        renderNode:AddOutput("dst", out)
+
+        local success = renderNode:RunSession(req)
+        if not success then
+            -- エラーがあれば元の画像を返却
+            OutImage:Set(req, img)
+            return
+        end
+    else
+        out = img
+    end
+
+    -- 最終出力
+    -- OutImage:Set(req, cellInfo1)
+    -- OutImage:Set(req, cellInfo2)
+    -- OutImage:Set(req, cellInfo3)
+    -- OutImage:Set(req, cellInfo4)
+    OutImage:Set(req, out)
+end
+
+function NotifyChanged(inp, param, time)
+    if inp == InPaperColorPreset then
+        -- 紙の色プリセットが選択された場合
+        local presetIndex = math.floor(param.Value + 0.5)
+
+        -- プリセット値の設定
+        local r, g, b = 1.0, 1.0, 1.0 -- デフォルト値（白）
+
+        if presetIndex == 1 then      -- Pure White
+            r, g, b = 1.00, 1.00, 1.00
+        elseif presetIndex == 2 then  -- Warm White
+            r, g, b = 1.00, 0.98, 0.94
+        elseif presetIndex == 3 then  -- Cool White
+            r, g, b = 0.97, 0.97, 1.00
+        elseif presetIndex == 4 then  -- Natural White
+            r, g, b = 0.98, 0.98, 0.96
+        elseif presetIndex == 5 then  -- Cream
+            r, g, b = 0.97, 0.95, 0.86
+        elseif presetIndex == 6 then  -- Ivory
+            r, g, b = 1.00, 0.97, 0.90
+        elseif presetIndex == 7 then  -- Light Gray
+            r, g, b = 0.90, 0.90, 0.90
+        elseif presetIndex == 8 then  -- Newspaper
+            r, g, b = 0.93, 0.91, 0.83
+        elseif presetIndex == 9 then  -- Vintage
+            r, g, b = 0.96, 0.92, 0.80
+        elseif presetIndex == 10 then -- Kraft
+            r, g, b = 0.85, 0.75, 0.58
+        elseif presetIndex == 11 then -- Recycled
+            r, g, b = 0.87, 0.87, 0.82
+        elseif presetIndex == 12 then -- Light Blue
+            r, g, b = 0.90, 0.95, 1.00
+        elseif presetIndex == 13 then -- Light Green
+            r, g, b = 0.90, 0.98, 0.90
+        elseif presetIndex == 14 then -- Light Pink
+            r, g, b = 1.00, 0.90, 0.93
+        elseif presetIndex == 15 then -- Light Yellow
+            r, g, b = 1.00, 1.00, 0.88
+        end
+
+        -- カラーコントロールに値をセット
+        if presetIndex > 0 then
+            InPaperColorRed:SetSource(Number(r), time)
+            InPaperColorGreen:SetSource(Number(g), time)
+            InPaperColorBlue:SetSource(Number(b), time)
+        end
+    end
+
+    return true
+end
