@@ -733,8 +733,9 @@ function Create()
     InStaggerSquareDots = self:AddInput("Stagger Square Dots", "StaggerSquareDots", {
         LINKID_DataType = "Number",
         INPID_InputControl = "CheckboxControl",
-        INP_Default = 0.0,
-        IC_Visible = true,
+        INP_Default = 1.0,
+        INP_Integer = true,
+        IC_Visible = false,
         INPS_StatusText = "Applies a brick-like staggered layout to square dots",
     })
 
