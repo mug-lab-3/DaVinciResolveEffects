@@ -613,10 +613,10 @@ function Create()
     InContrast = self:AddInput("Contrast", "Contrast", {
         LINKID_DataType = "Number",
         INPID_InputControl = "SliderControl",
-        INP_Default = 1.0,
-        INP_MinAllowed = 0.1,
-        INP_MaxAllowed = 15.0,
-        INPS_StatusText = "Adjusts the contrast of the halftone pattern",
+        INP_Default = 0.0,
+        INP_MinAllowed = -1.0,
+        INP_MaxAllowed = 1.0,
+        INPS_StatusText = "Adjusts the contrast of the halftone pattern (-1.0 to 1.0 mapped to 0.25x to 4x)",
     })
 
     InRGBShift = self:AddInput("RGB Shift (Req. Orig Color/Blend)", "RGBShift", {
@@ -662,10 +662,10 @@ function Create()
     InDotSizeCurve = self:AddInput("Dot Size Curve", "DotSizeCurve", {
         LINKID_DataType = "Number",
         INPID_InputControl = "SliderControl",
-        INP_Default = 1.0,
-        INP_MinAllowed = 0.01,
-        INP_MaxAllowed = 5.0,
-        INPS_StatusText = "Adjusts the growth curve of dot sizes (1.0 = linear)",
+        INP_Default = 0.0,
+        INP_MinAllowed = -1.0,
+        INP_MaxAllowed = 1.0,
+        INPS_StatusText = "Adjusts the growth curve of dot sizes (-1.0 to 1.0 mapped to 0.25x to 4x)",
     })
 
     InCutoffDotRadius = self:AddInput("Cutoff Dot Radius", "MinDotRadius", {
@@ -915,7 +915,9 @@ function Process(req)
     end
 
     -- 入力パラメータの取得
-    local contrast = InContrast:GetValue(req).Value
+    local contrastSlider = InContrast:GetValue(req).Value
+    local contrast = math.pow(4.0, contrastSlider)
+    
     local screenDensity = InScreenDensity:GetValue(req).Value
     local rgbShift = InRGBShift:GetValue(req).Value
 
@@ -928,7 +930,10 @@ function Process(req)
     -- -1.0 -> 2^-2 = 0.25 (wide)
     local aspectRatio = math.pow(2.0, aspectRatioSlider * 2.0)
     local dotGain = InDotGain:GetValue(req).Value
-    local dotSizeCurve = InDotSizeCurve:GetValue(req).Value
+    local dotSizeCurveSlider = InDotSizeCurve:GetValue(req).Value
+    -- 正の値でカーブを持ち上げ（白くしやすく/ドットを太く）、負の数でカーブを沈める（黒くしやすく/ドットを細く）ために反転
+    local dotSizeCurve = math.pow(4.0, -dotSizeCurveSlider)
+    
     local cutoffDotRadius = InCutoffDotRadius:GetValue(req).Value
     local maxDotRadius = InClipDotRadius:GetValue(req).Value
 
