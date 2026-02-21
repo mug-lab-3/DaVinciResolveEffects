@@ -1106,7 +1106,7 @@ function Process(req)
 
     -- セルの配列サイズを計算
     local cellGridNumX = math.ceil(width / cellPitchX) + 3
-    local cellGridNumY = math.ceil(height / cellPitchY) + 2
+    local cellGridNumY = math.ceil(height / cellPitchY) + 3
 
     -- セル情報用の中間バッファを作成
     local cellInfo1 = Image({
