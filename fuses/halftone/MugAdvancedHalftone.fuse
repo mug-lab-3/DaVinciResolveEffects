@@ -127,7 +127,10 @@ __KERNEL__ void CellInfoKernel(
     const float randAspect1 = hash3D(ux, uy, basePhase1, 2191590403u);
     const float randAspect = _mix(randAspect0, randAspect1, t);
 
-    const float finalAspect = _fmaxf(0.1f, params->aspectRatio * (1.0f + params->aspectJitter * randAspect));
+    // Dot Aspect Ratio のUIスライダーと同じ指数スケール(2乗ベース)を使用し、
+    // アスペクト比の変動幅が縦横で完全に対称的(例：0.25倍 ～ 4.0倍)になるように修正
+    const float aspectMultiplier = _exp2f(params->aspectJitter * randAspect * 2.0f);
+    const float finalAspect = _fmaxf(0.01f, params->aspectRatio * aspectMultiplier);
 
     // GPU側でセルサイズを動的計算（CPU負荷削減）
     const float SIN60 = 0.866025f; // √3/2
