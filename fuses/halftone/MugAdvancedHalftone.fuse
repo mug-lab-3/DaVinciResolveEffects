@@ -2,6 +2,9 @@
 Mug Advanced Halftone
 --]] --
 
+-- Set this to true to export CellInfo1-3 as additional outputs for debugging
+ShowCellInfo = false
+
 --******************************************************************************************************
 FuRegisterClass("MugAdvancedHalftone", CT_Tool, {
     REGS_Category          = "Fuses\\Mug",
@@ -12,7 +15,7 @@ FuRegisterClass("MugAdvancedHalftone", CT_Tool, {
     REGS_IconID            = "Icons.Tools.Icons.AdvancedHalftone",
     REG_Source_GlobalCtrls = true,
     REG_Source_SizeCtrls   = true,
-    REG_Version            = 1.10,
+    REG_Version            = 1.11,
 })
 
 -- Cell Information Calculation Parameters Structure
@@ -1028,6 +1031,21 @@ function Create()
         LINKID_DataType = "Image",
         LINK_Main = 1,
     })
+
+    if ShowCellInfo then
+        OutCellInfo1 = self:AddOutput("CellInfo1", "CellInfo1", {
+            LINKID_DataType = "Image",
+            LINK_Main = 2,
+        })
+        OutCellInfo2 = self:AddOutput("CellInfo2", "CellInfo2", {
+            LINKID_DataType = "Image",
+            LINK_Main = 3,
+        })
+        OutCellInfo3 = self:AddOutput("CellInfo3", "CellInfo3", {
+            LINKID_DataType = "Image",
+            LINK_Main = 4,
+        })
+    end
 end
 
 function Process(req)
@@ -1240,10 +1258,11 @@ function Process(req)
     end
 
     -- Final Pipeline Output Return
-    -- OutImage:Set(req, cellInfo1)
-    -- OutImage:Set(req, cellInfo2)
-    -- OutImage:Set(req, cellInfo3)
-    -- OutImage:Set(req, cellInfo4)
+    if ShowCellInfo then
+        OutCellInfo1:Set(req, cellInfo1)
+        OutCellInfo2:Set(req, cellInfo2)
+        OutCellInfo3:Set(req, cellInfo3)
+    end
     OutImage:Set(req, out)
 end
 
