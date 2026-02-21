@@ -432,6 +432,63 @@ __DEVICE__ float4 blendDotOver(
     );
 }
 
+// --- [UPDATE_BEST_CELL Refactoring] ---
+// 最適なセルの探索状態を保持する構造体 (typedefを避ける)
+struct BestCellState {
+    float bestStrength;
+    float bestCoverage;
+    float4 bestDotColor;
+};
+
+// 最適なセル候補を評価して状態を更新する関数
+__DEVICE__ void updateBestCell(
+    const float2 candidatePos,
+    const float2 pixelPos,
+    const float2 cellGridNum,
+    __TEXTURE2D__ cell_info1,
+    __TEXTURE2D__ cell_info2,
+    __TEXTURE2D__ cell_info3,
+    const float aaEdgeWidth,
+    const int dotShape,
+    const float4 userDotColor,
+    const int useOriginalColorFlag,
+    const int blendWithInput,
+    const float shiftVal,
+    const float2 cellShiftROFF,
+    const float2 cellShiftBOFF,
+    struct BestCellState *state)
+{
+    const float coverageCandidate = checkCellDot(candidatePos, pixelPos, cellGridNum, cell_info1, cell_info2, aaEdgeWidth, dotShape);
+    if (coverageCandidate > 0.0f) {
+        float4 candidateDotColor = userDotColor;
+        float candidateStrength = coverageCandidate;
+        if (useOriginalColorFlag != 0) {
+            const float2 baseUV = (candidatePos + to_float2(0.5f, 0.5f)) / cellGridNum;
+            if (shiftVal == 0.0f) {
+                // 最適化: シフトがない場合は1回のサンプリングで済ませる
+                candidateDotColor = _tex2DVecN(cell_info3, baseUV.x, baseUV.y, 15);
+            } else {
+                const float4 cR = _tex2DVecN(cell_info3, baseUV.x + cellShiftROFF.x, baseUV.y + cellShiftROFF.y, 15);
+                const float4 cG = _tex2DVecN(cell_info3, baseUV.x, baseUV.y, 15);
+                const float4 cB = _tex2DVecN(cell_info3, baseUV.x + cellShiftBOFF.x, baseUV.y + cellShiftBOFF.y, 15);
+                candidateDotColor = to_float4(cR.x, cG.y, cB.z, cG.w);
+            }
+            const float candidateLuma = candidateDotColor.x * LUMA_R + candidateDotColor.y * LUMA_G + candidateDotColor.z * LUMA_B;
+            candidateStrength *= _fmaxf(1.0f - candidateLuma, 0.0f);
+        } else if (blendWithInput != 0) {
+            // UseOriginalColorがオフでBlendWithInputがオンの場合、
+            // Shiftされた inputColor で上書きして単色のドットの色をずらすのは
+            // 不自然で不透明度も壊すので行わない
+        }
+        const float strengthDiff = candidateStrength - state->bestStrength;
+        if (strengthDiff > 1e-4f || (strengthDiff >= -1e-4f && coverageCandidate > state->bestCoverage)) {
+            state->bestStrength = candidateStrength;
+            state->bestCoverage = coverageCandidate;
+            state->bestDotColor = candidateDotColor;
+        }
+    }
+}
+
 
 __KERNEL__ void RenderDotsKernel(
     __CONSTANTREF__ RenderParams *params,
@@ -522,47 +579,12 @@ __KERNEL__ void RenderDotsKernel(
         }
     }
 
-    float bestCoverage = 0.0f;
-    float bestStrength = -1.0f;
+    struct BestCellState state;
+    state.bestCoverage = 0.0f;
+    state.bestStrength = -1.0f;
+    state.bestDotColor = (blendWithInput != 0 && useOriginalColorFlag != 0) ? inputColor : userDotColor;
 
-    // BlendWithInputオン、UseOriginalColorオフの場合でも、ドットの基本色はユーザー指定色にする
-    float4 bestDotColor = (blendWithInput != 0 && useOriginalColorFlag != 0) ? inputColor : userDotColor;
-
-#define UPDATE_BEST_CELL(posExpr) \
-    do { \
-        const float2 candidatePos = (posExpr); \
-        const float coverageCandidate = checkCellDot(candidatePos, pixelPos, cellGridNum, cell_info1, cell_info2, aaEdgeWidth, params->dotShape); \
-        if (coverageCandidate > 0.0f) { \
-            float4 candidateDotColor = userDotColor; \
-            float candidateStrength = coverageCandidate; \
-            if (useOriginalColorFlag != 0) { \
-                const float2 baseUV = (candidatePos + to_float2(0.5f, 0.5f)) / cellGridNum; \
-                if (shiftVal == 0.0f) { \
-                    /* 最適化: シフトがない場合は1回のサンプリングで済ませる */ \
-                    candidateDotColor = _tex2DVecN(cell_info3, baseUV.x, baseUV.y, 15); \
-                } else { \
-                    const float4 cR = _tex2DVecN(cell_info3, baseUV.x + cellShiftROFF.x, baseUV.y + cellShiftROFF.y, 15); \
-                    const float4 cG = _tex2DVecN(cell_info3, baseUV.x, baseUV.y, 15); \
-                    const float4 cB = _tex2DVecN(cell_info3, baseUV.x + cellShiftBOFF.x, baseUV.y + cellShiftBOFF.y, 15); \
-                    candidateDotColor = to_float4(cR.x, cG.y, cB.z, cG.w); \
-                } \
-                const float candidateLuma = candidateDotColor.x * LUMA_R + candidateDotColor.y * LUMA_G + candidateDotColor.z * LUMA_B; \
-                candidateStrength *= _fmaxf(1.0f - candidateLuma, 0.0f); \
-            } else if (blendWithInput != 0) { \
-                /* UseOriginalColorがオフでBlendWithInputがオンの場合、 \
-                   Shiftされた inputColor で上書きして単色のドットの色をずらすのは \
-                   不自然で不透明度も壊すので行わない */ \
-            } \
-            const float strengthDiff = candidateStrength - bestStrength; \
-            if (strengthDiff > 1e-4f || (strengthDiff >= -1e-4f && coverageCandidate > bestCoverage)) { \
-                bestStrength = candidateStrength; \
-                bestCoverage = coverageCandidate; \
-                bestDotColor = candidateDotColor; \
-            } \
-        } \
-    } while (0)
-
-    UPDATE_BEST_CELL(mainCellPos);
+    updateBestCell(mainCellPos, pixelPos, cellGridNum, cell_info1, cell_info2, cell_info3, aaEdgeWidth, params->dotShape, userDotColor, useOriginalColorFlag, blendWithInput, shiftVal, cellShiftROFF, cellShiftBOFF, &state);
 
     const float2 cellCenter = to_float2(
         mainCellX * cellPitch.x + (isOddRow != 0 ? halfCellPitch.x : 0.0f) + halfCellPitch.x,
@@ -593,19 +615,17 @@ __KERNEL__ void RenderDotsKernel(
         for (int i = 0; i < checkCount; i++) {
             const int index = checkIndices[i];
             if (index < 0) continue;
-            UPDATE_BEST_CELL(mainCellPos + neighborOffsets[index]);
+            updateBestCell(mainCellPos + neighborOffsets[index], pixelPos, cellGridNum, cell_info1, cell_info2, cell_info3, aaEdgeWidth, params->dotShape, userDotColor, useOriginalColorFlag, blendWithInput, shiftVal, cellShiftROFF, cellShiftBOFF, &state);
         }
     } else {
         for (int i = 0; i < 6; i++) {
-            UPDATE_BEST_CELL(mainCellPos + neighborOffsets[i]);
+            updateBestCell(mainCellPos + neighborOffsets[i], pixelPos, cellGridNum, cell_info1, cell_info2, cell_info3, aaEdgeWidth, params->dotShape, userDotColor, useOriginalColorFlag, blendWithInput, shiftVal, cellShiftROFF, cellShiftBOFF, &state);
         }
     }
 
-#undef UPDATE_BEST_CELL
-
-    if (bestCoverage > 0.0f) {
+    if (state.bestCoverage > 0.0f) {
         const float4 baseColor = (blendWithInput != 0) ? inputColor : paperColor;
-        const float4 finalColor = blendDotOver(baseColor, bestDotColor, bestCoverage);
+        const float4 finalColor = blendDotOver(baseColor, state.bestDotColor, state.bestCoverage);
         _tex2DVec4Write(dst, x, y, finalColor);
         return;
     }
