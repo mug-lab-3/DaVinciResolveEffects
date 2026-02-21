@@ -136,8 +136,17 @@ __KERNEL__ void CellInfoKernel(
     const float SIN60 = 0.866025f; // √3/2
     const float width = (float)params->srcSize[0];
     const float cellBasePitch = _fmaxf(3.0f, _floorf(width / params->screenDensity));
-    const float cellPitchX = cellBasePitch;
-    const float cellPitchY = _fmaxf(3.0f, _floorf(cellBasePitch * SIN60));
+    // アスペクト比に合わせてグリッド全体を伸縮させる (UI設定 Aspect Ratio)
+    const float gridAspect = params->aspectRatio;
+    float cx = cellBasePitch;
+    float cy = cellBasePitch * SIN60;
+    if (gridAspect > 1.0f) {
+        cx /= gridAspect; // 縦長ドットに合わせて横の隙間を縮まる
+    } else if (gridAspect < 1.0f) {
+        cy *= gridAspect; // 横長ドットに合わせて縦の隙間を縮まる
+    }
+    const float cellPitchX = _fmaxf(3.0f, _floorf(cx));
+    const float cellPitchY = _fmaxf(3.0f, _floorf(cy));
     const float2 cellPitch = to_float2(cellPitchX, cellPitchY);
     const float halfPitchX = cellPitchX * 0.5f;
     const float halfPitchY = cellPitchY * 0.5f; // 事前計算
@@ -306,6 +315,7 @@ RenderParams = [[
   int enableAntialias;  // ドット境界にアンチエイリアスを適用するか
   float aaEdgeWidth;    // アンチエイリアス境界幅（ピクセル単位）
   int dotShape;         // ドットの形状 (0: 円, 1: 四角, 2: ひし形)
+  float aspectRatio;    // ドットの縦横比（グリッド変形用）
   float rgbShift;       // 色収差・版ズレの強度（ピクセル単位）
 ]]
 
@@ -512,7 +522,16 @@ __KERNEL__ void RenderDotsKernel(
     const float SIN60 = 0.866025f;
     const float width = (float)params->srcSize[0];
     const float cellBasePitch = _fmaxf(3.0f, _floorf(width / params->screenDensity));
-    const float2 cellPitch = to_float2(cellBasePitch, _fmaxf(3.0f, _floorf(cellBasePitch * SIN60)));
+    // アスペクト比に合わせてグリッド全体を伸縮させる
+    const float gridAspect = params->aspectRatio;
+    float cx = cellBasePitch;
+    float cy = cellBasePitch * SIN60;
+    if (gridAspect > 1.0f) {
+        cx /= gridAspect;
+    } else if (gridAspect < 1.0f) {
+        cy *= gridAspect;
+    }
+    const float2 cellPitch = to_float2(_fmaxf(3.0f, _floorf(cx)), _fmaxf(3.0f, _floorf(cy)));
 
     const float aaEdgeWidth = (params->enableAntialias != 0) ? params->aaEdgeWidth : 0.0f;
 
@@ -1025,8 +1044,17 @@ function Process(req)
     -- 定数の修正
     local SIN60 = 0.866025 -- √3/2
     local cellBasePitch = math.floor(math.max(3.0, width / screenDensity))
-    local cellPitchX = cellBasePitch
-    local cellPitchY = math.floor(math.max(3.0, cellBasePitch * SIN60))
+    -- アスペクト比に合わせて生成するバッファグリッドの解像度も歪ませる
+    local cx = cellBasePitch
+    local cy = cellBasePitch * SIN60
+    if aspectRatio > 1.0 then
+        cx = cx / aspectRatio
+    elseif aspectRatio < 1.0 then
+        cy = cy * aspectRatio
+    end
+
+    local cellPitchX = math.max(3.0, math.floor(cx))
+    local cellPitchY = math.max(3.0, math.floor(cy))
     local MAX_CELL_RADIUS = (cellBasePitch * 0.5) * 1.5
 
     local averageCellPitch = (cellPitchX + cellPitchY) * 0.5
@@ -1122,6 +1150,7 @@ function Process(req)
         params.dotColor[3] = dotColor[4]
         params.useOriginalColor = useOriginalColor > 0.5 and 1 or 0
         params.rgbShift = rgbShift
+        params.aspectRatio = aspectRatio
         params.dotShape = math.floor(dotShape + 0.5)
         params.screenDensity = screenDensity -- GPU側でセルピッチ計算
         params.enableAntialias = enableDotAntialias and 1 or 0
