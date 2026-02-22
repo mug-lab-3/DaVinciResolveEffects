@@ -520,6 +520,9 @@ __DEVICE__ void updateBestCell(
                 const float4 cB = _tex2DVecN(cell_info3, baseUV.x + cellShiftBOFF.x, baseUV.y + cellShiftBOFF.y, 15);
                 candidateDotColor = to_float4(cR.x, cG.y, cB.z, cG.w);
             }
+            // Enforce UI Alpha setting regardless of original image transparency
+            candidateDotColor.w = userDotColor.w;
+
             const float candidateLuma = candidateDotColor.x * LUMA_R + candidateDotColor.y * LUMA_G + candidateDotColor.z * LUMA_B;
             candidateStrength *= _fmaxf(1.0f - candidateLuma, 0.0f);
         } else if (blendWithInput != 0) {
