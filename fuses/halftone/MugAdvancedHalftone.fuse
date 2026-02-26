@@ -15,8 +15,160 @@ FuRegisterClass("MugAdvancedHalftone", CT_Tool, {
     REGS_IconID            = "Icons.Tools.Icons.AdvancedHalftone",
     REG_Source_GlobalCtrls = true,
     REG_Source_SizeCtrls   = true,
-    REG_Version            = 1.21,
+    REG_Version            = 1.22,
 })
+
+-- Definition of Retro Color Themes (Palettes + Thresholds)
+-- Each theme defines:
+--   Name: UI Dropdown name
+--   Paper: Default background (R,G,B) or nil (no change)
+--   Palette: Array of colors mapped to luminance thresholds (0.0 to 1.0)
+ColorThemes = {
+    { Name = "Off", Paper = nil, Palette = {} },
+    { Name = "8 Colors", Paper = nil, Palette = {} }, -- Logic handled in kernel branch
+    { Name = "16 Colors", Paper = nil, Palette = {} },
+    { Name = "32 Colors", Paper = nil, Palette = {} },
+    {
+        Name = "Theme: Game Boy Classic",
+        Paper = { 0.60, 0.74, 0.05 },
+        Palette = {
+            { 0.25, 0.06, 0.22, 0.06 }, -- Darkest
+            { 0.50, 0.19, 0.38, 0.19 }, -- Dark
+            { 0.75, 0.55, 0.75, 0.44 }, -- Light
+            { 1.01, 0.60, 0.74, 0.05 }, -- Lightest (threshold > 1.0 to ensure capture)
+        }
+    },
+    {
+        Name = "Theme: Game Boy Pocket",
+        Paper = { 0.85, 0.85, 0.85 },
+        Palette = {
+            { 0.25, 0.18, 0.18, 0.18 }, -- Black
+            { 0.50, 0.40, 0.40, 0.40 }, -- Dark Gray
+            { 0.75, 0.66, 0.66, 0.66 }, -- Light Gray
+            { 1.01, 0.85, 0.85, 0.85 }, -- White/Silver
+        }
+    },
+    {
+        Name = "Theme: CGA Cyan/Magenta",
+        Paper = { 0.00, 0.00, 0.00 },
+        Palette = {
+            { 0.25, 0.00, 0.00, 0.00 }, -- Black
+            { 0.50, 1.00, 0.33, 1.00 }, -- Magenta
+            { 0.75, 0.33, 1.00, 1.00 }, -- Cyan
+            { 1.01, 1.00, 1.00, 1.00 }, -- White
+        }
+    },
+    {
+        Name = "Theme: Classic Mac 1-bit",
+        Paper = { 1.00, 1.00, 1.00 },
+        Palette = {
+            { 0.50, 0.00, 0.00, 0.00 }, -- Black
+            { 1.01, 1.00, 1.00, 1.00 }, -- White
+        }
+    },
+    {
+        Name = "Theme: Commodore 64 Approx",
+        Paper = { 0.62, 0.62, 0.62 },
+        Palette = {
+            { 0.20, 0.00, 0.00, 0.00 }, -- Black
+            { 0.40, 0.53, 0.24, 0.21 }, -- Reddish (Red)
+            { 0.60, 0.35, 0.65, 0.35 }, -- Greenish (Green)
+            { 0.80, 0.42, 0.33, 0.26 }, -- Brownish
+            { 1.01, 0.62, 0.62, 0.62 }, -- Light Grey
+        }
+    },
+    {
+        Name = "Theme: Newspaper",
+        Paper = { 0.85, 0.85, 0.75 },
+        Palette = {
+            { 0.50, 0.15, 0.15, 0.15 }, -- Ink
+            { 1.01, 0.75, 0.75, 0.65 }, -- Paper
+        }
+    },
+    {
+        Name = "Theme: Sepia Photograph",
+        Paper = { 0.95, 0.85, 0.70 },
+        Palette = {
+            { 0.25, 0.17, 0.10, 0.05 },
+            { 0.50, 0.35, 0.22, 0.12 },
+            { 0.75, 0.65, 0.50, 0.33 },
+            { 1.01, 0.95, 0.85, 0.70 },
+        }
+    },
+    {
+        Name = "Theme: Blueprint",
+        Paper = { 0.05, 0.15, 0.40 },
+        Palette = {
+            { 0.33, 0.05, 0.15, 0.40 },
+            { 0.66, 0.20, 0.40, 0.70 },
+            { 1.01, 0.80, 0.85, 0.95 },
+        }
+    },
+    {
+        Name = "Theme: Two-Color Print",
+        Paper = { 0.10, 0.10, 0.12 },
+        Palette = {
+            { 0.50, 0.10, 0.10, 0.12 },
+            { 1.01, 0.90, 0.20, 0.20 },
+        }
+    },
+    {
+        Name = "Theme: Green Phosphor CRT",
+        Paper = { 0.00, 0.15, 0.00 },
+        Palette = {
+            { 0.33, 0.00, 0.15, 0.00 },
+            { 0.66, 0.10, 0.55, 0.10 },
+            { 1.01, 0.30, 0.95, 0.30 },
+        }
+    },
+    {
+        Name = "Theme: Amber Phosphor CRT",
+        Paper = { 0.15, 0.05, 0.00 },
+        Palette = {
+            { 0.33, 0.15, 0.05, 0.00 },
+            { 0.66, 0.60, 0.35, 0.00 },
+            { 1.01, 1.00, 0.70, 0.00 },
+        }
+    },
+    {
+        Name = "Theme: LCD Calculator",
+        Paper = { 0.65, 0.70, 0.62 },
+        Palette = {
+            { 0.50, 0.25, 0.27, 0.25 },
+            { 1.01, 0.65, 0.70, 0.62 },
+        }
+    },
+    {
+        Name = "Theme: Thermal Camera",
+        Paper = { 0.00, 0.00, 0.50 },
+        Palette = {
+            { 0.25, 0.00, 0.00, 0.50 }, -- Dark Blue
+            { 0.50, 0.60, 0.00, 0.50 }, -- Purple/Magenta
+            { 0.75, 1.00, 0.40, 0.00 }, -- Orange
+            { 1.01, 1.00, 1.00, 0.40 }, -- Yellow
+        }
+    },
+    {
+        Name = "Theme: Night Vision",
+        Paper = { 0.00, 0.20, 0.00 },
+        Palette = {
+            { 0.25, 0.00, 0.20, 0.00 },
+            { 0.50, 0.10, 0.50, 0.10 },
+            { 0.75, 0.30, 0.80, 0.30 },
+            { 1.01, 0.70, 1.00, 0.70 },
+        }
+    },
+    {
+        Name = "Theme: Thermal Camera (Inverted)",
+        Paper = { 1.00, 1.00, 0.40 },
+        Palette = {
+            { 0.25, 1.00, 1.00, 0.40 }, -- Yellow
+            { 0.50, 1.00, 0.40, 0.00 }, -- Orange
+            { 0.75, 0.60, 0.00, 0.50 }, -- Purple
+            { 1.01, 0.00, 0.00, 0.50 }, -- Dark Blue
+        }
+    },
+}
 
 -- Cell Information Calculation Parameters Structure
 CellInfoParams = [[
@@ -339,6 +491,9 @@ RenderParams = [[
   float rgbShift;       // Color plate misalignment/chromatic aberration strength (in pixels)
   float gridSpacingY;   // Base spacing multiplier for Y-axis grid
   float gridStaggerX;   // X-axis offset multiplier for odd rows
+  float themePalette[48]; // Flattened RGBA palette (12 * 4)
+  float themeThresholds[12]; // Luminance thresholds for each palette color
+  int paletteSize;      // Actual number of colors in the current theme
 ]]
 
 RenderDotsKernel = [[
@@ -347,96 +502,32 @@ RenderDotsKernel = [[
 #define LUMA_G 0.59f
 #define LUMA_B 0.11f
 
-__DEVICE__ float4 applyColorReduction(float4 color, int mode) {
-    if (mode == 4) { // Game Boy Classic (4 shades of green)
-        const float luma = color.x * LUMA_R + color.y * LUMA_G + color.z * LUMA_B;
-        if (luma < 0.25f) return to_float4(0.06f, 0.22f, 0.06f, color.w);       // Darkest
-        if (luma < 0.50f) return to_float4(0.19f, 0.38f, 0.19f, color.w);       // Dark
-        if (luma < 0.75f) return to_float4(0.55f, 0.75f, 0.44f, color.w);       // Light
-        return to_float4(0.60f, 0.74f, 0.05f, color.w);                         // Lightest
-    } else if (mode == 5) { // Game Boy Pocket (4 shades of gray/silver)
-        const float luma = color.x * LUMA_R + color.y * LUMA_G + color.z * LUMA_B;
-        if (luma < 0.25f) return to_float4(0.18f, 0.18f, 0.18f, color.w);       // Black
-        if (luma < 0.50f) return to_float4(0.40f, 0.40f, 0.40f, color.w);       // Dark Gray
-        if (luma < 0.75f) return to_float4(0.66f, 0.66f, 0.66f, color.w);       // Light Gray
-        return to_float4(0.85f, 0.85f, 0.85f, color.w);                         // White/Silver
-    } else if (mode == 6) { // CGA Palette 1 (Cyan/Magenta/White/Black)
-        const float luma = color.x * LUMA_R + color.y * LUMA_G + color.z * LUMA_B;
-        if (luma < 0.25f) return to_float4(0.0f, 0.0f, 0.0f, color.w);          // Black
-        if (luma > 0.75f) return to_float4(1.0f, 1.0f, 1.0f, color.w);          // White
-        if (color.y < 0.5f) return to_float4(1.0f, 0.33f, 1.0f, color.w);       // Magenta
-        return to_float4(0.33f, 1.0f, 1.0f, color.w);                           // Cyan
-    } else if (mode == 7) { // Classic Mac 128k (1-bit Black & White)
-        const float luma = color.x * LUMA_R + color.y * LUMA_G + color.z * LUMA_B;
-        if (luma < 0.50f) return to_float4(0.0f, 0.0f, 0.0f, color.w);          // Black
-        return to_float4(1.0f, 1.0f, 1.0f, color.w);                            // White
-    } else if (mode == 8) { // Commodore 64 Approximation (High Contrast/Desaturated version map)
-        const float luma = color.x * LUMA_R + color.y * LUMA_G + color.z * LUMA_B;
-        // Simple 4-tone approximation of C64 visual impact
-        if (luma < 0.25f) return to_float4(0.00f, 0.00f, 0.00f, color.w);       // Black
-        if (luma > 0.75f) return to_float4(0.62f, 0.62f, 0.62f, color.w);       // Light Grey
-        if (color.x > color.z && color.x > color.y) return to_float4(0.53f, 0.24f, 0.21f, color.w); // Reddish
-        if (color.y > color.x && color.y > color.z) return to_float4(0.35f, 0.65f, 0.35f, color.w); // Greenish
-        if (color.z > color.x && color.z > color.y) return to_float4(0.24f, 0.20f, 0.65f, color.w); // Blueish
-        return to_float4(0.42f, 0.33f, 0.26f, color.w);                         // Brownish
-    } else if (mode == 9) { // Newspaper (CMYK Approximation - Yellowed, desaturated 8 colors)
-        float3 c = to_float3(_round(color.x), _round(color.y), _round(color.z));
-        // Soften the pure RGB colors to simulate cheap ink and old greyish paper
-        return to_float4(c.x * 0.7f + 0.15f, c.y * 0.7f + 0.15f, c.z * 0.6f + 0.15f, color.w);
-    } else if (mode == 10) { // Sepia Photograph
-        const float luma = color.x * LUMA_R + color.y * LUMA_G + color.z * LUMA_B;
-        if (luma < 0.25f) return to_float4(0.17f, 0.10f, 0.05f, color.w);
-        if (luma < 0.50f) return to_float4(0.35f, 0.22f, 0.12f, color.w);
-        if (luma < 0.75f) return to_float4(0.65f, 0.50f, 0.33f, color.w);
-        return to_float4(0.95f, 0.85f, 0.70f, color.w);
-    } else if (mode == 11) { // Blueprint
-        const float luma = color.x * LUMA_R + color.y * LUMA_G + color.z * LUMA_B;
-        if (luma < 0.33f) return to_float4(0.05f, 0.15f, 0.40f, color.w);
-        if (luma < 0.66f) return to_float4(0.20f, 0.40f, 0.70f, color.w);
-        return to_float4(0.80f, 0.85f, 0.95f, color.w);
-    } else if (mode == 12) { // Two-Color Print (Red/Black)
-        const float luma = color.x * LUMA_R + color.y * LUMA_G + color.z * LUMA_B;
-        if (luma < 0.50f) return to_float4(0.10f, 0.10f, 0.12f, color.w);
-        return to_float4(0.90f, 0.20f, 0.20f, color.w);
-    } else if (mode == 13) { // Green Phosphor CRT
-        const float luma = color.x * LUMA_R + color.y * LUMA_G + color.z * LUMA_B;
-        if (luma < 0.33f) return to_float4(0.00f, 0.15f, 0.00f, color.w);
-        if (luma < 0.66f) return to_float4(0.10f, 0.55f, 0.10f, color.w);
-        return to_float4(0.30f, 0.95f, 0.30f, color.w);
-    } else if (mode == 14) { // Amber Phosphor CRT
-        const float luma = color.x * LUMA_R + color.y * LUMA_G + color.z * LUMA_B;
-        if (luma < 0.33f) return to_float4(0.15f, 0.05f, 0.00f, color.w);
-        if (luma < 0.66f) return to_float4(0.60f, 0.35f, 0.00f, color.w);
-        return to_float4(1.00f, 0.70f, 0.00f, color.w);
-    } else if (mode == 15) { // LCD Calculator
-        const float luma = color.x * LUMA_R + color.y * LUMA_G + color.z * LUMA_B;
-        if (luma < 0.50f) return to_float4(0.25f, 0.27f, 0.25f, color.w);
-        return to_float4(0.65f, 0.70f, 0.62f, color.w);
-    } else if (mode == 16) { // Thermal Camera
-        const float luma = color.x * LUMA_R + color.y * LUMA_G + color.z * LUMA_B;
-        if (luma < 0.25f) return to_float4(0.00f, 0.00f, 0.50f, color.w);       // Dark Blue
-        if (luma < 0.50f) return to_float4(0.60f, 0.00f, 0.50f, color.w);       // Purple/Magenta
-        if (luma < 0.75f) return to_float4(1.00f, 0.40f, 0.00f, color.w);       // Orange
-        return to_float4(1.00f, 1.00f, 0.40f, color.w);                         // Yellow
-    } else if (mode == 17) { // Night Vision
-        const float luma = color.x * LUMA_R + color.y * LUMA_G + color.z * LUMA_B;
-        if (luma < 0.25f) return to_float4(0.00f, 0.20f, 0.00f, color.w);
-        if (luma < 0.50f) return to_float4(0.10f, 0.50f, 0.10f, color.w);
-        if (luma < 0.75f) return to_float4(0.30f, 0.80f, 0.30f, color.w);
-        return to_float4(0.70f, 1.00f, 0.70f, color.w);
-    } else if (mode == 18) { // Thermal Camera (Inverted)
-        const float luma = color.x * LUMA_R + color.y * LUMA_G + color.z * LUMA_B;
-        if (luma > 0.75f) return to_float4(0.00f, 0.00f, 0.50f, color.w);       // Lightest -> Dark Blue
-        if (luma > 0.50f) return to_float4(0.60f, 0.00f, 0.50f, color.w);       // Purple/Magenta
-        if (luma > 0.25f) return to_float4(1.00f, 0.40f, 0.00f, color.w);       // Orange
-        return to_float4(1.00f, 1.00f, 0.40f, color.w);                         // Darkest -> Yellow
+__DEVICE__ float4 applyColorReduction(float4 color, int mode, __CONSTANTREF__ RenderParams *params) {
+    if (mode == 0) return color;
+
+    const float luma = color.x * LUMA_R + color.y * LUMA_G + color.z * LUMA_B;
+
+    // Palette-driven hardware themes (Modes 4 and up)
+    if (mode >= 4 && params->paletteSize > 0) {
+        for (int i = 0; i < params->paletteSize; i++) {
+            if (luma < params->themeThresholds[i]) {
+                // Accessing flattened float palette as float4
+                const int pIdx = i * 4;
+                float4 target = to_float4(params->themePalette[pIdx], params->themePalette[pIdx+1], params->themePalette[pIdx+2], color.w);
+                return target;
+            }
+        }
+        // Fallback to last color (usually brightest)
+        const int pIdx = (params->paletteSize - 1) * 4;
+        float4 target = to_float4(params->themePalette[pIdx], params->themePalette[pIdx+1], params->themePalette[pIdx+2], color.w);
+        return target;
     }
 
+    // Legacy/Generic modes (8, 16, 32 colors)
     // 1. Convert to approximate perceptual space (gamma 2.0) to preserve dark details
-    // We use sqrtf to simulate this non-linear response safely.
     float3 c = to_float3(_sqrtf(_fmaxf(color.x, 0.0f)), _sqrtf(_fmaxf(color.y, 0.0f)), _sqrtf(_fmaxf(color.z, 0.0f)));
 
-    if (mode == 1) {        // 8 Colors (RGB 111: 1x1x1) (3-bit: Red/Green/Blue/Cyan/Magenta/Yellow/White/Black)
+    if (mode == 1) {        // 8 Colors (RGB 111: 1x1x1)
         c = to_float3(_round(c.x), _round(c.y), _round(c.z));
     } else if (mode == 2) { // 16 Colors (RGB 121: 2x4x2)
         c = to_float3(_round(c.x * 1.0f)/1.0f, _round(c.y * 3.0f)/3.0f, _round(c.z * 1.0f)/1.0f);
@@ -606,6 +697,7 @@ __DEVICE__ void updateBestCell(
     const float shiftVal,
     const float2 cellShiftROFF,
     const float2 cellShiftBOFF,
+    __CONSTANTREF__ RenderParams *params,
     struct BestCellState *state)
 {
     const float coverageCandidate = checkCellDot(candidatePos, pixelPos, cellGridNum, cell_info1, cell_info2, aaEdgeWidth, dotShape);
@@ -624,7 +716,7 @@ __DEVICE__ void updateBestCell(
                 candidateDotColor = to_float4(cR.x, cG.y, cB.z, cG.w);
             }
             if (colorReduction > 0) {
-                candidateDotColor = applyColorReduction(candidateDotColor, colorReduction);
+                candidateDotColor = applyColorReduction(candidateDotColor, colorReduction, params);
             }
             // Enforce UI Alpha setting regardless of original image transparency
             candidateDotColor.w = userDotColor.w;
@@ -745,7 +837,7 @@ __KERNEL__ void RenderDotsKernel(
             inputColor = to_float4(sR.x, sG.y, sB.z, sG.w);
         }
         if (useOriginalColorFlag != 0 && colorReduction > 0) {
-            inputColor = applyColorReduction(inputColor, colorReduction);
+            inputColor = applyColorReduction(inputColor, colorReduction, params);
         }
     }
 
@@ -754,7 +846,7 @@ __KERNEL__ void RenderDotsKernel(
     state.bestStrength = -1.0f;
     state.bestDotColor = (blendWithInput != 0 && useOriginalColorFlag != 0) ? inputColor : userDotColor;
 
-    updateBestCell(mainCellPos, pixelPos, cellGridNum, cell_info1, cell_info2, cell_info3, aaEdgeWidth, params->dotShape, userDotColor, useOriginalColorFlag, colorReduction, blendWithInput, shiftVal, cellShiftROFF, cellShiftBOFF, &state);
+    updateBestCell(mainCellPos, pixelPos, cellGridNum, cell_info1, cell_info2, cell_info3, aaEdgeWidth, params->dotShape, userDotColor, useOriginalColorFlag, colorReduction, blendWithInput, shiftVal, cellShiftROFF, cellShiftBOFF, params, &state);
 
     const float2 cellCenter = to_float2(
         mainCellX * cellPitch.x + ((isOddRow != 0) ? (halfCellPitch.x * params->gridStaggerX) : 0.0f) + halfCellPitch.x,
@@ -794,11 +886,11 @@ __KERNEL__ void RenderDotsKernel(
         for (int i = 0; i < checkCount; i++) {
             const int index = checkIndices[i];
             if (index < 0) continue;
-            updateBestCell(mainCellPos + neighborOffsets[index], pixelPos, cellGridNum, cell_info1, cell_info2, cell_info3, aaEdgeWidth, params->dotShape, userDotColor, useOriginalColorFlag, colorReduction, blendWithInput, shiftVal, cellShiftROFF, cellShiftBOFF, &state);
+            updateBestCell(mainCellPos + neighborOffsets[index], pixelPos, cellGridNum, cell_info1, cell_info2, cell_info3, aaEdgeWidth, params->dotShape, userDotColor, useOriginalColorFlag, colorReduction, blendWithInput, shiftVal, cellShiftROFF, cellShiftBOFF, params, &state);
         }
     } else {
         for (int i = 0; i < neighborCount; i++) {
-            updateBestCell(mainCellPos + neighborOffsets[i], pixelPos, cellGridNum, cell_info1, cell_info2, cell_info3, aaEdgeWidth, params->dotShape, userDotColor, useOriginalColorFlag, colorReduction, blendWithInput, shiftVal, cellShiftROFF, cellShiftBOFF, &state);
+            updateBestCell(mainCellPos + neighborOffsets[i], pixelPos, cellGridNum, cell_info1, cell_info2, cell_info3, aaEdgeWidth, params->dotShape, userDotColor, useOriginalColorFlag, colorReduction, blendWithInput, shiftVal, cellShiftROFF, cellShiftBOFF, params, &state);
         }
     }
 
@@ -992,33 +1084,18 @@ function Create()
         INPS_StatusText = "Preserves original colors instead of black and white",
     })
 
-    InColorReduction = self:AddInput("Color Reduction", "ColorReduction", {
+    local colorReductionConfig = {
         LINKID_DataType = "Number",
         INPID_InputControl = "ComboControl",
         INP_Default = 0.0,
         INP_Integer = true,
         INP_DoNotifyChanged = true,
-        { CCS_AddString = "Off" },
-        { CCS_AddString = "8 Colors" },
-        { CCS_AddString = "16 Colors" },
-        { CCS_AddString = "32 Colors" },
-        { CCS_AddString = "Theme: Game Boy Classic" },
-        { CCS_AddString = "Theme: Game Boy Pocket" },
-        { CCS_AddString = "Theme: CGA Cyan/Magenta" },
-        { CCS_AddString = "Theme: Classic Mac 1-bit" },
-        { CCS_AddString = "Theme: Commodore 64 Approx" },
-        { CCS_AddString = "Theme: Newspaper" },
-        { CCS_AddString = "Theme: Sepia Photograph" },
-        { CCS_AddString = "Theme: Blueprint" },
-        { CCS_AddString = "Theme: Two-Color Print" },
-        { CCS_AddString = "Theme: Green Phosphor CRT" },
-        { CCS_AddString = "Theme: Amber Phosphor CRT" },
-        { CCS_AddString = "Theme: LCD Calculator" },
-        { CCS_AddString = "Theme: Thermal Camera" },
-        { CCS_AddString = "Theme: Night Vision" },
-        { CCS_AddString = "Theme: Thermal Camera (Inverted)" },
         INPS_StatusText = "Simulates retro color depths and hardware palettes",
-    })
+    }
+    for i, theme in ipairs(ColorThemes) do
+        table.insert(colorReductionConfig, { CCS_AddString = theme.Name })
+    end
+    InColorReduction = self:AddInput("Color Reduction", "ColorReduction", colorReductionConfig)
 
     groupID = groupID + 1
     InDotColorRed = self:AddInput("Dot Color Red", "DotColorRed", {
@@ -1370,6 +1447,25 @@ function Process(req)
         params.dotColor[3] = dotColor[4]
         params.useOriginalColor = useOriginalColor > 0.5 and 1 or 0
         params.colorReduction = colorReduction
+        
+        -- Transfer Palette Data for hardware themes (Modes 4 and up)
+        local theme = ColorThemes[colorReduction + 1]
+        if theme and theme.Palette and #theme.Palette > 0 then
+            params.paletteSize = #theme.Palette
+            for i, entry in ipairs(theme.Palette) do
+                local idx = i - 1
+                params.themeThresholds[idx] = entry[1]
+                -- Flattened indexing for float themePalette[48]
+                local baseIdx = idx * 4
+                params.themePalette[baseIdx + 0] = entry[2]
+                params.themePalette[baseIdx + 1] = entry[3]
+                params.themePalette[baseIdx + 2] = entry[4]
+                params.themePalette[baseIdx + 3] = 1.0 
+            end
+        else
+            params.paletteSize = 0
+        end
+
         params.rgbShift = rgbShift
         params.aspectRatio = aspectRatio
         params.dotShape = math.floor(dotShape + 0.5)
@@ -1468,47 +1564,15 @@ function NotifyChanged(inp, param, time)
 
     if inp == InColorReduction then
         local modeIndex = math.floor(param.Value + 0.5)
-        local r, g, b = nil, nil, nil
+        local theme = ColorThemes[modeIndex + 1]
 
-        if modeIndex == 4 then     -- Theme: Game Boy Classic
-            r, g, b = 0.60, 0.74, 0.05
-        elseif modeIndex == 5 then -- Theme: Game Boy Pocket
-            r, g, b = 0.85, 0.85, 0.85
-        elseif modeIndex == 6 then -- Theme: CGA Cyan/Magenta
-            r, g, b = 0.00, 0.00, 0.00
-        elseif modeIndex == 7 then -- Theme: Classic Mac 1-bit
-            r, g, b = 1.00, 1.00, 1.00
-        elseif modeIndex == 8 then -- Theme: Commodore 64 Approx
-            r, g, b = 0.62, 0.62, 0.62
-        elseif modeIndex == 9 then -- Theme: Newspaper
-            r, g, b = 0.85, 0.85, 0.75
-        elseif modeIndex == 10 then -- Theme: Sepia Photograph
-            r, g, b = 0.95, 0.85, 0.70
-        elseif modeIndex == 11 then -- Theme: Blueprint
-            r, g, b = 0.05, 0.15, 0.40
-        elseif modeIndex == 12 then -- Theme: Two-Color Print
-            r, g, b = 0.10, 0.10, 0.12
-        elseif modeIndex == 13 then -- Theme: Green Phosphor CRT
-            r, g, b = 0.00, 0.15, 0.00
-        elseif modeIndex == 14 then -- Theme: Amber Phosphor CRT
-            r, g, b = 0.15, 0.05, 0.00
-        elseif modeIndex == 15 then -- Theme: LCD Calculator
-            r, g, b = 0.65, 0.70, 0.62
-        elseif modeIndex == 16 then -- Theme: Thermal Camera
-            r, g, b = 0.00, 0.00, 0.50
-        elseif modeIndex == 17 then -- Theme: Night Vision
-            r, g, b = 0.00, 0.20, 0.00
-        elseif modeIndex == 18 then -- Theme: Thermal Camera (Inverted)
-            r, g, b = 1.00, 1.00, 0.40
-        end
-
-        if r ~= nil then
+        if theme and theme.Paper then
             InBlendWithInput:SetSource(Number(0.0), time) -- Ensure paper color is visible
             InUseOriginalColor:SetSource(Number(1.0), time) -- Force Original Color ON when picking a theme
             InPaperColorPreset:SetSource(Number(0.0), time) -- Set to custom preset
-            InPaperColorRed:SetSource(Number(r), time)
-            InPaperColorGreen:SetSource(Number(g), time)
-            InPaperColorBlue:SetSource(Number(b), time)        
+            InPaperColorRed:SetSource(Number(theme.Paper[1]), time)
+            InPaperColorGreen:SetSource(Number(theme.Paper[2]), time)
+            InPaperColorBlue:SetSource(Number(theme.Paper[3]), time)        
         end
     end
 
