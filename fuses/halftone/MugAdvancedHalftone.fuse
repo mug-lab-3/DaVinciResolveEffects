@@ -63,15 +63,6 @@ ColorThemes = {
         }
     },
     {
-        Name = "Theme: 1-Bit Desktop",
-        Paper = { 1.0, 1.0, 1.0 },
-        PaletteType = "Luma",
-        Palette = {
-            { 0.0, 0.0, 0.0 },
-            { 1.0, 1.0, 1.0 },
-        }
-    },
-    {
         Name = "Theme: 80s Computer",
         Paper = { 0.42, 0.42, 0.42 },
         PaletteType = "Luma",
