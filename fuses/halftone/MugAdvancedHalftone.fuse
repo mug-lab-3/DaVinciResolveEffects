@@ -15,7 +15,7 @@ FuRegisterClass("MugAdvancedHalftone", CT_Tool, {
     REGS_IconID            = "Icons.Tools.Icons.AdvancedHalftone",
     REG_Source_GlobalCtrls = true,
     REG_Source_SizeCtrls   = true,
-    REG_Version            = 1.20,
+    REG_Version            = 1.21,
 })
 
 -- Cell Information Calculation Parameters Structure
@@ -424,6 +424,12 @@ __DEVICE__ float4 applyColorReduction(float4 color, int mode) {
         if (luma < 0.50f) return to_float4(0.10f, 0.50f, 0.10f, color.w);
         if (luma < 0.75f) return to_float4(0.30f, 0.80f, 0.30f, color.w);
         return to_float4(0.70f, 1.00f, 0.70f, color.w);
+    } else if (mode == 18) { // Thermal Camera (Inverted)
+        const float luma = color.x * LUMA_R + color.y * LUMA_G + color.z * LUMA_B;
+        if (luma > 0.75f) return to_float4(0.00f, 0.00f, 0.50f, color.w);       // Lightest -> Dark Blue
+        if (luma > 0.50f) return to_float4(0.60f, 0.00f, 0.50f, color.w);       // Purple/Magenta
+        if (luma > 0.25f) return to_float4(1.00f, 0.40f, 0.00f, color.w);       // Orange
+        return to_float4(1.00f, 1.00f, 0.40f, color.w);                         // Darkest -> Yellow
     }
 
     // 1. Convert to approximate perceptual space (gamma 2.0) to preserve dark details
@@ -991,6 +997,7 @@ function Create()
         INPID_InputControl = "ComboControl",
         INP_Default = 0.0,
         INP_Integer = true,
+        INP_DoNotifyChanged = true,
         { CCS_AddString = "Off" },
         { CCS_AddString = "8 Colors" },
         { CCS_AddString = "16 Colors" },
@@ -1009,6 +1016,7 @@ function Create()
         { CCS_AddString = "Theme: LCD Calculator" },
         { CCS_AddString = "Theme: Thermal Camera" },
         { CCS_AddString = "Theme: Night Vision" },
+        { CCS_AddString = "Theme: Thermal Camera (Inverted)" },
         INPS_StatusText = "Simulates retro color depths and hardware palettes",
     })
 
@@ -1455,6 +1463,52 @@ function NotifyChanged(inp, param, time)
             InPaperColorRed:SetSource(Number(r), time)
             InPaperColorGreen:SetSource(Number(g), time)
             InPaperColorBlue:SetSource(Number(b), time)
+        end
+    end
+
+    if inp == InColorReduction then
+        local modeIndex = math.floor(param.Value + 0.5)
+        local r, g, b = nil, nil, nil
+
+        if modeIndex == 4 then     -- Theme: Game Boy Classic
+            r, g, b = 0.60, 0.74, 0.05
+        elseif modeIndex == 5 then -- Theme: Game Boy Pocket
+            r, g, b = 0.85, 0.85, 0.85
+        elseif modeIndex == 6 then -- Theme: CGA Cyan/Magenta
+            r, g, b = 0.00, 0.00, 0.00
+        elseif modeIndex == 7 then -- Theme: Classic Mac 1-bit
+            r, g, b = 1.00, 1.00, 1.00
+        elseif modeIndex == 8 then -- Theme: Commodore 64 Approx
+            r, g, b = 0.62, 0.62, 0.62
+        elseif modeIndex == 9 then -- Theme: Newspaper
+            r, g, b = 0.85, 0.85, 0.75
+        elseif modeIndex == 10 then -- Theme: Sepia Photograph
+            r, g, b = 0.95, 0.85, 0.70
+        elseif modeIndex == 11 then -- Theme: Blueprint
+            r, g, b = 0.05, 0.15, 0.40
+        elseif modeIndex == 12 then -- Theme: Two-Color Print
+            r, g, b = 0.10, 0.10, 0.12
+        elseif modeIndex == 13 then -- Theme: Green Phosphor CRT
+            r, g, b = 0.00, 0.15, 0.00
+        elseif modeIndex == 14 then -- Theme: Amber Phosphor CRT
+            r, g, b = 0.15, 0.05, 0.00
+        elseif modeIndex == 15 then -- Theme: LCD Calculator
+            r, g, b = 0.65, 0.70, 0.62
+        elseif modeIndex == 16 then -- Theme: Thermal Camera
+            r, g, b = 0.00, 0.00, 0.50
+        elseif modeIndex == 17 then -- Theme: Night Vision
+            r, g, b = 0.00, 0.20, 0.00
+        elseif modeIndex == 18 then -- Theme: Thermal Camera (Inverted)
+            r, g, b = 1.00, 1.00, 0.40
+        end
+
+        if r ~= nil then
+            InBlendWithInput:SetSource(Number(0.0), time) -- Ensure paper color is visible
+            InUseOriginalColor:SetSource(Number(1.0), time) -- Force Original Color ON when picking a theme
+            InPaperColorPreset:SetSource(Number(0.0), time) -- Set to custom preset
+            InPaperColorRed:SetSource(Number(r), time)
+            InPaperColorGreen:SetSource(Number(g), time)
+            InPaperColorBlue:SetSource(Number(b), time)        
         end
     end
 
