@@ -15,7 +15,7 @@ FuRegisterClass("MugAdvancedHalftone", CT_Tool, {
     REGS_IconID            = "Icons.Tools.Icons.AdvancedHalftone",
     REG_Source_GlobalCtrls = true,
     REG_Source_SizeCtrls   = true,
-    REG_Version            = 1.11,
+    REG_Version            = 1.20,
 })
 
 -- Cell Information Calculation Parameters Structure
@@ -329,6 +329,7 @@ RenderParams = [[
   float paperColor[4];  // Paper color (Background) [R,G,B,A]
   float dotColor[4];    // Dot color (Foreground) [R,G,B,A]
   int useOriginalColor; // Whether to use the original input color for dots
+  int colorReduction;   // Color reduction mode (0: Off, 1: 16, 2: 32, 3: 256)
   float screenDensity;  // Screen density (calculates cell pitch on GPU)
   int blendWithInput;   // Boolean flag: blend dots over input image instead of paper color
   int enableAntialias;  // Boolean flag: apply structural antialiasing to dot edges
@@ -345,6 +346,101 @@ RenderDotsKernel = [[
 #define LUMA_R 0.3f
 #define LUMA_G 0.59f
 #define LUMA_B 0.11f
+
+__DEVICE__ float4 applyColorReduction(float4 color, int mode) {
+    if (mode == 4) { // Game Boy Classic (4 shades of green)
+        const float luma = color.x * LUMA_R + color.y * LUMA_G + color.z * LUMA_B;
+        if (luma < 0.25f) return to_float4(0.06f, 0.22f, 0.06f, color.w);       // Darkest
+        if (luma < 0.50f) return to_float4(0.19f, 0.38f, 0.19f, color.w);       // Dark
+        if (luma < 0.75f) return to_float4(0.55f, 0.75f, 0.44f, color.w);       // Light
+        return to_float4(0.60f, 0.74f, 0.05f, color.w);                         // Lightest
+    } else if (mode == 5) { // Game Boy Pocket (4 shades of gray/silver)
+        const float luma = color.x * LUMA_R + color.y * LUMA_G + color.z * LUMA_B;
+        if (luma < 0.25f) return to_float4(0.18f, 0.18f, 0.18f, color.w);       // Black
+        if (luma < 0.50f) return to_float4(0.40f, 0.40f, 0.40f, color.w);       // Dark Gray
+        if (luma < 0.75f) return to_float4(0.66f, 0.66f, 0.66f, color.w);       // Light Gray
+        return to_float4(0.85f, 0.85f, 0.85f, color.w);                         // White/Silver
+    } else if (mode == 6) { // CGA Palette 1 (Cyan/Magenta/White/Black)
+        const float luma = color.x * LUMA_R + color.y * LUMA_G + color.z * LUMA_B;
+        if (luma < 0.25f) return to_float4(0.0f, 0.0f, 0.0f, color.w);          // Black
+        if (luma > 0.75f) return to_float4(1.0f, 1.0f, 1.0f, color.w);          // White
+        if (color.y < 0.5f) return to_float4(1.0f, 0.33f, 1.0f, color.w);       // Magenta
+        return to_float4(0.33f, 1.0f, 1.0f, color.w);                           // Cyan
+    } else if (mode == 7) { // Classic Mac 128k (1-bit Black & White)
+        const float luma = color.x * LUMA_R + color.y * LUMA_G + color.z * LUMA_B;
+        if (luma < 0.50f) return to_float4(0.0f, 0.0f, 0.0f, color.w);          // Black
+        return to_float4(1.0f, 1.0f, 1.0f, color.w);                            // White
+    } else if (mode == 8) { // Commodore 64 Approximation (High Contrast/Desaturated version map)
+        const float luma = color.x * LUMA_R + color.y * LUMA_G + color.z * LUMA_B;
+        // Simple 4-tone approximation of C64 visual impact
+        if (luma < 0.25f) return to_float4(0.00f, 0.00f, 0.00f, color.w);       // Black
+        if (luma > 0.75f) return to_float4(0.62f, 0.62f, 0.62f, color.w);       // Light Grey
+        if (color.x > color.z && color.x > color.y) return to_float4(0.53f, 0.24f, 0.21f, color.w); // Reddish
+        if (color.y > color.x && color.y > color.z) return to_float4(0.35f, 0.65f, 0.35f, color.w); // Greenish
+        if (color.z > color.x && color.z > color.y) return to_float4(0.24f, 0.20f, 0.65f, color.w); // Blueish
+        return to_float4(0.42f, 0.33f, 0.26f, color.w);                         // Brownish
+    } else if (mode == 9) { // Newspaper (CMYK Approximation - Yellowed, desaturated 8 colors)
+        float3 c = to_float3(_round(color.x), _round(color.y), _round(color.z));
+        // Soften the pure RGB colors to simulate cheap ink and old greyish paper
+        return to_float4(c.x * 0.7f + 0.15f, c.y * 0.7f + 0.15f, c.z * 0.6f + 0.15f, color.w);
+    } else if (mode == 10) { // Sepia Photograph
+        const float luma = color.x * LUMA_R + color.y * LUMA_G + color.z * LUMA_B;
+        if (luma < 0.25f) return to_float4(0.17f, 0.10f, 0.05f, color.w);
+        if (luma < 0.50f) return to_float4(0.35f, 0.22f, 0.12f, color.w);
+        if (luma < 0.75f) return to_float4(0.65f, 0.50f, 0.33f, color.w);
+        return to_float4(0.95f, 0.85f, 0.70f, color.w);
+    } else if (mode == 11) { // Blueprint
+        const float luma = color.x * LUMA_R + color.y * LUMA_G + color.z * LUMA_B;
+        if (luma < 0.33f) return to_float4(0.05f, 0.15f, 0.40f, color.w);
+        if (luma < 0.66f) return to_float4(0.20f, 0.40f, 0.70f, color.w);
+        return to_float4(0.80f, 0.85f, 0.95f, color.w);
+    } else if (mode == 12) { // Two-Color Print (Red/Black)
+        const float luma = color.x * LUMA_R + color.y * LUMA_G + color.z * LUMA_B;
+        if (luma < 0.50f) return to_float4(0.10f, 0.10f, 0.12f, color.w);
+        return to_float4(0.90f, 0.20f, 0.20f, color.w);
+    } else if (mode == 13) { // Green Phosphor CRT
+        const float luma = color.x * LUMA_R + color.y * LUMA_G + color.z * LUMA_B;
+        if (luma < 0.33f) return to_float4(0.00f, 0.15f, 0.00f, color.w);
+        if (luma < 0.66f) return to_float4(0.10f, 0.55f, 0.10f, color.w);
+        return to_float4(0.30f, 0.95f, 0.30f, color.w);
+    } else if (mode == 14) { // Amber Phosphor CRT
+        const float luma = color.x * LUMA_R + color.y * LUMA_G + color.z * LUMA_B;
+        if (luma < 0.33f) return to_float4(0.15f, 0.05f, 0.00f, color.w);
+        if (luma < 0.66f) return to_float4(0.60f, 0.35f, 0.00f, color.w);
+        return to_float4(1.00f, 0.70f, 0.00f, color.w);
+    } else if (mode == 15) { // LCD Calculator
+        const float luma = color.x * LUMA_R + color.y * LUMA_G + color.z * LUMA_B;
+        if (luma < 0.50f) return to_float4(0.25f, 0.27f, 0.25f, color.w);
+        return to_float4(0.65f, 0.70f, 0.62f, color.w);
+    } else if (mode == 16) { // Thermal Camera
+        const float luma = color.x * LUMA_R + color.y * LUMA_G + color.z * LUMA_B;
+        if (luma < 0.25f) return to_float4(0.00f, 0.00f, 0.50f, color.w);       // Dark Blue
+        if (luma < 0.50f) return to_float4(0.60f, 0.00f, 0.50f, color.w);       // Purple/Magenta
+        if (luma < 0.75f) return to_float4(1.00f, 0.40f, 0.00f, color.w);       // Orange
+        return to_float4(1.00f, 1.00f, 0.40f, color.w);                         // Yellow
+    } else if (mode == 17) { // Night Vision
+        const float luma = color.x * LUMA_R + color.y * LUMA_G + color.z * LUMA_B;
+        if (luma < 0.25f) return to_float4(0.00f, 0.20f, 0.00f, color.w);
+        if (luma < 0.50f) return to_float4(0.10f, 0.50f, 0.10f, color.w);
+        if (luma < 0.75f) return to_float4(0.30f, 0.80f, 0.30f, color.w);
+        return to_float4(0.70f, 1.00f, 0.70f, color.w);
+    }
+
+    // 1. Convert to approximate perceptual space (gamma 2.0) to preserve dark details
+    // We use sqrtf to simulate this non-linear response safely.
+    float3 c = to_float3(_sqrtf(_fmaxf(color.x, 0.0f)), _sqrtf(_fmaxf(color.y, 0.0f)), _sqrtf(_fmaxf(color.z, 0.0f)));
+
+    if (mode == 1) {        // 8 Colors (RGB 111: 1x1x1) (3-bit: Red/Green/Blue/Cyan/Magenta/Yellow/White/Black)
+        c = to_float3(_round(c.x), _round(c.y), _round(c.z));
+    } else if (mode == 2) { // 16 Colors (RGB 121: 2x4x2)
+        c = to_float3(_round(c.x * 1.0f)/1.0f, _round(c.y * 3.0f)/3.0f, _round(c.z * 1.0f)/1.0f);
+    } else if (mode == 3) { // 32 Colors (RGB 221: 4x4x2)
+        c = to_float3(_round(c.x * 3.0f)/3.0f, _round(c.y * 3.0f)/3.0f, _round(c.z * 1.0f)/1.0f);
+    } 
+
+    // 2. Convert back to linear space
+    return to_float4(c.x * c.x, c.y * c.y, c.z * c.z, color.w);
+}
 #define DOT_RADIUS_THRESHOLD 0.1f
 #define BOUNDING_BOX_MARGIN 1.0f
 #define HIGH_DENSITY_THRESHOLD 100.0f  // Screen density values above this trigger high-density fast execution path
@@ -499,6 +595,7 @@ __DEVICE__ void updateBestCell(
     const int dotShape,
     const float4 userDotColor,
     const int useOriginalColorFlag,
+    const int colorReduction,
     const int blendWithInput,
     const float shiftVal,
     const float2 cellShiftROFF,
@@ -519,6 +616,9 @@ __DEVICE__ void updateBestCell(
                 const float4 cG = _tex2DVecN(cell_info3, baseUV.x, baseUV.y, 15);
                 const float4 cB = _tex2DVecN(cell_info3, baseUV.x + cellShiftBOFF.x, baseUV.y + cellShiftBOFF.y, 15);
                 candidateDotColor = to_float4(cR.x, cG.y, cB.z, cG.w);
+            }
+            if (colorReduction > 0) {
+                candidateDotColor = applyColorReduction(candidateDotColor, colorReduction);
             }
             // Enforce UI Alpha setting regardless of original image transparency
             candidateDotColor.w = userDotColor.w;
@@ -608,6 +708,7 @@ __KERNEL__ void RenderDotsKernel(
         params->dotColor[3]
     };
     const int useOriginalColorFlag = params->useOriginalColor;
+    const int colorReduction = params->colorReduction;
 
     const float intWidth = (float)params->srcSize[0];
     const float intHeight = (float)params->srcSize[1];
@@ -637,6 +738,9 @@ __KERNEL__ void RenderDotsKernel(
             const float4 sB = _tex2DVecN(src_img, px + shiftBOFF.x, py + shiftBOFF.y, 15);
             inputColor = to_float4(sR.x, sG.y, sB.z, sG.w);
         }
+        if (useOriginalColorFlag != 0 && colorReduction > 0) {
+            inputColor = applyColorReduction(inputColor, colorReduction);
+        }
     }
 
     struct BestCellState state;
@@ -644,7 +748,7 @@ __KERNEL__ void RenderDotsKernel(
     state.bestStrength = -1.0f;
     state.bestDotColor = (blendWithInput != 0 && useOriginalColorFlag != 0) ? inputColor : userDotColor;
 
-    updateBestCell(mainCellPos, pixelPos, cellGridNum, cell_info1, cell_info2, cell_info3, aaEdgeWidth, params->dotShape, userDotColor, useOriginalColorFlag, blendWithInput, shiftVal, cellShiftROFF, cellShiftBOFF, &state);
+    updateBestCell(mainCellPos, pixelPos, cellGridNum, cell_info1, cell_info2, cell_info3, aaEdgeWidth, params->dotShape, userDotColor, useOriginalColorFlag, colorReduction, blendWithInput, shiftVal, cellShiftROFF, cellShiftBOFF, &state);
 
     const float2 cellCenter = to_float2(
         mainCellX * cellPitch.x + ((isOddRow != 0) ? (halfCellPitch.x * params->gridStaggerX) : 0.0f) + halfCellPitch.x,
@@ -684,11 +788,11 @@ __KERNEL__ void RenderDotsKernel(
         for (int i = 0; i < checkCount; i++) {
             const int index = checkIndices[i];
             if (index < 0) continue;
-            updateBestCell(mainCellPos + neighborOffsets[index], pixelPos, cellGridNum, cell_info1, cell_info2, cell_info3, aaEdgeWidth, params->dotShape, userDotColor, useOriginalColorFlag, blendWithInput, shiftVal, cellShiftROFF, cellShiftBOFF, &state);
+            updateBestCell(mainCellPos + neighborOffsets[index], pixelPos, cellGridNum, cell_info1, cell_info2, cell_info3, aaEdgeWidth, params->dotShape, userDotColor, useOriginalColorFlag, colorReduction, blendWithInput, shiftVal, cellShiftROFF, cellShiftBOFF, &state);
         }
     } else {
         for (int i = 0; i < neighborCount; i++) {
-            updateBestCell(mainCellPos + neighborOffsets[i], pixelPos, cellGridNum, cell_info1, cell_info2, cell_info3, aaEdgeWidth, params->dotShape, userDotColor, useOriginalColorFlag, blendWithInput, shiftVal, cellShiftROFF, cellShiftBOFF, &state);
+            updateBestCell(mainCellPos + neighborOffsets[i], pixelPos, cellGridNum, cell_info1, cell_info2, cell_info3, aaEdgeWidth, params->dotShape, userDotColor, useOriginalColorFlag, colorReduction, blendWithInput, shiftVal, cellShiftROFF, cellShiftBOFF, &state);
         }
     }
 
@@ -880,6 +984,32 @@ function Create()
         INPID_InputControl = "CheckboxControl",
         INP_Default = 0.0,
         INPS_StatusText = "Preserves original colors instead of black and white",
+    })
+
+    InColorReduction = self:AddInput("Color Reduction", "ColorReduction", {
+        LINKID_DataType = "Number",
+        INPID_InputControl = "ComboControl",
+        INP_Default = 0.0,
+        INP_Integer = true,
+        { CCS_AddString = "Off" },
+        { CCS_AddString = "8 Colors" },
+        { CCS_AddString = "16 Colors" },
+        { CCS_AddString = "32 Colors" },
+        { CCS_AddString = "Theme: Game Boy Classic" },
+        { CCS_AddString = "Theme: Game Boy Pocket" },
+        { CCS_AddString = "Theme: CGA Cyan/Magenta" },
+        { CCS_AddString = "Theme: Classic Mac 1-bit" },
+        { CCS_AddString = "Theme: Commodore 64 Approx" },
+        { CCS_AddString = "Theme: Newspaper" },
+        { CCS_AddString = "Theme: Sepia Photograph" },
+        { CCS_AddString = "Theme: Blueprint" },
+        { CCS_AddString = "Theme: Two-Color Print" },
+        { CCS_AddString = "Theme: Green Phosphor CRT" },
+        { CCS_AddString = "Theme: Amber Phosphor CRT" },
+        { CCS_AddString = "Theme: LCD Calculator" },
+        { CCS_AddString = "Theme: Thermal Camera" },
+        { CCS_AddString = "Theme: Night Vision" },
+        INPS_StatusText = "Simulates retro color depths and hardware palettes",
     })
 
     groupID = groupID + 1
@@ -1093,6 +1223,7 @@ function Process(req)
     local enableDotAntialias = InEnableDotAntialias:GetValue(req).Value > 0.5
     local aaEdgeSoftness = InAAEdgeSoftness:GetValue(req).Value
     local useOriginalColor = InUseOriginalColor:GetValue(req).Value
+    local colorReduction = math.floor(InColorReduction:GetValue(req).Value + 0.5)
 
     local blendWithInput = InBlendWithInput:GetValue(req).Value
     local paperColor = {
@@ -1230,6 +1361,7 @@ function Process(req)
         params.dotColor[2] = dotColor[3]
         params.dotColor[3] = dotColor[4]
         params.useOriginalColor = useOriginalColor > 0.5 and 1 or 0
+        params.colorReduction = colorReduction
         params.rgbShift = rgbShift
         params.aspectRatio = aspectRatio
         params.dotShape = math.floor(dotShape + 0.5)
