@@ -15,7 +15,7 @@ FuRegisterClass("MugAdvancedHalftone", CT_Tool, {
     REGS_IconID            = "Icons.Tools.Icons.AdvancedHalftone",
     REG_Source_GlobalCtrls = true,
     REG_Source_SizeCtrls   = true,
-    REG_Version            = 1.22,
+    REG_Version            = 1.30,
 })
 
 -- Definition of Retro Color Themes (Palettes + Thresholds)
@@ -30,7 +30,7 @@ ColorThemes = {
     { Name = "16 Colors (Generic)", Paper = nil, PaletteType = "None", Palette = {} },
     { Name = "32 Colors (Generic)", Paper = nil, PaletteType = "None", Palette = {} },
     {
-        Name = "Theme: Game Boy Classic",
+        Name = "Theme: Retro Handheld (G)",
         Paper = { 0.60, 0.74, 0.05 },
         PaletteType = "Luma",
         Palette = {
@@ -41,7 +41,7 @@ ColorThemes = {
         }
     },
     {
-        Name = "Theme: Game Boy Pocket",
+        Name = "Theme: Retro Handheld (S)",
         Paper = { 0.85, 0.85, 0.85 },
         PaletteType = "Luma",
         Palette = {
@@ -52,9 +52,9 @@ ColorThemes = {
         }
     },
     {
-        Name = "Theme: CGA Palette 1",
+        Name = "Theme: Vintage PC 4c",
         Paper = { 0.0, 0.0, 0.0 },
-        PaletteType = "Luma", -- Simplest mapping for CGA 1
+        PaletteType = "Luma", -- Simplest mapping for 4-color PC
         Palette = {
             { 0.0, 0.0, 0.0 },  -- Black
             { 1.0, 0.33, 1.0 }, -- Magenta
@@ -63,7 +63,7 @@ ColorThemes = {
         }
     },
     {
-        Name = "Theme: Classic Mac",
+        Name = "Theme: 1-Bit Desktop",
         Paper = { 1.0, 1.0, 1.0 },
         PaletteType = "Luma",
         Palette = {
@@ -72,7 +72,7 @@ ColorThemes = {
         }
     },
     {
-        Name = "Theme: Commodore 64",
+        Name = "Theme: 80s Computer",
         Paper = { 0.42, 0.42, 0.42 },
         PaletteType = "Luma",
         Palette = {
@@ -1078,6 +1078,7 @@ function Create()
         LINKID_DataType = "Number",
         INPID_InputControl = "CheckboxControl",
         INP_Default = 0.0,
+        INP_DoNotifyChanged = true,
         INPS_StatusText = "Preserves original colors instead of black and white",
     })
 
@@ -1093,6 +1094,7 @@ function Create()
         table.insert(colorReductionConfig, { CCS_AddString = theme.Name })
     end
     InColorReduction = self:AddInput("Color Reduction", "ColorReduction", colorReductionConfig)
+    InColorReduction:SetAttrs({IC_Visible = false}) -- Hide by default since Use Original Color is 0.0
 
     groupID = groupID + 1
     InDotColorRed = self:AddInput("Dot Color Red", "DotColorRed", {
@@ -1614,6 +1616,13 @@ function NotifyChanged(inp, param, time)
             InPaperColorRed:SetSource(Number(theme.Paper[1]), time)
             InPaperColorGreen:SetSource(Number(theme.Paper[2]), time)
             InPaperColorBlue:SetSource(Number(theme.Paper[3]), time)        
+        end
+    end
+    if inp == InUseOriginalColor then
+        if param.Value > 0.5 then
+            InColorReduction:SetAttrs({IC_Visible = true})
+        else
+            InColorReduction:SetAttrs({IC_Visible = false})
         end
     end
 
