@@ -15,7 +15,7 @@ FuRegisterClass("MugAdvancedHalftone", CT_Tool, {
     REGS_IconID            = "Icons.Tools.Icons.AdvancedHalftone",
     REG_Source_GlobalCtrls = true,
     REG_Source_SizeCtrls   = true,
-    REG_Version            = 1.31,
+    REG_Version            = 1.32,
 })
 
 -- Definition of Retro Color Themes (Palettes + Thresholds)
@@ -305,7 +305,6 @@ __KERNEL__ void CellInfoKernel(
     const float finalAspect = _fmaxf(0.01f, params->aspectRatio * aspectMultiplier);
 
     // Dynamically calculate cell pitch/size on the GPU to reduce CPU overhead
-    const float SIN60 = 0.866025f; // √3/2
     const float width = (float)params->srcSize[0];
     const float cellBasePitch = _fmaxf(3.0f, _floorf(width / params->screenDensity));
     // Stretch or shrink the entire underlying coordinate grid to match the aspect ratio.
@@ -391,26 +390,15 @@ __KERNEL__ void CellInfoKernel(
         const int localMaxX = min(maxX, (int)(cellCenterX + maxDx));
 
         for (int pixelX = localMinX; pixelX <= localMaxX; pixelX += sampleStep) {
-            const float dx = (float)pixelX - cellCenterX;
-            const float distSq = dx*dx + dySquared;
+            const float4 color = _tex2DVec4(src, (float)pixelX, (float)pixelY);
 
-            // Check if current sample point falls strictly inside the circular radius
-            if (distSq <= radiusSquared) {
-                // Retrieve pixel color
-                const float4 color = _tex2DVec4(src, (float)pixelX, (float)pixelY);
+            // Compute perceptual luminance efficiently
+            const float luma = color.x * LUMA_R + color.y * LUMA_G + color.z * LUMA_B;
 
-                // Compute perceptual luminance
-                const float luma = color.x * LUMA_R + color.y * LUMA_G + color.z * LUMA_B;
-
-                // Adjust for sampling step (apply pre-calculated weighting factor)
-                const float lumaWeighted = luma * sampleStepSquared;
-                totalLuma += lumaWeighted;
-                sampleCount += sampleStepInt;
-
-                // Accumulate color components efficiently using vector addition
-                const float4 colorWeighted = color * sampleStepSquared;
-                avgColor += colorWeighted;
-            }
+            // Simplified accumulation
+            totalLuma += luma * sampleStepSquared;
+            sampleCount += sampleStepInt;
+            avgColor += color * sampleStepSquared;
         }
     }
 
@@ -564,33 +552,34 @@ __DEVICE__ float checkCellDot(
             measureDiff.y /= _fmaxf(0.01f, finalAspect); // Compress Y-axis for wide dots
         }
 
-        float distSq = 0.0f;
-        float dist = 0.0f;
-
         if (dotShape == 0) { // Circle
-            distSq = measureDiff.x * measureDiff.x + measureDiff.y * measureDiff.y;
-            dist = _sqrtf(distSq);
+            const float distSq = measureDiff.x * measureDiff.x + measureDiff.y * measureDiff.y;
+            const float radiusSq = dotRadius * dotRadius;
+
+            if (aaEdgeWidth <= 0.0f) {
+                return (distSq <= radiusSq) ? 1.0f : 0.0f;
+            }
+
+            if (distSq >= radiusSq) return 0.0f;
+
+            const float innerR = _fmaxf(dotRadius - aaEdgeWidth, 0.0f);
+            if (distSq <= innerR * innerR) return 1.0f;
+
+            const float dist = _sqrtf(distSq);
+            return _saturatef((dotRadius - dist) / aaEdgeWidth);
         } else if (dotShape == 1) { // Square
-            dist = _fmaxf(measureDiff.x, measureDiff.y);
+            const float dist = _fmaxf(measureDiff.x, measureDiff.y);
+            if (aaEdgeWidth <= 0.0f) return (dist <= dotRadius) ? 1.0f : 0.0f;
+            if (dist >= dotRadius) return 0.0f;
+            if (dist <= _fmaxf(dotRadius - aaEdgeWidth, 0.0f)) return 1.0f;
+            return _saturatef((dotRadius - dist) / aaEdgeWidth);
         } else if (dotShape == 2) { // Diamond
-            dist = (measureDiff.x + measureDiff.y) * 0.70710678f;
+            const float dist = (measureDiff.x + measureDiff.y) * 0.70710678f;
+            if (aaEdgeWidth <= 0.0f) return (dist <= dotRadius) ? 1.0f : 0.0f;
+            if (dist >= dotRadius) return 0.0f;
+            if (dist <= _fmaxf(dotRadius - aaEdgeWidth, 0.0f)) return 1.0f;
+            return _saturatef((dotRadius - dist) / aaEdgeWidth);
         }
-
-        if (aaEdgeWidth <= 0.0f) {
-            return (dist <= dotRadius) ? 1.0f : 0.0f;
-        }
-
-        if (dist >= dotRadius)
-            return 0.0f;
-
-        // Select between fast approximation or precise calculation based on inner radius
-        const float innerRadius = _fmaxf(dotRadius - aaEdgeWidth, 0.0f);
-
-        if (dist <= innerRadius)
-            return 1.0f;
-
-        const float t = (dotRadius - dist) / aaEdgeWidth;
-        return _saturatef(t);
     }
     return 0.0f;
 }
@@ -599,35 +588,27 @@ __DEVICE__ float checkCellDot(
 // Neighbor cell relative offset definitions
 __DEVICE__ void getNeighborOffsets(const int isOddRow, const float gridStaggerX, float2 neighborOffsets[8], int *neighborCount)
 {
-    if (gridStaggerX == 0.0f) {
-        // Orthogonal grid (Square arrangement, 8 neighbors)
-        *neighborCount = 8;
-        neighborOffsets[0] = to_float2(-1.0f, -1.0f); // Top Left
-        neighborOffsets[1] = to_float2( 0.0f, -1.0f); // Top
-        neighborOffsets[2] = to_float2( 1.0f, -1.0f); // Top Right
-        neighborOffsets[3] = to_float2( 1.0f,  0.0f); // Right
-        neighborOffsets[4] = to_float2( 1.0f,  1.0f); // Bottom Right
-        neighborOffsets[5] = to_float2( 0.0f,  1.0f); // Bottom
-        neighborOffsets[6] = to_float2(-1.0f,  1.0f); // Bottom Left
-        neighborOffsets[7] = to_float2(-1.0f,  0.0f); // Left
-    } else {
-        // Hexagonal grid commonly used in print (Circle/Diamond arrangement, 6 neighbors)
+    // Fast path for hexagonal grid often used in high-quality print
+    if (gridStaggerX != 0.0f) {
         *neighborCount = 6;
-        if (isOddRow != 0) {
-            neighborOffsets[0] = to_float2(-1.0f, -1.0f); // Top Left
-            neighborOffsets[1] = to_float2( 0.0f, -1.0f); // Top Right
-            neighborOffsets[2] = to_float2( 1.0f,  0.0f); // Right
-            neighborOffsets[3] = to_float2( 0.0f,  1.0f); // Bottom Right
-            neighborOffsets[4] = to_float2(-1.0f,  1.0f); // Bottom Left
-            neighborOffsets[5] = to_float2(-1.0f,  0.0f); // Left
-        } else {
-            neighborOffsets[0] = to_float2( 0.0f, -1.0f); // Top Left
-            neighborOffsets[1] = to_float2( 1.0f, -1.0f); // Top Right
-            neighborOffsets[2] = to_float2( 1.0f,  0.0f); // Right
-            neighborOffsets[3] = to_float2( 1.0f,  1.0f); // Bottom Right
-            neighborOffsets[4] = to_float2( 0.0f,  1.0f); // Bottom Left
-            neighborOffsets[5] = to_float2(-1.0f,  0.0f); // Left
-        }
+        const float offset = isOddRow != 0 ? -1.0f : 0.0f;
+        neighborOffsets[0] = to_float2(offset, -1.0f);
+        neighborOffsets[1] = to_float2(offset + 1.0f, -1.0f);
+        neighborOffsets[2] = to_float2( 1.0f,  0.0f);
+        neighborOffsets[3] = to_float2(offset + 1.0f,  1.0f);
+        neighborOffsets[4] = to_float2(offset,  1.0f);
+        neighborOffsets[5] = to_float2(-1.0f,  0.0f);
+    } else {
+        // Standard orthogonal grid
+        *neighborCount = 8;
+        neighborOffsets[0] = to_float2(-1.0f, -1.0f);
+        neighborOffsets[1] = to_float2( 0.0f, -1.0f);
+        neighborOffsets[2] = to_float2( 1.0f, -1.0f);
+        neighborOffsets[3] = to_float2( 1.0f,  0.0f);
+        neighborOffsets[4] = to_float2( 1.0f,  1.0f);
+        neighborOffsets[5] = to_float2( 0.0f,  1.0f);
+        neighborOffsets[6] = to_float2(-1.0f,  1.0f);
+        neighborOffsets[7] = to_float2(-1.0f,  0.0f);
     }
 }
 
@@ -732,7 +713,6 @@ __KERNEL__ void RenderDotsKernel(
     const float2 pixelPos = to_float2((float)x, (float)y);
 
     // Compute cell dimensions dynamically to offset CPU overhead
-    const float SIN60 = 0.866025f;
     const float width = (float)params->srcSize[0];
     const float cellBasePitch = _fmaxf(3.0f, _floorf(width / params->screenDensity));
     // Distort entire grid resolution appropriately for the target aspect ratio
