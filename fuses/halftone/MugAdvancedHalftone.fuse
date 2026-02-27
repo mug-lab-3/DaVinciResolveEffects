@@ -179,9 +179,9 @@ ColorThemes = {
 
 -- Cell Information Calculation Parameters Structure
 CellInfoParams = [[
-  int srcSize[2];         // Source image size // TEX_NORMALIZED_COORDS_FALSE
+  int srcSize[2];         // Source image size
   int dstSize[2];         // Output grid size (number of cells)
-  float screenDensity;    // Screen density (calculates cell size on GPU)
+  float screenDensity;    // Screen density
   float contrast;         // Contrast adjustment applied to sampled luminance
   float aspectRatio;      // Dot aspect ratio
   float dotGain;          // Dot gain effect (ink spread simulation)
@@ -292,18 +292,15 @@ __KERNEL__ void CellInfoKernel(
     const float randAspect1 = hash3D(ux, uy, basePhase1, 2191590403u);
     const float randAspect = _mix(randAspect0, randAspect1, t);
 
-    // Uses the same exponential scale (base 2) as the UI slider for Dot Aspect Ratio
-    // Modified so the fluctuation range of aspect ratio is completely symmetric vertically and horizontally (e.g. 0.25x to 4.0x)
+    // Fluctuation range of aspect ratio is symmetric vertically and horizontally (0.25x to 4.0x)
     const float aspectMultiplier = _exp2f(params->aspectJitter * randAspect * 2.0f);
     const float finalAspect = _fmaxf(0.01f, params->aspectRatio * aspectMultiplier);
 
     // Dynamically calculate cell pitch/size on the GPU to reduce CPU overhead
     const float width = (float)params->srcSize[0];
     const float cellBasePitch = _fmaxf(3.0f, _floorf(width / params->screenDensity));
-    // Stretch or shrink the entire underlying coordinate grid to match the aspect ratio.
-    // Rather than stretching each individual dot geometrically (which distorts the circular gradients
-    // and causes overlap artifacts), we instead universally squash/stretch the cell placement pitch.
-    // Then later, the sampling logic squashes the distance checks appropriately.
+    // Stretch or shrink the underlying coordinate grid to match the aspect ratio.
+    // Sampling logic squashes the distance checks appropriately.
     const float gridAspect = params->aspectRatio;
     float cx = cellBasePitch;
     float cy = cellBasePitch * params->gridSpacingY; // Apply base vertical placement ratio driven from CPU
@@ -317,10 +314,9 @@ __KERNEL__ void CellInfoKernel(
     const float cellPitchY = _fmaxf(3.0f, _floorf(cy));
     const float2 cellPitch = to_float2(cellPitchX, cellPitchY);
     const float halfPitchX = cellPitchX * 0.5f;
-    const float halfPitchY = cellPitchY * 0.5f; // Pre-calculated
+    const float halfPitchY = cellPitchY * 0.5f;
     const float maxCellRadius = (cellBasePitch * 0.5f) * 1.5f;
 
-    // Offset Y position by half a cell (Fixed offset for standard staggering)
     const float yOffset = halfPitchY;
 
     // Calculate row offset based on multiplier matching dot shape (provided by CPU)
@@ -341,7 +337,7 @@ __KERNEL__ void CellInfoKernel(
     const int samplingRadius = (int)(halfPitchX);
     const float radiusSquared = (float)(samplingRadius * samplingRadius);
 
-    // Dynamic adjustment of sampling step size (pre-calculated comparison with threshold)
+    // Dynamic adjustment of sampling step size
     const int sampleStep = ((float)samplingRadius > SAMPLING_STEP_THRESHOLD) ? SAMPLING_STEP_LARGE : 1;
     const float sampleStepSquared = (float)(sampleStep * sampleStep); // Pre-calculated
 
@@ -363,8 +359,8 @@ __KERNEL__ void CellInfoKernel(
         return;
     }
 
-    // Sample pixels within the cell bounding box using a faster circular sampling logic (optimized version)
-    const int sampleStepInt = sampleStep * sampleStep; // Integer version for optimization
+    // Sample pixels within the cell bounding box using circular sampling logic
+    const int sampleStepInt = sampleStep * sampleStep;
 
     // Loop dynamically over the bounding box calculated from the cell center
     for (int pixelY = minY; pixelY <= maxY; pixelY += sampleStep) {
@@ -384,7 +380,7 @@ __KERNEL__ void CellInfoKernel(
         for (int pixelX = localMinX; pixelX <= localMaxX; pixelX += sampleStep) {
             const float4 color = _tex2DVec4(src, (float)pixelX, (float)pixelY);
 
-            // Compute perceptual luminance efficiently
+            // Compute perceptual luminance
             const float luma = color.x * LUMA_R + color.y * LUMA_G + color.z * LUMA_B;
 
             // Simplified accumulation
@@ -405,7 +401,7 @@ __KERNEL__ void CellInfoKernel(
     const float invSampleCount = (sampleCount > 0) ? (1.0f / (float)sampleCount) : 0.0f;
     float avgLuma = totalLuma * invSampleCount;
 
-    // Average color calculation (Vectorized for optimization)
+    // Average color calculation
     avgColor *= invSampleCount;
 
     // Apply user contrast enhancement
@@ -479,7 +475,7 @@ __DEVICE__ float4 applyColorReduction(float4 color, int mode, __CONSTANTREF__ Re
     const int mappingMode = params->mappingMode;
     if (mappingMode == 0) return color;
 
-    // Dual-Mode High Speed Indexing
+    // Palette indexing
     int idx = 0;
     
     if (mappingMode == 1) { // Luma Mode
@@ -495,7 +491,7 @@ __DEVICE__ float4 applyColorReduction(float4 color, int mode, __CONSTANTREF__ Re
 }
 #define DOT_RADIUS_THRESHOLD 0.1f
 #define BOUNDING_BOX_MARGIN 1.0f
-#define HIGH_DENSITY_THRESHOLD 100.0f  // Screen density values above this trigger high-density fast execution path
+#define HIGH_DENSITY_THRESHOLD 100.0f  // Screen density threshold for fast-path
 #define MIN_CHECK_RADIUS 1.5f  // Minimum radius size necessary for comprehensive checking
 
 // Checks presence and geometry of a dot within a cell, returning coverage factor
@@ -696,7 +692,7 @@ __KERNEL__ void RenderDotsKernel(
 
     const float2 pixelPos = to_float2((float)x, (float)y);
 
-    // Compute cell dimensions dynamically to offset CPU overhead
+    // Compute cell dimensions
     const float width = (float)params->srcSize[0];
     const float cellBasePitch = _fmaxf(3.0f, _floorf(width / params->screenDensity));
     // Distort entire grid resolution appropriately for the target aspect ratio
@@ -719,7 +715,7 @@ __KERNEL__ void RenderDotsKernel(
     const int baseRowY = (int)((pixelPos.y + yOffset) / cellPitch.y);
     const int isOddRow = (baseRowY % 2 != 0) ? 1 : 0;
 
-    const float2 halfCellPitch = cellPitch * 0.5f; // Pre-calculated
+    const float2 halfCellPitch = cellPitch * 0.5f;
 
     float adjustedX = pixelPos.x;
     if (isOddRow != 0 && params->dotShape != 1) {
@@ -748,7 +744,7 @@ __KERNEL__ void RenderDotsKernel(
     const float shiftVal = (blendWithInput != 0 || useOriginalColorFlag != 0) ? params->rgbShift : 0.0f;
     const float2 shiftROFF = to_float2(-shiftVal / intWidth, -shiftVal / intHeight);
     const float2 shiftBOFF = to_float2( shiftVal / intWidth,  shiftVal / intHeight);
-    // cellInfo3 maps exactly to the image region (UV space 0.0~1.0), so pixel shift amount is identical to the offset used for src
+    // cell_info2 maps exactly to the image region (UV space 0.0~1.0), so pixel shift amount is identical to the offset used for src
     const float2 cellShiftROFF = shiftROFF;
     const float2 cellShiftBOFF = shiftBOFF;
 
@@ -792,10 +788,7 @@ __KERNEL__ void RenderDotsKernel(
     getNeighborOffsets(isOddRow, params->gridStaggerX, neighborOffsets, &neighborCount);
 
     if (isHighDensity != 0) {
-        // High Density Fast-Path execution:
-        // When resolving tiny dots (like 2x2 pixels), iterating through all 6-8 neighbor cells is overly expensive.
-        // Based on the localized sub-pixel fraction of 'relPos' (which quadrant the pixel is in relative to cell center),
-        // we can mathematically deduce that it only needs to check at most 2 specific adjacent neighbors.
+        // High density rendering
         int checkIndices[2] = {-1, -1};
         int checkCount = 0;
         const float2 cellThreshold = halfCellPitch * 0.5f; // Boundary threshold (quarter pitch)
@@ -812,7 +805,7 @@ __KERNEL__ void RenderDotsKernel(
                 checkIndices[checkCount++] = (relPos.y > 0.0f) ? (isOddRow ? 3 : 4)
                                                               : (isOddRow ? 0 : 1);
             }
-            if (checkCount > 2) checkCount = 2; // For performance, restricted neighbor check to 2 adjacent. Orthogonal shapes occasionally need diagonals, but primarily 2 suffices here.
+            if (checkCount > 2) checkCount = 2;
         }
 
         for (int i = 0; i < checkCount; i++) {
@@ -1282,7 +1275,7 @@ function Process(req)
 
     local out = Image({ IMG_Like = img })
 
-    -- Step 1: Execute kernel for cell information accumulation
+    -- Execute kernel for cell information accumulation
     local cellInfoNode = DVIPComputeNode(req, "CellInfoKernel", CellInfoKernel, "CellInfoParams", CellInfoParams)
 
     if cellInfoNode then
@@ -1292,7 +1285,7 @@ function Process(req)
         params.srcSize[1] = height
         params.dstSize[0] = cellGridNumX
         params.dstSize[1] = cellGridNumY
-        params.screenDensity = screenDensity -- Calculated natively on GPU
+        params.screenDensity = screenDensity
         params.contrast = contrast
         params.aspectRatio = aspectRatio
         params.dotGain = dotGain
@@ -1324,7 +1317,7 @@ function Process(req)
         end
     end
 
-    -- Step 2: Execute dot rendering compositor kernel
+    -- Execute dot rendering compositor kernel
     local renderNode = DVIPComputeNode(req, "RenderDotsKernel", RenderDotsKernel, "RenderParams", RenderParams)
 
     if renderNode then
@@ -1345,7 +1338,7 @@ function Process(req)
         params.dotColor[3] = dotA
         params.useOriginalColor = useOriginalColor
         params.colorReduction = colorReduction
-        params.screenDensity = screenDensity 
+        params.screenDensity = screenDensity
         params.enableAntialias = (enableDotAntialias and 1 or 0)
         params.aaEdgeWidth = aaEdgeWidth
         params.dotShape = dotShape
