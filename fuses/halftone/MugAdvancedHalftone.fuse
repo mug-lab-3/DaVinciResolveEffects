@@ -2,7 +2,7 @@
 Mug Advanced Halftone
 --]] --
 
--- Set this to true to export CellInfo1-3 as additional outputs for debugging
+-- Set this to true to export CellInfo1-2 as additional outputs for debugging
 ShowCellInfo = false
 
 --******************************************************************************************************
@@ -15,7 +15,7 @@ FuRegisterClass("MugAdvancedHalftone", CT_Tool, {
     REGS_IconID            = "Icons.Tools.Icons.AdvancedHalftone",
     REG_Source_GlobalCtrls = true,
     REG_Source_SizeCtrls   = true,
-    REG_Version            = 1.33,
+    REG_Version            = 1.40,
 })
 
 -- Definition of Retro Color Themes (Palettes + Thresholds)
@@ -200,24 +200,18 @@ CellInfoParams = [[
 ]]
 
 -- Cell Information Calculation Kernel
--- Intermediate buffer format:
--- float4 cellInfo1:
---   x: Cell ID X - X position in grid coordinate system (Integer: 0 to dstSize[0]-1)
---   y: Cell ID Y - Y position in grid coordinate system (Integer: 0 to dstSize[1]-1)
---   z: Cell Center X - X position in pixel coordinate system (Integer: 0 to srcSize[0]-1)
---   w: Cell Center Y - Y position in pixel coordinate system (Integer: 0 to srcSize[1]-1)
+-- Optimized Intermediate buffer format (2-texture consolidation):
+-- float4 cellInfo1 (Geometry):
+--   x: Cell Center X - Actual X position in pixel coordinates
+--   y: Cell Center Y - Actual Y position in pixel coordinates
+--   z: Dot Radius    - Calculated dot radius (0.0 to maxCellRadius)
+--   w: Final Aspect  - Local dot aspect ratio for this individual cell
 --
--- float4 cellInfo2:
---   x: Cell Luminance Value (0.0 to 1.0)
---   y: Dot Radius - Number of pixels for radius (0 to maxCellRadius)
---   z: Row Offset Flag - Whether this cell's row is offset (Integer: 0=Normal row, 1=Offset row)
---   w: Final Aspect Ratio - The calculated local aspect ratio for this cell
---
--- float4 cellInfo3:
---   x: Original Color R component - For Original Color Mode (0.0 to 1.0)
---   y: Original Color G component - For Original Color Mode (0.0 to 1.0)
---   z: Original Color B component - For Original Color Mode (0.0 to 1.0)
---   w: Original Color A channel - Transparency (0.0 to 1.0)
+-- float4 cellInfo2 (Color):
+--   x: Original Color R / Average Color R
+--   y: Original Color G / Average Color G
+--   z: Original Color B / Average Color B
+--   w: Original Color A / Mask Alpha
 --
 --
 -- * Note: In the rendering kernel, each pixel samples its enclosing cell and neighboring cells for accurate overlap rendering.
@@ -256,8 +250,7 @@ __KERNEL__ void CellInfoKernel(
     __CONSTANTREF__ CellInfoParams *params,
     __TEXTURE2D__ src,
     __TEXTURE2D_WRITE__ dst_info1,
-    __TEXTURE2D_WRITE__ dst_info2,
-    __TEXTURE2D_WRITE__ dst_info3)
+    __TEXTURE2D_WRITE__ dst_info2)
 {
     DEFINE_KERNEL_ITERATORS_XY(x, y);
 
@@ -365,9 +358,8 @@ __KERNEL__ void CellInfoKernel(
 
     // Early Return for invalid ranges to improve GPU thread utilization
     if (minX > maxX || minY > maxY) {
-        _tex2DVec4Write(dst_info1, x, y, cellInfo1);
-        _tex2DVec4Write(dst_info2, x, y, to_float4(0.5f, 0.0f, (float)isOddRow, finalAspect));
-        _tex2DVec4Write(dst_info3, x, y, to_float4(0.0f, 0.0f, 0.0f, 1.0f));
+        _tex2DVec4Write(dst_info1, x, y, to_float4(cellCenterX, cellCenterY, 0.0f, finalAspect));
+        _tex2DVec4Write(dst_info2, x, y, to_float4(0.0f, 0.0f, 0.0f, 1.0f));
         return;
     }
 
@@ -404,9 +396,8 @@ __KERNEL__ void CellInfoKernel(
 
     // Fast path execution if no valid samples were found
     if (sampleCount == 0) {
-        _tex2DVec4Write(dst_info1, x, y, cellInfo1);
-        _tex2DVec4Write(dst_info2, x, y, to_float4(0.5f, 0.0f, (float)isOddRow, 1.0f));
-        _tex2DVec4Write(dst_info3, x, y, to_float4(0.0f, 0.0f, 0.0f, 1.0f));
+        _tex2DVec4Write(dst_info1, x, y, to_float4(cellCenterX, cellCenterY, 0.0f, 1.0f));
+        _tex2DVec4Write(dst_info2, x, y, to_float4(0.0f, 0.0f, 0.0f, 1.0f));
         return;
     }
 
@@ -449,13 +440,11 @@ __KERNEL__ void CellInfoKernel(
         dotRadius = _fminf(tonalValue * maxCellRadius, maxCellRadius * params->clipRadius);
     }
 
-    // dst_info2: Store calculated dot attributes
-    const float4 cellInfo2 = to_float4(avgLuma, dotRadius, (float)isOddRow, finalAspect);
-
     // Write final information to intermediate texture buffers
-    _tex2DVec4Write(dst_info1, x, y, cellInfo1);
-    _tex2DVec4Write(dst_info2, x, y, cellInfo2);
-    _tex2DVec4Write(dst_info3, x, y, avgColor);
+    // dst_info1 (Geometry): [CenterX, CenterY, Radius, Aspect]
+    // dst_info2 (Color): [R, G, B, Alpha]
+    _tex2DVec4Write(dst_info1, x, y, to_float4(cellCenterX, cellCenterY, dotRadius, finalAspect));
+    _tex2DVec4Write(dst_info2, x, y, avgColor);
 }
 ]]
 
@@ -515,7 +504,6 @@ __DEVICE__ float checkCellDot(
     const float2 pixelPos,
     const float2 cellGridNum,
     __TEXTURE2D__ cell_info1,
-    __TEXTURE2D__ cell_info2,
     const float aaEdgeWidth,
     const int dotShape)
 {
@@ -524,18 +512,16 @@ __DEVICE__ float checkCellDot(
 
         const float2 cellUV = (cellPos + to_float2(0.5f, 0.5f)) / cellGridNum;
 
-        const float4 cellInfo2Data = _tex2DVec4(cell_info2, cellUV.x, cellUV.y);
-        const float dotRadius = cellInfo2Data.y;
-        const float finalAspect = cellInfo2Data.w;
+        const float4 geoData = _tex2DVec4(cell_info1, cellUV.x, cellUV.y);
+        const float2 cellCenter = to_float2(geoData.x, geoData.y);
+        const float dotRadius = geoData.z;
+        const float finalAspect = geoData.w;
 
         if (dotRadius <= 0.0f)
             return 0.0f;
 
         if (dotRadius <= DOT_RADIUS_THRESHOLD && aaEdgeWidth <= 0.0f)
             return 0.0f;
-
-        const float4 cellInfo1Data = _tex2DVec4(cell_info1, cellUV.x, cellUV.y);
-        const float2 cellCenter = to_float2(cellInfo1Data.z, cellInfo1Data.w);
 
         const float bbSize = dotRadius + BOUNDING_BOX_MARGIN + aaEdgeWidth;
         const float2 diff = pixelPos - cellCenter;
@@ -646,7 +632,6 @@ __DEVICE__ void updateBestCell(
     const float2 cellGridNum,
     __TEXTURE2D__ cell_info1,
     __TEXTURE2D__ cell_info2,
-    __TEXTURE2D__ cell_info3,
     const float aaEdgeWidth,
     const int dotShape,
     const float4 userDotColor,
@@ -659,7 +644,7 @@ __DEVICE__ void updateBestCell(
     __CONSTANTREF__ RenderParams *params,
     struct BestCellState *state)
 {
-    const float coverageCandidate = checkCellDot(candidatePos, pixelPos, cellGridNum, cell_info1, cell_info2, aaEdgeWidth, dotShape);
+    const float coverageCandidate = checkCellDot(candidatePos, pixelPos, cellGridNum, cell_info1, aaEdgeWidth, dotShape);
     if (coverageCandidate > 0.0f) {
         float4 candidateDotColor = userDotColor;
         float candidateStrength = coverageCandidate;
@@ -667,11 +652,11 @@ __DEVICE__ void updateBestCell(
             const float2 baseUV = (candidatePos + to_float2(0.5f, 0.5f)) / cellGridNum;
             if (shiftVal == 0.0f) {
                 // Optimization: Avoid redundant separated sampling if Shift is disabled
-                candidateDotColor = _tex2DVec4(cell_info3, baseUV.x, baseUV.y);
+                candidateDotColor = _tex2DVec4(cell_info2, baseUV.x, baseUV.y);
             } else {
-                const float4 cR = _tex2DVec4(cell_info3, baseUV.x + cellShiftROFF.x, baseUV.y + cellShiftROFF.y);
-                const float4 cG = _tex2DVec4(cell_info3, baseUV.x, baseUV.y);
-                const float4 cB = _tex2DVec4(cell_info3, baseUV.x + cellShiftBOFF.x, baseUV.y + cellShiftBOFF.y);
+                const float4 cR = _tex2DVec4(cell_info2, baseUV.x + cellShiftROFF.x, baseUV.y + cellShiftROFF.y);
+                const float4 cG = _tex2DVec4(cell_info2, baseUV.x, baseUV.y);
+                const float4 cB = _tex2DVec4(cell_info2, baseUV.x + cellShiftBOFF.x, baseUV.y + cellShiftBOFF.y);
                 candidateDotColor = to_float4(cR.x, cG.y, cB.z, cG.w);
             }
             if (colorReduction > 0) {
@@ -701,7 +686,6 @@ __KERNEL__ void RenderDotsKernel(
     __CONSTANTREF__ RenderParams *params,
     __TEXTURE2D__ cell_info1,
     __TEXTURE2D__ cell_info2,
-    __TEXTURE2D__ cell_info3,
     __TEXTURE2D__ src_img,
     __TEXTURE2D_WRITE__ dst)
 {
@@ -794,7 +778,7 @@ __KERNEL__ void RenderDotsKernel(
     state.bestStrength = -1.0f;
     state.bestDotColor = (blendWithInput != 0 && useOriginalColorFlag != 0) ? inputColor : userDotColor;
 
-    updateBestCell(mainCellPos, pixelPos, cellGridNum, cell_info1, cell_info2, cell_info3, aaEdgeWidth, params->dotShape, userDotColor, useOriginalColorFlag, colorReduction, blendWithInput, shiftVal, cellShiftROFF, cellShiftBOFF, params, &state);
+    updateBestCell(mainCellPos, pixelPos, cellGridNum, cell_info1, cell_info2, aaEdgeWidth, params->dotShape, userDotColor, useOriginalColorFlag, colorReduction, blendWithInput, shiftVal, cellShiftROFF, cellShiftBOFF, params, &state);
 
     const float2 cellCenter = to_float2(
         mainCellX * cellPitch.x + ((isOddRow != 0) ? (halfCellPitch.x * params->gridStaggerX) : 0.0f) + halfCellPitch.x,
@@ -834,11 +818,11 @@ __KERNEL__ void RenderDotsKernel(
         for (int i = 0; i < checkCount; i++) {
             const int index = checkIndices[i];
             if (index < 0) continue;
-            updateBestCell(mainCellPos + neighborOffsets[index], pixelPos, cellGridNum, cell_info1, cell_info2, cell_info3, aaEdgeWidth, params->dotShape, userDotColor, useOriginalColorFlag, colorReduction, blendWithInput, shiftVal, cellShiftROFF, cellShiftBOFF, params, &state);
+            updateBestCell(mainCellPos + neighborOffsets[index], pixelPos, cellGridNum, cell_info1, cell_info2, aaEdgeWidth, params->dotShape, userDotColor, useOriginalColorFlag, colorReduction, blendWithInput, shiftVal, cellShiftROFF, cellShiftBOFF, params, &state);
         }
     } else {
         for (int i = 0; i < neighborCount; i++) {
-            updateBestCell(mainCellPos + neighborOffsets[i], pixelPos, cellGridNum, cell_info1, cell_info2, cell_info3, aaEdgeWidth, params->dotShape, userDotColor, useOriginalColorFlag, colorReduction, blendWithInput, shiftVal, cellShiftROFF, cellShiftBOFF, params, &state);
+            updateBestCell(mainCellPos + neighborOffsets[i], pixelPos, cellGridNum, cell_info1, cell_info2, aaEdgeWidth, params->dotShape, userDotColor, useOriginalColorFlag, colorReduction, blendWithInput, shiftVal, cellShiftROFF, cellShiftBOFF, params, &state);
         }
     }
 
@@ -1209,10 +1193,6 @@ function Create()
             LINKID_DataType = "Image",
             LINK_Main = 3,
         })
-        OutCellInfo3 = self:AddOutput("CellInfo3", "CellInfo3", {
-            LINKID_DataType = "Image",
-            LINK_Main = 4,
-        })
     end
 end
 
@@ -1300,12 +1280,6 @@ function Process(req)
         IMG_Depth = 8,
     })
 
-    local cellInfo3 = Image({
-        IMG_Width = cellGridNumX,
-        IMG_Height = cellGridNumY,
-        IMG_Depth = 8,
-    })
-
     local out = Image({ IMG_Like = img })
 
     -- Step 1: Execute kernel for cell information accumulation
@@ -1341,7 +1315,6 @@ function Process(req)
         cellInfoNode:AddInput("src", img)
         cellInfoNode:AddOutput("dst_info1", cellInfo1)
         cellInfoNode:AddOutput("dst_info2", cellInfo2)
-        cellInfoNode:AddOutput("dst_info3", cellInfo3)
 
         local success = cellInfoNode:RunSession(req)
         if not success then
@@ -1450,7 +1423,6 @@ function Process(req)
         --      TEX_NORMALIZED_COORDS_FALSE)
         renderNode:AddInput("cell_info1", cellInfo1)
         renderNode:AddInput("cell_info2", cellInfo2)
-        renderNode:AddInput("cell_info3", cellInfo3)
         renderNode:AddInput("src_img", img)
         renderNode:AddOutput("dst", out)
 
@@ -1468,7 +1440,6 @@ function Process(req)
     if ShowCellInfo then
         OutCellInfo1:Set(req, cellInfo1)
         OutCellInfo2:Set(req, cellInfo2)
-        OutCellInfo3:Set(req, cellInfo3)
     end
     OutImage:Set(req, out)
 end
