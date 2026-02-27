@@ -27,13 +27,11 @@ graph TD
     A["入力画像 (Input Image)"] --> CPU["CPU: Process<br/>パラメータ初期化・UI制御"]
     CPU --> C_K["GPU: CellInfoKernel<br/>セルごとの輝度・色・半径を計算"]
     
-    C_K --> B1["cell_info1<br/>セル位置情報"]
-    C_K --> B2["cell_info2<br/>ドット半径・輝度情報"]
-    C_K --> B3["cell_info3<br/>セル平均色情報"]
+    C_K --> B1["cell_info1<br/>幾何情報 (Geometry)"]
+    C_K --> B2["cell_info2<br/>色情報 (Color)"]
     
     B1 --> R_K["GPU: RenderDotsKernel<br/>各ピクセルの最終色をサンプリング・合成"]
     B2 --> R_K
-    B3 --> R_K
     A --> R_K
     
     R_K --> Z["最終出力画像 (Output)"]
@@ -47,7 +45,7 @@ graph TD
 
     class CPU cpuStyle
     class C_K,R_K gpuStyle
-    class B1,B2,B3 bufStyle
+    class B1,B2 bufStyle
 ```
 
 ### 処理の2段階構造
@@ -60,21 +58,17 @@ graph TD
 
 ## 3. GPU カーネルの設計詳細とデータ構造 (GPU Kernel Design Details)
 
-CPUからカーネルへ情報を中継し、2つのカーネル間でデータを共有するために、3つの浮動小数点テクスチャバッファ（`cell_info1, 2, 3`）を使用します。
+CPUからカーネルへ情報を中継し、2つのカーネル間でデータを共有するために、2つの浮動小数点テクスチャバッファ（`cell_info1, 2`）を使用します。
 
 ### cell_info バッファの仕様
 
 | バッファ | チャンネル | 格納されるデータ | 役割の説明 |
 | :--- | :--- | :--- | :--- |
-| **cell_info1** | `.x` | `cellIDX` | グリッド座標系でのX位置 (0〜dstSize[0]-1) |
-| | `.y` | `cellIDY` | グリッド座標系でのY位置 (0〜dstSize[1]-1) |
-| | `.z` | `cellCenterX` | ピクセル座標系でのセル中心のX座標 |
-| | `.w` | `cellCenterY` | ピクセル座標系でのセル中心のY座標 |
-| **cell_info2** | `.x` | `avgLuma` | コントラスト調整後の平均輝度 (0.0〜1.0) |
-| | `.y` | `dotRadius` | セルに描画すべきドットの半径 (ピクセル単位) |
-| | `.z` | `isOddRow` | 行オフセットフラグ。六角形グリッドの奇数行ズレ判定用 (1=オフセット) |
+| **cell_info1** | `.x` | `cellCenterX` | ピクセル座標系でのセル中心のX座標 |
+| | `.y` | `cellCenterY` | ピクセル座標系でのセル中心のY座標 |
+| | `.z` | `dotRadius` | セルに描画すべきドットの半径 (ピクセル単位) |
 | | `.w` | `finalAspect` | Jitterを加味して算出されたこのセル専用のアスペクト比 |
-| **cell_info3** | `.x` | `avgColor.R` | セル円形範囲内の平均色の赤成分 (0.0〜1.0) |
+| **cell_info2** | `.x` | `avgColor.R` | セル円形範囲内の平均色の赤成分 (0.0〜1.0) |
 | | `.y` | `avgColor.G` | 平均色の緑成分 (0.0〜1.0) |
 | | `.z` | `avgColor.B` | 平均色の青成分 (0.0〜1.0) |
 | | `.w` | `avgColor.A` | 平均色のアルファ成分 (透明度) |
@@ -104,7 +98,7 @@ UI からの `Screen Density` を基に、六角形グリッド構成のピッ�
 5. **Dot Size Curve**: $T = \mathrm{saturate}(T_1)^{\max(\text{DotSizeCurve}, \, 10^{-4})}$
 
 ### ステージ 3: 半径決定とカットオフ (Cutoffs & Max Radius)
-導き出された $T$ を用いて実際のドット半径 ($R_{dot}$) を算出し、`cell_info2.y` に格納します。
+導き出された $T$ を用いて実際のドット半径 ($R_{dot}$) を算出し、`cell_info1.z` に格納します。
 
 1. **Brightness Cutoff**: 反転モードでない場合、$L_{adj} \le \text{BrightnessCutoff}$ のセルのみ描画を許可します（条件外は $R_{dot}=0$）。
 2. **Cutoff Dot Radius (MinDotRadius)**: 計算された仮の半径が $\text{MinDotRadius}$ 未満であれば、ノイズとみなして $R_{dot}=0$ にします。
@@ -128,7 +122,7 @@ $$ \alpha = \mathrm{saturate}\left( \frac{R_{dot} - d}{w} \right) $$
 ### ステージ 5: 最終色の合算 (Color Blending)
 最終的な描画色は「背景 (BaseColor)」と「ドット色 (DotColor)」をカバレッジでアルファ合成 (`blendDotOver`) します。
 
-- **DotColor**: `Use Original Color` がオンなら `cell_info3` の平均色($\mathrm{RGB}$)を使用します。オフならUIの `Dot Color` の単色を使用します。この際、`RGB Shift` パラメータが設定されていると、R・G・B成分をそれぞれ異なる座標へズラしてサンプリングし、版ズレ（フリンジ）を発生させます。
+- **DotColor**: `Use Original Color` がオンなら `cell_info2` の平均色($\mathrm{RGB}$)を使用します。オフならUIの `Dot Color` の単色を使用します。この際、`RGB Shift` パラメータが設定されていると、R・G・B成分をそれぞれ異なる座標へズラしてサンプリングし、版ズレ（フリンジ）を発生させます。
 - **BaseColor**: `Blend With Input` がオンなら元の入力画像をベースとし（こちらにも `RGB Shift` が適用可能）、オフなら `Paper Color`（プリセットまたはカスタム指定色）を使用します。
 
 ---
@@ -217,7 +211,7 @@ DaVinci Resolve のインスペクタに表示される全パラメータの一�
 
 - **GPU制約**: DaVinci Resolve の OpenCL/CUDA 環境を強く前提としたハードウェア実装です。CPUへのフォールバック機能はありません。
 - **解像度と密度の限界**: `Screen Density` を法外な数値に引き上げたり、16Kのような異常解像度で使用する場合、テクスチャメモリのフェッチ回数が並行処理の上限を突破し、フレームドロップが発生する可能性があります。
-- **将来の拡張**: 現在は RGB シフトやドット形状の描画にバッファをフル活用していますが、`cell_info` をさらに 1 つ追加（`cell_info4`）することで、「ライン（線・トーン）」「クロスハッチング」といった別の高度な描画アルゴリズムの拡張を計画できる設計基盤となっています。
+- **将来の拡張**: 現在は RGB シフトやドット形状の描画にバッファをフル活用していますが、`cell_info` をさらに 1 つ追加（`cell_info3`）することで、「ライン（線・トーン）」「クロスハッチング」といった別の高度な描画アルゴリズムの拡張を計画できる設計基盤となっています。
 
 ---
 *Generated based on source code MugAdvancedHalftone.fuse v3.00*
