@@ -1224,89 +1224,65 @@ function Process(req)
         return
     end
 
-    -- Retrieve input parameters
-    local contrastSlider = InContrast:GetValue(req).Value
-    local contrast = math.pow(4.0, contrastSlider)
-    
+    -- Localization of frequently used functions
+    local floor = math.floor
+    local max   = math.max
+    local pow   = math.pow
+
+    -- Consolidate all input fetches
     local screenDensity = InScreenDensity:GetValue(req).Value
-    local rgbShift = InRGBShift:GetValue(req).Value
+    local rgbShift      = InRGBShift:GetValue(req).Value
+    local contrast      = pow(4.0, InContrast:GetValue(req).Value)
 
-    local dotShape = InDotShape:GetValue(req).Value
-    local aspectRatioSlider = InAspectRatio:GetValue(req).Value
-    -- Convert UI linear range (-1.0 to 1.0) into exponential scaling multiplier (0.25 to 4.0)
-    -- This provides symmetric visual scaling behavior.
-    -- +1.0 -> 2^2 = 4 (tall)
-    --  0.0 -> 2^0 = 1 (circle)
-    -- -1.0 -> 2^-2 = 0.25 (wide)
-    local aspectRatio = math.pow(2.0, aspectRatioSlider * 2.0)
-    local dotGain = InDotGain:GetValue(req).Value
-    local dotSizeCurveSlider = InDotSizeCurve:GetValue(req).Value
-    -- Positive values elevate curve (brighter/larger dots); negative values sink curve (darker/smaller dots), hence negation
-    local dotSizeCurve = math.pow(4.0, -dotSizeCurveSlider)
-    
-    local cutoffDotRadius = InCutoffDotRadius:GetValue(req).Value
-    local maxDotRadius = InClipDotRadius:GetValue(req).Value
+    local aspectRatioSlider   = InAspectRatio:GetValue(req).Value
+    local aspectRatio         = pow(2.0, aspectRatioSlider * 2.0)
+    local dotGain             = InDotGain:GetValue(req).Value
+    local dotSizeCurveSlider  = InDotSizeCurve:GetValue(req).Value
+    local dotSizeCurve        = pow(4.0, -dotSizeCurveSlider)
+    local cutoffDotRadius     = InCutoffDotRadius:GetValue(req).Value
+    local maxDotRadius        = InClipDotRadius:GetValue(req).Value
+    local jitterPhase         = InJitterPhase:GetValue(req).Value
+    local positionJitter      = InPositionJitter:GetValue(req).Value
+    local sizeJitter          = InSizeJitter:GetValue(req).Value
+    local aspectJitter        = InAspectJitter:GetValue(req).Value
+    local invertMode          = InInvertMode:GetValue(req).Value
+    local brightnessCutoff    = InBrightnessCutoff:GetValue(req).Value
+    local enableDotAntialias  = InEnableDotAntialias:GetValue(req).Value > 0.5
+    local aaEdgeSoftness      = InAAEdgeSoftness:GetValue(req).Value
+    local useOriginalColor    = InUseOriginalColor:GetValue(req).Value > 0.5 and 1 or 0
+    local colorReduction      = floor(InColorReduction:GetValue(req).Value + 0.5)
+    local blendWithInput      = InBlendWithInput:GetValue(req).Value > 0.5 and 1 or 0
+    local dotShape            = floor(InDotShape:GetValue(req).Value + 0.5)
+    local staggerSquares      = InStaggerSquareDots:GetValue(req).Value > 0.5
 
-    local jitterPhase = InJitterPhase:GetValue(req).Value
-    local positionJitter = InPositionJitter:GetValue(req).Value
-    local sizeJitter = InSizeJitter:GetValue(req).Value
-    local aspectJitter = InAspectJitter:GetValue(req).Value
-
-    local invertMode = InInvertMode:GetValue(req).Value
-    local brightnessCutoff = InBrightnessCutoff:GetValue(req).Value
-
-    local enableDotAntialias = InEnableDotAntialias:GetValue(req).Value > 0.5
-    local aaEdgeSoftness = InAAEdgeSoftness:GetValue(req).Value
-    local useOriginalColor = InUseOriginalColor:GetValue(req).Value
-    local colorReduction = math.floor(InColorReduction:GetValue(req).Value + 0.5)
-
-    local blendWithInput = InBlendWithInput:GetValue(req).Value
-    local paperColor = {
-        InPaperColorRed:GetValue(req).Value,
-        InPaperColorGreen:GetValue(req).Value,
-        InPaperColorBlue:GetValue(req).Value,
-        InPaperColorAlpha:GetValue(req).Value,
-    }
-    local dotColor = {
-        InDotColorRed:GetValue(req).Value,
-        InDotColorGreen:GetValue(req).Value,
-        InDotColorBlue:GetValue(req).Value,
-        InDotColorAlpha:GetValue(req).Value,
-    }
+    -- Color Components
+    local paperR = InPaperColorRed:GetValue(req).Value
+    local paperG = InPaperColorGreen:GetValue(req).Value
+    local paperB = InPaperColorBlue:GetValue(req).Value
+    local paperA = InPaperColorAlpha:GetValue(req).Value
+    local dotR   = InDotColorRed:GetValue(req).Value
+    local dotG   = InDotColorGreen:GetValue(req).Value
+    local dotB   = InDotColorBlue:GetValue(req).Value
+    local dotA   = InDotColorAlpha:GetValue(req).Value
 
     local width = img.DataWindow:Width()
     local height = img.DataWindow:Height()
 
-    -- Calculate buffer sizes for cell information
-    -- Pre-evaluate layout spacing rules based on the chosen grid shape on CPU side
-    local dotShape = math.floor(InDotShape:GetValue(req).Value + 0.5)
-    local staggerSquares = InStaggerSquareDots:GetValue(req).Value > 0.5
-    local SIN60 = 0.866025 -- √3/2
+    -- Calculate geometry rules
+    local SIN60 = 0.866025
     local gridSpacingY = (dotShape == 1) and 1.0 or SIN60
-    local gridStaggerX = 1.0
-    if dotShape == 1 then
-        gridStaggerX = staggerSquares and 1.0 or 0.0
-    end
+    local gridStaggerX = (dotShape == 1) and (staggerSquares and 1.0 or 0.0) or 1.0
 
-    local cellBasePitch = math.floor(math.max(3.0, width / screenDensity))
-    -- Distort the buffer grid resolution proportionately alongside the aspect ratio
-    local cx = cellBasePitch
-    local cy = cellBasePitch * gridSpacingY
-    if aspectRatio > 1.0 then
-        cx = cx / aspectRatio
-    elseif aspectRatio < 1.0 then
-        cy = cy * aspectRatio
-    end
+    local cellBasePitch = floor(max(3.0, width / screenDensity))
+    local cx, cy = cellBasePitch, cellBasePitch * gridSpacingY
+    if aspectRatio > 1.0 then cx = cx / aspectRatio
+    elseif aspectRatio < 1.0 then cy = cy * aspectRatio end
 
-    local cellPitchX = math.max(3.0, math.floor(cx))
-    local cellPitchY = math.max(3.0, math.floor(cy))
-    local MAX_CELL_RADIUS = (cellBasePitch * 0.5) * 1.5
+    local cellPitchX = max(3.0, floor(cx))
+    local cellPitchY = max(3.0, floor(cy))
 
     local averageCellPitch = (cellPitchX + cellPitchY) * 0.5
-    local aaEdgeWidth = 0.0
-    if enableDotAntialias then
-        aaEdgeWidth = aaEdgeSoftness * averageCellPitch
-    end
+    local aaEdgeWidth = enableDotAntialias and (aaEdgeSoftness * averageCellPitch) or 0.0
 
     -- Calculate grid layout limits
     local cellGridNumX = math.ceil(width / cellPitchX) + 3
@@ -1356,7 +1332,7 @@ function Process(req)
         params.aspectJitter = aspectJitter
         params.invertMode = invertMode > 0.5 and 1 or 0
         params.brightnessCutoff = brightnessCutoff
-        params.useOriginalColor = useOriginalColor > 0.5 and 1 or 0
+        params.useOriginalColor = useOriginalColor
         params.gridSpacingY = gridSpacingY
         params.gridStaggerX = gridStaggerX
 
@@ -1384,23 +1360,23 @@ function Process(req)
         local params = renderNode:GetParamBlock(RenderParams)
         params.srcSize[0] = width
         params.srcSize[1] = height
-        params.blendWithInput = blendWithInput > 0.5 and 1 or 0
-        params.paperColor[0] = paperColor[1]
-        params.paperColor[1] = paperColor[2]
-        params.paperColor[2] = paperColor[3]
-        params.paperColor[3] = paperColor[4]
+        params.blendWithInput = blendWithInput
+        params.paperColor[0] = paperR
+        params.paperColor[1] = paperG
+        params.paperColor[2] = paperB
+        params.paperColor[3] = paperA
         params.cellGridNum[0] = cellGridNumX
         params.cellGridNum[1] = cellGridNumY
-        params.dotColor[0] = dotColor[1]
-        params.dotColor[1] = dotColor[2]
-        params.dotColor[2] = dotColor[3]
-        params.dotColor[3] = dotColor[4]
-        params.useOriginalColor = useOriginalColor > 0.5 and 1 or 0
+        params.dotColor[0] = dotR
+        params.dotColor[1] = dotG
+        params.dotColor[2] = dotB
+        params.dotColor[3] = dotA
+        params.useOriginalColor = useOriginalColor
         params.colorReduction = colorReduction
         params.screenDensity = screenDensity 
-        params.enableAntialias = enableDotAntialias and 1 or 0
+        params.enableAntialias = (enableDotAntialias and 1 or 0)
         params.aaEdgeWidth = aaEdgeWidth
-        params.dotShape = math.floor(dotShape + 0.5)
+        params.dotShape = dotShape
         params.aspectRatio = aspectRatio
         params.rgbShift = rgbShift
         params.gridSpacingY = gridSpacingY
