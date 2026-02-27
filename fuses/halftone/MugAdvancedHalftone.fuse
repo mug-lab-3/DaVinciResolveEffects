@@ -1226,44 +1226,43 @@ function Process(req)
 
     -- Localization of frequently used functions
     local floor = math.floor
-    local max   = math.max
-    local pow   = math.pow
+    local max = math.max
+    local pow = math.pow
 
-    -- Consolidate all input fetches
     local screenDensity = InScreenDensity:GetValue(req).Value
-    local rgbShift      = InRGBShift:GetValue(req).Value
-    local contrast      = pow(4.0, InContrast:GetValue(req).Value)
+    local rgbShift = InRGBShift:GetValue(req).Value
+    local contrast = pow(4.0, InContrast:GetValue(req).Value)
 
-    local aspectRatioSlider   = InAspectRatio:GetValue(req).Value
-    local aspectRatio         = pow(2.0, aspectRatioSlider * 2.0)
-    local dotGain             = InDotGain:GetValue(req).Value
-    local dotSizeCurveSlider  = InDotSizeCurve:GetValue(req).Value
-    local dotSizeCurve        = pow(4.0, -dotSizeCurveSlider)
-    local cutoffDotRadius     = InCutoffDotRadius:GetValue(req).Value
-    local maxDotRadius        = InClipDotRadius:GetValue(req).Value
-    local jitterPhase         = InJitterPhase:GetValue(req).Value
-    local positionJitter      = InPositionJitter:GetValue(req).Value
-    local sizeJitter          = InSizeJitter:GetValue(req).Value
-    local aspectJitter        = InAspectJitter:GetValue(req).Value
-    local invertMode          = InInvertMode:GetValue(req).Value
-    local brightnessCutoff    = InBrightnessCutoff:GetValue(req).Value
-    local enableDotAntialias  = InEnableDotAntialias:GetValue(req).Value > 0.5
-    local aaEdgeSoftness      = InAAEdgeSoftness:GetValue(req).Value
-    local useOriginalColor    = InUseOriginalColor:GetValue(req).Value > 0.5 and 1 or 0
-    local colorReduction      = floor(InColorReduction:GetValue(req).Value + 0.5)
-    local blendWithInput      = InBlendWithInput:GetValue(req).Value > 0.5 and 1 or 0
-    local dotShape            = floor(InDotShape:GetValue(req).Value + 0.5)
-    local staggerSquares      = InStaggerSquareDots:GetValue(req).Value > 0.5
+    local aspectRatioSlider = InAspectRatio:GetValue(req).Value
+    local aspectRatio = pow(2.0, aspectRatioSlider * 2.0)
+    local dotGain = InDotGain:GetValue(req).Value
+    local dotSizeCurveSlider = InDotSizeCurve:GetValue(req).Value
+    local dotSizeCurve = pow(4.0, -dotSizeCurveSlider)
+    local cutoffDotRadius = InCutoffDotRadius:GetValue(req).Value
+    local maxDotRadius = InClipDotRadius:GetValue(req).Value
+    local jitterPhase = InJitterPhase:GetValue(req).Value
+    local positionJitter = InPositionJitter:GetValue(req).Value
+    local sizeJitter = InSizeJitter:GetValue(req).Value
+    local aspectJitter = InAspectJitter:GetValue(req).Value
+    local invertMode = InInvertMode:GetValue(req).Value
+    local brightnessCutoff = InBrightnessCutoff:GetValue(req).Value
+    local enableDotAntialias = InEnableDotAntialias:GetValue(req).Value > 0.5
+    local aaEdgeSoftness = InAAEdgeSoftness:GetValue(req).Value
+    local useOriginalColor = InUseOriginalColor:GetValue(req).Value > 0.5 and 1 or 0
+    local colorReduction = floor(InColorReduction:GetValue(req).Value + 0.5)
+    local blendWithInput = InBlendWithInput:GetValue(req).Value > 0.5 and 1 or 0
+    local dotShape = floor(InDotShape:GetValue(req).Value + 0.5)
+    local staggerSquares = InStaggerSquareDots:GetValue(req).Value > 0.5
 
     -- Color Components
     local paperR = InPaperColorRed:GetValue(req).Value
     local paperG = InPaperColorGreen:GetValue(req).Value
     local paperB = InPaperColorBlue:GetValue(req).Value
     local paperA = InPaperColorAlpha:GetValue(req).Value
-    local dotR   = InDotColorRed:GetValue(req).Value
-    local dotG   = InDotColorGreen:GetValue(req).Value
-    local dotB   = InDotColorBlue:GetValue(req).Value
-    local dotA   = InDotColorAlpha:GetValue(req).Value
+    local dotR = InDotColorRed:GetValue(req).Value
+    local dotG = InDotColorGreen:GetValue(req).Value
+    local dotB = InDotColorBlue:GetValue(req).Value
+    local dotA = InDotColorAlpha:GetValue(req).Value
 
     local width = img.DataWindow:Width()
     local height = img.DataWindow:Height()
