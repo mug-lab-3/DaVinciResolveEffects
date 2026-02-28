@@ -178,7 +178,7 @@
 					SourceOp = "MugAdvancedHalftone1",
 					Source = "ColorReduction",
 					Page = "Controls",
-					Name = "Color",
+					Name = "Color Reduction",
 					ControlGroup = 1,
 					Default = 0
 				},
@@ -186,7 +186,7 @@
 					SourceOp = "MugAdvancedHalftone1",
 					Source = "DotColorRed",
 					Page = "Controls",
-					Name = "Color",
+					Name = "Dot Color",
 					ControlGroup = 2,
 					Default = 0.0627
 				},
