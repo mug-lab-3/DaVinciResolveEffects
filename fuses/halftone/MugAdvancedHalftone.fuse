@@ -94,6 +94,17 @@ ColorThemes = {
         }
     },
     {
+        Name = "Theme: Vintage PC 4c (0)",
+        Paper = { 0.00, 0.00, 0.00 },
+        PaletteType = PALETTE_TYPE.NEAREST_NEIGHBOR,
+        Palette = {
+            { 0.00, 0.00, 0.00 }, -- Black
+            { 0.00, 0.67, 0.00 }, -- Green
+            { 0.67, 0.00, 0.00 }, -- Red
+            { 0.67, 0.33, 0.00 }, -- Brown/Orange
+        }
+    },
+    {
         Name = "Theme: 80s Computer",
         Paper = { 0.42, 0.42, 0.42 },
         PaletteType = PALETTE_TYPE.NEAREST_NEIGHBOR,
@@ -126,6 +137,30 @@ ColorThemes = {
             { 1.00, 0.00, 1.00 }, { 0.00, 1.00, 0.00 }, { 0.00, 0.00, 1.00 }, { 1.00, 1.00, 0.00 },
             { 1.00, 0.50, 0.00 }, { 0.50, 0.25, 0.00 }, { 1.00, 0.50, 0.50 }, { 1.00, 0.90, 0.00 },
             { 0.00, 1.00, 0.50 }, { 0.50, 0.50, 1.00 }, { 1.00, 0.00, 0.50 }, { 0.50, 1.00, 1.00 }
+        }
+    },
+    {
+        Name = "Theme: ZX Spectrum",
+        Paper = { 0.80, 0.80, 0.80 },
+        PaletteType = PALETTE_TYPE.NEAREST_NEIGHBOR,
+        Palette = {
+            { 0.00, 0.00, 0.00 }, { 0.00, 0.00, 0.84 }, { 0.84, 0.00, 0.00 }, { 0.84, 0.00, 0.84 },
+            { 0.00, 0.84, 0.00 }, { 0.00, 0.84, 0.84 }, { 0.84, 0.84, 0.00 }, { 0.84, 0.84, 0.84 },
+            { 0.00, 0.00, 1.00 }, { 1.00, 0.00, 0.00 }, { 1.00, 0.00, 1.00 }, { 0.00, 1.00, 0.00 },
+            { 0.00, 1.00, 1.00 }, { 1.00, 1.00, 0.00 }, { 1.00, 1.00, 1.00 }
+        }
+    },
+    {
+        Name = "Theme: Tokyo Night",
+        Paper = { 0.02, 0.02, 0.05 }, -- Extremely Dark Navy (Almost Black)
+        PaletteType = PALETTE_TYPE.NEAREST_NEIGHBOR,
+        Palette = {
+            { 0.00, 0.00, 0.10 }, -- Deep Dark Blue (Base)
+            { 1.00, 0.05, 0.50 }, -- Vibrant Neon Pink
+            { 0.00, 1.00, 0.90 }, -- Electric Cyan
+            { 0.60, 0.10, 1.00 }, -- Bright Neon Purple
+            { 0.05, 0.00, 0.25 }, -- Low-key Night Blue
+            { 1.00, 1.00, 1.00 }, -- White Highlight
         }
     },
     {
