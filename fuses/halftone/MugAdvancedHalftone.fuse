@@ -85,7 +85,7 @@ ColorThemes = {
     {
         Name = "Theme: Vintage PC 4c",
         Paper = { 0.0, 0.0, 0.0 },
-        PaletteType = PALETTE_TYPE.NEAREST_NEIGHBOR,
+        PaletteType = PALETTE_TYPE.LUMA, -- Simplest mapping for 4-color PC
         Palette = {
             { 0.0, 0.0, 0.0 },  -- Black
             { 1.0, 0.33, 1.0 }, -- Magenta
@@ -196,24 +196,30 @@ ColorThemes = {
     },
     {
         Name = "Theme: Thermal Camera",
-        Paper = { 0.00, 0.00, 0.50 },
+        Paper = { 0.00, 0.00, 0.20 }, -- Deep Midnight Blue
         PaletteType = PALETTE_TYPE.LUMA,
         Palette = {
-            { 0.00, 0.00, 0.50 }, -- Dark Blue
-            { 0.60, 0.00, 0.50 }, -- Purple/Magenta
-            { 1.00, 0.40, 0.00 }, -- Orange
-            { 1.00, 1.00, 0.40 }, -- Yellow
+            { 0.00, 0.00, 0.50 }, -- Dark Blue (Low)
+            { 0.30, 0.00, 0.60 }, -- Purple
+            { 0.80, 0.00, 0.40 }, -- Magenta/Red
+            { 1.00, 0.30, 0.00 }, -- Orange
+            { 1.00, 0.80, 0.00 }, -- Yellow
+            { 1.00, 1.00, 0.50 }, -- Light Yellow
+            { 1.00, 1.00, 1.00 }, -- White (High)
         }
     },
     {
         Name = "Theme: Thermal (Inverted)",
-        Paper = { 1.00, 1.00, 0.40 },
+        Paper = { 1.00, 1.00, 1.00 },
         PaletteType = PALETTE_TYPE.LUMA,
         Palette = {
-            { 1.00, 1.00, 0.40 }, -- Yellow
-            { 1.00, 0.40, 0.00 }, -- Orange
-            { 0.60, 0.00, 0.50 }, -- Purple
-            { 0.00, 0.00, 0.50 }, -- Dark Blue
+            { 1.00, 1.00, 1.00 }, -- White (Highest Heat -> Inverted)
+            { 1.00, 1.00, 0.50 },
+            { 1.00, 0.80, 0.00 },
+            { 1.00, 0.30, 0.00 },
+            { 0.80, 0.00, 0.40 },
+            { 0.30, 0.00, 0.60 },
+            { 0.00, 0.00, 0.50 }, -- Dark Blue (Lowest Heat -> Inverted)
         }
     },
     {
@@ -1548,7 +1554,7 @@ function NotifyChanged(inp, param, time)
         local theme = ColorThemes[modeIndex + 1]
 
         if theme and theme.Paper then
-            InBlendWithInput:SetSource(Number(0.0), time) -- Ensure paper color is visible
+            -- InBlendWithInput:SetSource(Number(0.0), time) -- Ensure paper color is visible
             InUseOriginalColor:SetSource(Number(1.0), time) -- Force Original Color ON when picking a theme
             InPaperColorPreset:SetSource(Number(0.0), time) -- Set to custom preset
             InPaperColorRed:SetSource(Number(theme.Paper[1]), time)
