@@ -131,7 +131,8 @@ $$ \alpha = \mathrm{saturate}\left( \frac{R_{dot} - d}{w} \right) $$
 
 - **DotColor**: `Use Original Color` がオンなら `cell_info2` の平均色($\mathrm{RGB}$)を使用します。オフならUIの `Dot Color` の単色を使用します。この際、`RGB Shift` パラメータが設定されていると、R・G・B成分をそれぞれ異なる座標へズラしてサンプリングし、版ズレ（フリンジ）を発生させます。
 - **BaseColor**: `Blend With Input` がオンなら元の入力画像をベースとし（こちらにも `RGB Shift` が適用可能）、オフなら `Paper Color`（プリセットまたはカスタム指定色）を使用します。
-
+- **RGB Shift (Chromatic Aberration)**: シミュレートされた版ズレや色収差を再現し、レトロな印刷効果を強調します。
+- **Information Tab**: プラグイン内にバージョン情報、主要機能のまとめ、GitHub/SNS リンクを統合しました。
 ---
 
 ## 5. UI パラメータリファレンス (UI Parameter Reference)

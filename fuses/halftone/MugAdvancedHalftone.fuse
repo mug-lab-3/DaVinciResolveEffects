@@ -5,6 +5,9 @@ Mug Advanced Halftone
 -- Set this to true to export CellInfo1-2 as additional outputs for debugging
 ShowCellInfo = false
 
+-- Set version globally for easy maintenance
+VERSION = 1.81
+
 --******************************************************************************************************
 FuRegisterClass("MugAdvancedHalftone", CT_Tool, {
     REGS_Category          = "Fuses\\Mug",
@@ -15,7 +18,7 @@ FuRegisterClass("MugAdvancedHalftone", CT_Tool, {
     REGS_IconID            = "Icons.Tools.Icons.AdvancedHalftone",
     REG_Source_GlobalCtrls = true,
     REG_Source_SizeCtrls   = true,
-    REG_Version            = 1.81,
+    REG_Version            = VERSION,
 })
 
 -- Palette Mapping Types
@@ -1005,13 +1008,6 @@ function Create()
     local groupID = 0
 
     self:BeginControlNest("Global", "Global", true);
-    InGithub = self:AddInput("GitHub (Check for Latest)", "Github", {
-        LINKID_DataType = "Number",
-        INPID_InputControl = "ButtonControl",
-        INP_DoNotifyChanged = true,
-        INP_External = false,
-        IC_ControlPage = 0,
-    })
 
     InScreenDensity = self:AddInput("Screen Density", "ScreenDensity", {
         LINKID_DataType = "Number",
@@ -1380,6 +1376,43 @@ function Create()
             LINK_Main = 3,
         })
     end
+
+    self:AddControlPage("About")
+    InGithub = self:AddInput("GitHub (Current: v" .. tostring(VERSION) .. ")", "Github", {
+        LINKID_DataType = "Number",
+        INPID_InputControl = "ButtonControl",
+        INP_DoNotifyChanged = true,
+        INP_External = false,
+    })
+    
+    self:AddInput("About", "AboutText", {
+        LINKID_DataType = "Text",
+        INPID_InputControl = "TextEditControl",
+        INP_External = false,
+        INP_Passive = true,
+        TEC_Wrap = true,
+        TEC_ReadOnly = true,
+        INPS_DefaultText = [[
+Mug Advanced Halftone v]] .. tostring(VERSION) .. [[
+--------------------------------------------------
+A high-performance halftone simulation Fuse for DaVinci Resolve.
+
+[Key Features]
+- Hexagonal Grid & Custom Shapes (Circle, Square, Diamond)
+- Global Pattern Line Hatching & Crosshatching
+- Professional Engraving Shadow Logic
+- Analog Jitter (Position, Size, Aspect)
+- Retro Hardware Color Themes & RGB Channel Shift
+- Fully GPU Accelerated (OpenCL/Metal/CUDA)
+
+[Updates & Support]
+- GitHub: https://github.com/mug-lab-3/DaVinciResolveEffects/tree/main/fuses/halftone
+- X: https://x.com/MugLab3
+- YouTube: https://www.youtube.com/@MugLab3
+
+Developed by Mug Lab.
+]],
+    })
 end
 
 function Process(req)
