@@ -15,7 +15,7 @@ FuRegisterClass("MugAdvancedHalftone", CT_Tool, {
     REGS_IconID            = "Icons.Tools.Icons.AdvancedHalftone",
     REG_Source_GlobalCtrls = true,
     REG_Source_SizeCtrls   = true,
-    REG_Version            = 1.80,
+    REG_Version            = 1.81,
 })
 
 -- Palette Mapping Types
@@ -1004,6 +1004,7 @@ __KERNEL__ void RenderDotsKernel(
 function Create()
     local groupID = 0
 
+    self:BeginControlNest("Global", "Global", true);
     InGithub = self:AddInput("GitHub (Check for Latest)", "Github", {
         LINKID_DataType = "Number",
         INPID_InputControl = "ButtonControl",
@@ -1031,18 +1032,9 @@ function Create()
         INP_MaxAllowed = 1.0,
         INPS_StatusText = "Adjusts the contrast of the halftone pattern (-1.0 to 1.0 mapped to 0.25x to 4x)",
     })
+    self:EndControlNest();
 
-    InRGBShift = self:AddInput("RGB Shift (Req. Orig Color/Blend)", "RGBShift", {
-        LINKID_DataType = "Number",
-        INPID_InputControl = "SliderControl",
-        INP_Default = 0.0,
-        INP_MinAllowed = 0.0,
-        INP_MaxAllowed = 20.0,
-        INPS_StatusText =
-        "Simulates color plate misalignment. Only active when 'Use Original Color' or 'Blend With Input' is enabled.",
-    })
-
-    self:BeginControlNest("Dot", "Dot", true);
+    self:BeginControlNest("Dot Shape", "DotShapeNest", true);
     InDotShape = self:AddInput("Dot Shape", "DotShape", {
         LINKID_DataType = "Number",
         INPID_InputControl = "ComboControl",
@@ -1121,42 +1113,6 @@ function Create()
         INPS_StatusText = "Controls the maximum size of dots in the halftone pattern",
     })
 
-    InJitterPhase = self:AddInput("Jitter Noise Phase", "JitterPhase", {
-        LINKID_DataType = "Number",
-        INPID_InputControl = "SliderControl",
-        INP_Default = 0.0,
-        INP_Integer = false,
-        INP_MinAllowed = 0.0,
-        INPS_StatusText = "Smoothly evolves the random pattern used for all jitters",
-    })
-
-    InPositionJitter = self:AddInput("Position Jitter", "PositionJitter", {
-        LINKID_DataType = "Number",
-        INPID_InputControl = "SliderControl",
-        INP_Default = 0.05,
-        INP_MinAllowed = 0.0,
-        INP_MaxAllowed = 1.0,
-        INPS_StatusText = "Randomly shifts dot positions to simulate imperfect printing registration",
-    })
-
-    InSizeJitter = self:AddInput("Size Jitter", "SizeJitter", {
-        LINKID_DataType = "Number",
-        INPID_InputControl = "SliderControl",
-        INP_Default = 0.02,
-        INP_MinAllowed = 0.0,
-        INP_MaxAllowed = 1.0,
-        INPS_StatusText = "Randomly varies dot sizes to simulate ink bleed or paper texture irregularities",
-    })
-
-    InAspectJitter = self:AddInput("Aspect Jitter", "AspectJitter", {
-        LINKID_DataType = "Number",
-        INPID_InputControl = "SliderControl",
-        INP_Default = 0.0,
-        INP_MinAllowed = 0.0,
-        INP_MaxAllowed = 1.0,
-        INPS_StatusText = "Randomly varies the aspect ratio of each dot to simulate paper grain or print roller slippage",
-    })
-
     InInvertMode = self:AddInput("Invert Brightness", "InvertMode", {
         LINKID_DataType = "Number",
         INPID_InputControl = "CheckboxControl",
@@ -1187,6 +1143,56 @@ function Create()
         INP_MinAllowed = 0.0,
         INP_MaxAllowed = 1.0,
         INPS_StatusText = "Controls how wide the antialias region is around each dot",
+    })
+    self:EndControlNest();
+
+    self:BeginControlNest("Dot Jitter", "DotJitter", true);
+    InJitterPhase = self:AddInput("Jitter Noise Phase", "JitterPhase", {
+        LINKID_DataType = "Number",
+        INPID_InputControl = "SliderControl",
+        INP_Default = 0.0,
+        INP_Integer = false,
+        INP_MinAllowed = 0.0,
+        INPS_StatusText = "Smoothly evolves the random pattern used for all jitters",
+    })
+
+    InPositionJitter = self:AddInput("Position Jitter", "PositionJitter", {
+        LINKID_DataType = "Number",
+        INPID_InputControl = "SliderControl",
+        INP_Default = 0.0,
+        INP_MinAllowed = 0.0,
+        INP_MaxAllowed = 1.0,
+        INPS_StatusText = "Randomly shifts dot positions to simulate imperfect printing registration",
+    })
+
+    InSizeJitter = self:AddInput("Size Jitter", "SizeJitter", {
+        LINKID_DataType = "Number",
+        INPID_InputControl = "SliderControl",
+        INP_Default = 0.0,
+        INP_MinAllowed = 0.0,
+        INP_MaxAllowed = 1.0,
+        INPS_StatusText = "Randomly varies dot sizes to simulate ink bleed or paper texture irregularities",
+    })
+
+    InAspectJitter = self:AddInput("Aspect Jitter", "AspectJitter", {
+        LINKID_DataType = "Number",
+        INPID_InputControl = "SliderControl",
+        INP_Default = 0.0,
+        INP_MinAllowed = 0.0,
+        INP_MaxAllowed = 1.0,
+        INPS_StatusText = "Randomly varies the aspect ratio of each dot to simulate paper grain or print roller slippage",
+    })
+    self:EndControlNest();
+
+    self:BeginControlNest("Dot Color", "DotColorNest", true);
+    InRGBShift = self:AddInput("RGB Shift (Req. Orig Color/Blend)", "RGBShift", {
+        LINKID_DataType = "Number",
+        INPID_InputControl = "SliderControl",
+        INP_Default = 0.0,
+        INP_MinAllowed = 0.0,
+        INP_MaxAllowed = 20.0,
+        INPS_StatusText =
+        "Simulates color plate misalignment. Only active when 'Use Original Color' or 'Blend With Input' is enabled.",
     })
 
     InUseOriginalColor = self:AddInput("Use Original Color", "UseOriginalColor", {
@@ -1265,7 +1271,7 @@ function Create()
     })
     self:EndControlNest()
 
-    self:BeginControlNest("Paper", "Paper", true);
+    self:BeginControlNest("Paper & Background", "Paper", true);
 
     InBlendWithInput = self:AddInput("Blend With Input", "BlendWithInput", {
         LINKID_DataType = "Number",

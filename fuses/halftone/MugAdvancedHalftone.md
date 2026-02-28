@@ -140,27 +140,30 @@ DaVinci Resolve のインスペクタに表示される全パラメータの一�
 
 | セクション | パラメータ名 | デフォルト | 範囲 | 説明 |
 | :--- | :--- | :--- | :--- | :--- |
-| **Main** | Screen Density | 200.0 | 1 - 1000.0 | 画面全体のセルの細かさ。値が大きいほどドットが細密になります。 |
+| **Global** | GitHub (Check for Latest)| - | Button | 最新版のリポジトリとソースコードを確認します。 |
+| | Screen Density | 200.0 | 1 - 1000.0 | 画面全体のセルの細かさ。値が大きいほどドットが細密になります。 |
 | | Contrast | 0.0 | -1.0 - 1.0 | 元画像のコントラストを増減させます。正の値で明暗差が強く（最大4倍）、負の値で弱く（最大1/4倍）なります。 |
-| | RGB Shift | 0.0 | 0.0 - 20.0 | 指定ピクセル分RGBチャンネルをズラしてサンプリングし、色収差や版ズレを再現します。（Use Original Color/Blend With Input時のみ機能）|
-| **Dot** | Dot Shape | Circle | Dropdown | ドットの形状（Circle, Square, Diamond, Line, Crosshatch）を選択。 |
+| **Dot Shape** | Dot Shape | Circle | Dropdown | ドットの形状（Circle, Square, Diamond, Line, Crosshatch）を選択。 |
+| | Stagger Square Dots | On | Checkbox | 四角形ドットをレンガ状に互い違いに配置します。 (Square 選択時のみ) |
 | | Line Angle | 45.0 | 0.0 - 360.0 | ハッチング線の角度を制御。Line/Crosshatch モード時にのみ有効。 |
 | | Dot Aspect Ratio | 0.0 | -1.0 - 1.0 | 各ドット（または線）の縦横比。正の値で縦長（最大4倍）、負の値で横長（最大1/4倍）になります。 |
 | | Dot Gain | 0.0 | -1.0 - 1.0 | 紙に滲んでドットが太る（またはかすれて細る）オフセットバイアスです。 |
 | | Dot Size Curve | 0.0 | -1.0 - 1.0 | ドットサイズの成長カーブです。正の値で暗部を中心にドットが付きやすく（最大4倍）、負の値で飛びやすくなります（最大1/4倍）。 |
 | | Cutoff Dot Radius | 0.05 | 0.0 - 1.0 | 描画する最小のドット半径。これ未満のゴミのようなドットを排除します。 |
 | | Clip Dot Radius | 1.0 | 0.0 - 1.0 | ドットの最大サイズの上限クリップ値です。 |
-| | Jitter Noise Phase | 1.0 | 1.0 - 1000.0 | 各種ジッターのノイズフェーズ（位相）です。小数値で滑らかにアニメーションさせることが可能です。 |
+| | Invert Brightness | 0 (Off) | Checkbox | オンにすると、明るい部分のドットが大きく、暗い部分のドットが小さくなります。 |
+| | Brightness Cutoff | 0.75 | 0.0 - 1.0 | ドットを配置する明度の限界値（白飛びの領域など）。 |
+| | Enable Dot Antialias| 1 (On) | Checkbox | ドットの境界を滑らかにフェザー（ぼかし）処理するかどうか。 |
+| | AA Edge Softness | 0.15 | 0.0 - 1.0 | アンチエイリアス境界の幅。セルピッチに対する比率です。 |
+| **Dot Jitter** | Jitter Noise Phase | 1.0 | 1.0 - 1000.0 | 各種ジッターのノイズフェーズ（位相）です。小数値で滑らかにアニメーションさせることが可能です。 |
 | | Position Jitter | 0.05 | 0.0 - 1.0 | 網点グリッドの中心位置をランダムにずらし、印刷ズレをシミュレートします。 |
 | | Size Jitter | 0.02 | 0.0 - 1.0 | 各ドットの大きさをランダムに増減させ、インクのムラをシミュレートします。 |
 | | Aspect Jitter | 0.0 | 0.0 - 1.0 | 各ドットの縦横比を個別にランダムにブレさせる強さ。 |
-| | Invert Brightness | 0 (Off) | Checkbox | オンにすると、明るい部分のドットが大きく、暗い部分のドットが小さくなります。 |
-| | Brightness Cutoff | 0.75 | 0.0 - 1.0 | ドットを配置する明度の限界値（白飛びの領域など）。 |
-| | Enable Dot Antialias | 1 (On) | Checkbox | ドットの境界を滑らかにフェザー（ぼかし）処理するかどうか。 |
-| | AA Edge Softness | 0.15 | 0.0 - 1.0 | アンチエイリアス境界の幅。セルピッチに対する比率です。 |
+| **Dot Color** | RGB Shift | 0.0 | 0.0 - 20.0 | 指定ピクセル分RGBチャンネルをズラしてサンプリングし、色収差や版ズレを再現します。（Use Original Color/Blend With Input時のみ機能）|
 | | Use Original Color | 0 (Off) | Checkbox | ドット色として、元の入力画像のピクセルカラーを採用します。 |
-| | Dot Color (R/G/B/A) | 0.06,0.01,0,1 | 0.0 - 1.0 | Use Original Color がオフの時に使用される前景色（濃い茶など）。 |
-| **Paper** | Blend With Input | 0 (Off) | Checkbox | 紙色を無視して、生成したドットパターンを元の入力画像に直接オーバーレイ合成します。 |
+| | Color Reduction | - | Dropdown | レトロなハードウェアパレットをシミュレートします。(Use Original Color オン時) |
+| | Dot Color (R/G/B/A)| 0.06,0.01,0,1 | 0.0 - 1.0 | Foreground color (Use Original Color オフ時)。 |
+| **Paper & Background** | Blend With Input | 0 (Off) | Checkbox | 紙色を無視して、生成したドットパターンを元の入力画像に直接オーバーレイ合成します。 |
 | | Paper Color Preset | Custom | Dropdown | Newspaper, Vintage などの一般的な紙の背景色をワンクリックで適応します。 |
 | | Paper Color (R/G/B/A)| 0.85,0.75,0.58,1 | 0.0 - 1.0 | 背景色（紙の色）。手動で指定できます。プリセット選択時は自動上書きされます。 |
 
