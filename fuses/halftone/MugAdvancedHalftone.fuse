@@ -15,24 +15,55 @@ FuRegisterClass("MugAdvancedHalftone", CT_Tool, {
     REGS_IconID            = "Icons.Tools.Icons.AdvancedHalftone",
     REG_Source_GlobalCtrls = true,
     REG_Source_SizeCtrls   = true,
-    REG_Version            = 1.40,
+    REG_Version            = 1.50,
 })
+
+-- Palette Mapping Types
+PALETTE_TYPE = {
+    NONE = 0,
+    LUMA = 1,             -- Luminance-based mapping (4-16 colors)
+    RGB = 2,              -- 3-bit RGB color cuboid (8 colors)
+    NEAREST_NEIGHBOR = 3, -- Perceptual nearest neighbor matching (16-32 colors)
+}
 
 -- Definition of Retro Color Themes (Palettes + Thresholds)
 -- Each theme defines:
 --   Name: UI Dropdown name
 --   Paper: Default background (R,G,B) or nil (no change)
---   PaletteType: "Luma" for luminance-based palettes, "RGB" for 8-color RGB palettes, "None" for generic.
+--   PaletteType: Constant from PALETTE_TYPE table
 --   Palette: Array of colors (R,G,B) or (R,G,B,A) for the theme.
 ColorThemes = {
-    { Name = "Off", Paper = nil, PaletteType = "None", Palette = {} },
-    { Name = "8 Colors (Generic)", Paper = nil, PaletteType = "None", Palette = {} }, 
-    { Name = "16 Colors (Generic)", Paper = nil, PaletteType = "None", Palette = {} },
-    { Name = "32 Colors (Generic)", Paper = nil, PaletteType = "None", Palette = {} },
+    { Name = "Off", Paper = nil, PaletteType = PALETTE_TYPE.NONE, Palette = {} },
+    {
+        Name = "16 Colors (Fantasy Console)",
+        Paper = nil,
+        PaletteType = PALETTE_TYPE.NEAREST_NEIGHBOR,
+        Palette = {
+            { 0.00, 0.00, 0.00 }, { 0.11, 0.17, 0.33 }, { 0.49, 0.15, 0.33 }, { 0.00, 0.53, 0.32 },
+            { 0.67, 0.32, 0.21 }, { 0.37, 0.34, 0.31 }, { 0.76, 0.77, 0.78 }, { 1.00, 0.95, 0.91 },
+            { 1.00, 0.00, 0.30 }, { 1.00, 0.64, 0.00 }, { 1.00, 0.93, 0.15 }, { 0.00, 0.89, 0.21 },
+            { 0.16, 0.68, 1.00 }, { 0.51, 0.46, 0.61 }, { 1.00, 0.47, 0.66 }, { 1.00, 0.80, 0.67 }
+        }
+    },
+    {
+        Name = "32 Colors (Artisan Classic)",
+        Paper = nil,
+        PaletteType = PALETTE_TYPE.NEAREST_NEIGHBOR,
+        Palette = {
+            { 0.00, 0.00, 0.00 }, { 0.13, 0.13, 0.20 }, { 0.27, 0.16, 0.24 }, { 0.40, 0.22, 0.19 },
+            { 0.56, 0.34, 0.23 }, { 0.87, 0.44, 0.15 }, { 0.85, 0.63, 0.40 }, { 0.93, 0.76, 0.60 },
+            { 0.98, 0.95, 0.21 }, { 0.60, 0.90, 0.31 }, { 0.42, 0.75, 0.19 }, { 0.22, 0.58, 0.43 },
+            { 0.29, 0.41, 0.18 }, { 0.32, 0.29, 0.14 }, { 0.20, 0.24, 0.22 }, { 0.25, 0.25, 0.45 },
+            { 0.19, 0.38, 0.51 }, { 0.36, 0.43, 0.88 }, { 0.39, 0.61, 1.00 }, { 0.37, 0.80, 0.89 },
+            { 0.80, 0.86, 0.99 }, { 1.00, 1.00, 1.00 }, { 0.61, 0.68, 0.72 }, { 0.52, 0.49, 0.53 },
+            { 0.41, 0.42, 0.42 }, { 0.35, 0.34, 0.32 }, { 0.46, 0.26, 0.54 }, { 0.67, 0.20, 0.20 },
+            { 0.85, 0.34, 0.39 }, { 0.84, 0.48, 0.73 }, { 0.56, 0.59, 0.29 }, { 0.54, 0.44, 0.19 }
+        }
+    },
     {
         Name = "Theme: Retro Handheld (G)",
         Paper = { 0.60, 0.74, 0.05 },
-        PaletteType = "Luma",
+        PaletteType = PALETTE_TYPE.LUMA,
         Palette = {
             { 0.06, 0.22, 0.06 }, -- Darkest
             { 0.19, 0.38, 0.19 }, -- Dark
@@ -43,7 +74,7 @@ ColorThemes = {
     {
         Name = "Theme: Retro Handheld (S)",
         Paper = { 0.85, 0.85, 0.85 },
-        PaletteType = "Luma",
+        PaletteType = PALETTE_TYPE.LUMA,
         Palette = {
             { 0.18, 0.18, 0.18 },
             { 0.40, 0.40, 0.40 },
@@ -54,7 +85,7 @@ ColorThemes = {
     {
         Name = "Theme: Vintage PC 4c",
         Paper = { 0.0, 0.0, 0.0 },
-        PaletteType = "Luma", -- Simplest mapping for 4-color PC
+        PaletteType = PALETTE_TYPE.NEAREST_NEIGHBOR,
         Palette = {
             { 0.0, 0.0, 0.0 },  -- Black
             { 1.0, 0.33, 1.0 }, -- Magenta
@@ -65,20 +96,42 @@ ColorThemes = {
     {
         Name = "Theme: 80s Computer",
         Paper = { 0.42, 0.42, 0.42 },
-        PaletteType = "Luma",
+        PaletteType = PALETTE_TYPE.NEAREST_NEIGHBOR,
         Palette = {
-            { 0.00, 0.00, 0.00 }, -- Black
-            { 0.24, 0.20, 0.65 }, -- Dark Blue
-            { 0.53, 0.24, 0.21 }, -- Red
-            { 0.42, 0.33, 0.26 }, -- Brown
-            { 0.35, 0.65, 0.35 }, -- Green
-            { 0.62, 0.62, 0.62 }, -- Grey
+            { 0.00, 0.00, 0.00 }, -- 0: Black
+            { 1.00, 1.00, 1.00 }, -- 1: White
+            { 0.70, 0.25, 0.20 }, -- 2: Red
+            { 0.44, 0.72, 0.74 }, -- 3: Cyan
+            { 0.55, 0.27, 0.65 }, -- 4: Purple
+            { 0.35, 0.65, 0.35 }, -- 5: Green
+            { 0.24, 0.20, 0.65 }, -- 6: Blue
+            { 0.95, 0.95, 0.45 }, -- 7: Yellow
+            { 0.75, 0.45, 0.25 }, -- 8: Orange (More vibrant than Pepto)
+            { 0.31, 0.24, 0.00 }, -- 9: Brown
+            { 0.90, 0.55, 0.50 }, -- 10: Light Red
+            { 0.31, 0.31, 0.31 }, -- 11: Dark Grey
+            { 0.47, 0.47, 0.47 }, -- 12: Grey
+            { 0.67, 0.94, 0.67 }, -- 13: Light Green
+            { 0.63, 0.59, 1.00 }, -- 14: Light Blue
+            { 0.61, 0.61, 0.61 }, -- 15: Light Grey
+        }
+    },
+    {
+        Name = "Theme: 80s Arcade Pop",
+        Paper = { 0.10, 0.10, 0.15 }, -- Deep night blue / dark
+        PaletteType = PALETTE_TYPE.NEAREST_NEIGHBOR,
+        Palette = {
+            -- High-saturation "Pop" palette (NES/Arcade style)
+            { 0.00, 0.00, 0.00 }, { 1.00, 1.00, 1.00 }, { 1.00, 0.00, 0.00 }, { 0.00, 1.00, 1.00 },
+            { 1.00, 0.00, 1.00 }, { 0.00, 1.00, 0.00 }, { 0.00, 0.00, 1.00 }, { 1.00, 1.00, 0.00 },
+            { 1.00, 0.50, 0.00 }, { 0.50, 0.25, 0.00 }, { 1.00, 0.50, 0.50 }, { 1.00, 0.90, 0.00 },
+            { 0.00, 1.00, 0.50 }, { 0.50, 0.50, 1.00 }, { 1.00, 0.00, 0.50 }, { 0.50, 1.00, 1.00 }
         }
     },
     {
         Name = "Theme: Newspaper",
         Paper = { 0.85, 0.85, 0.75 },
-        PaletteType = "RGB",
+        PaletteType = PALETTE_TYPE.RGB,
         Palette = {
             -- Order: (R<<2) | (G<<1) | B 
             { 0.15, 0.15, 0.15 }, -- 000: Black
@@ -94,7 +147,7 @@ ColorThemes = {
     {
         Name = "Theme: Sepia Photograph",
         Paper = { 0.95, 0.85, 0.70 },
-        PaletteType = "Luma",
+        PaletteType = PALETTE_TYPE.LUMA,
         Palette = {
             { 0.17, 0.10, 0.05 },
             { 0.35, 0.22, 0.12 },
@@ -105,7 +158,7 @@ ColorThemes = {
     {
         Name = "Theme: Blueprint",
         Paper = { 0.80, 0.85, 0.95 },
-        PaletteType = "Luma",
+        PaletteType = PALETTE_TYPE.LUMA,
         Palette = {
             { 0.05, 0.15, 0.40 },
             { 0.20, 0.40, 0.70 },
@@ -115,7 +168,7 @@ ColorThemes = {
     {
         Name = "Theme: Green Phosphor",
         Paper = { 0.00, 0.15, 0.00 },
-        PaletteType = "Luma",
+        PaletteType = PALETTE_TYPE.LUMA,
         Palette = {
             { 0.00, 0.15, 0.00 },
             { 0.10, 0.55, 0.10 },
@@ -125,7 +178,7 @@ ColorThemes = {
     {
         Name = "Theme: Amber Phosphor",
         Paper = { 0.15, 0.05, 0.00 },
-        PaletteType = "Luma",
+        PaletteType = PALETTE_TYPE.LUMA,
         Palette = {
             { 0.15, 0.05, 0.00 },
             { 0.60, 0.35, 0.00 },
@@ -135,7 +188,7 @@ ColorThemes = {
     {
         Name = "Theme: LCD Calculator",
         Paper = { 0.65, 0.70, 0.62 },
-        PaletteType = "Luma",
+        PaletteType = PALETTE_TYPE.LUMA,
         Palette = {
             { 0.25, 0.27, 0.25 },
             { 0.65, 0.70, 0.62 },
@@ -144,7 +197,7 @@ ColorThemes = {
     {
         Name = "Theme: Thermal Camera",
         Paper = { 0.00, 0.00, 0.50 },
-        PaletteType = "Luma",
+        PaletteType = PALETTE_TYPE.LUMA,
         Palette = {
             { 0.00, 0.00, 0.50 }, -- Dark Blue
             { 0.60, 0.00, 0.50 }, -- Purple/Magenta
@@ -155,7 +208,7 @@ ColorThemes = {
     {
         Name = "Theme: Thermal (Inverted)",
         Paper = { 1.00, 1.00, 0.40 },
-        PaletteType = "Luma",
+        PaletteType = PALETTE_TYPE.LUMA,
         Palette = {
             { 1.00, 1.00, 0.40 }, -- Yellow
             { 1.00, 0.40, 0.00 }, -- Orange
@@ -166,7 +219,7 @@ ColorThemes = {
     {
         Name = "Theme: Night Vision",
         Paper = { 0.00, 0.20, 0.00 },
-        PaletteType = "Luma",
+        PaletteType = PALETTE_TYPE.LUMA,
         Palette = {
             { 0.00, 0.20, 0.00 },
             { 0.10, 0.50, 0.10 },
@@ -450,19 +503,23 @@ RenderParams = [[
   int cellGridNum[2];     // [2-3] 8 bytes - Number of cell grids [X, Y] (Block 1: 16b aligned)
   float paperColor[4];    // [4-7] 16 bytes - Paper color (Background) [R,G,B,A] (Block 2: 16b aligned)
   float dotColor[4];      // [8-11] 16 bytes - Dot color (Foreground) [R,G,B,A] (Block 3: 16b aligned)
-  int useOriginalColor;   // 4 bytes - Whether to use the original input color for dots
-  int colorReduction;     // 4 bytes - Color reduction mode
-  float screenDensity;    // 4 bytes - Screen density (calculates cell pitch on GPU)
-  int blendWithInput;     // 4 bytes - Blend dots over input instead of paper (Block 4: 16b aligned)
-  int enableAntialias;    // 4 bytes - Boolean flag: apply structural antialiasing
-  float aaEdgeWidth;      // 4 bytes - Antialiasing edge blend width (in pixels)
-  int dotShape;           // 4 bytes - Dot shape enum (0: Circle, 1: Square, 2: Diamond)
-  float aspectRatio;      // 4 bytes - Dot aspect ratio (used for grid deformation) (Block 5: 16b aligned)
-  float rgbShift;         // 4 bytes - Color plate misalignment strength (in pixels)
-  float gridSpacingY;     // 4 bytes - Base spacing multiplier for Y-axis grid
-  float gridStaggerX;     // 4 bytes - X-axis offset multiplier for odd rows
-  int mappingMode;        // 4 bytes - 0: Off, 1: Luma (16 slots), 2: Bitmask (Block 6: 16b aligned)
-  float themePalette[64]; // 256 bytes - Unified 16-color RGBA palette (Starts at 96b. Aligned.)
+  int useOriginalColor;   // [12] 4 bytes - Whether to use the original input color for dots
+  int colorReduction;     // [13] 4 bytes - Color reduction mode
+  float screenDensity;    // [14] 4 bytes - Screen density (calculates cell pitch on GPU)
+  int blendWithInput;     // [15] 4 bytes - Blend dots over input instead of paper (Block 4: 16b aligned)
+  int enableAntialias;    // [16] 4 bytes - Boolean flag: apply structural antialiasing
+  float aaEdgeWidth;      // [17] 4 bytes - Antialiasing edge blend width (in pixels)
+  int dotShape;           // [18] 4 bytes - Dot shape enum (0: Circle, 1: Square, 2: Diamond)
+  float aspectRatio;      // [19] 4 bytes - Dot aspect ratio (used for grid deformation) (Block 5: 16b aligned)
+  float rgbShift;         // [20] 4 bytes - Color plate misalignment strength (in pixels)
+  float gridSpacingY;     // [21] 4 bytes - Base spacing multiplier for Y-axis grid
+  float gridStaggerX;     // [22] 4 bytes - X-axis offset multiplier for odd rows
+  int mappingMode;        // [23] 4 bytes - 0: Off, 1: Luma (16 slots), 2: NearestNeighbor (Block 6: 16b aligned)
+  int paletteSize;        // [24] 4 bytes - Current number of active colors in palette
+  int _padding1;          // [25] 4 bytes - Alignment padding
+  int _padding2;          // [26] 4 bytes - Alignment padding
+  int _padding3;          // [27] 4 bytes - Alignment padding (Total 112 bytes - Perfect 16-byte boundary)
+  float themePalette[128]; // [28-155] 512 bytes - RGBA palette (Starts at 112b. Aligned.)
 ]]
 
 RenderDotsKernel = [[
@@ -476,18 +533,39 @@ __DEVICE__ float4 applyColorReduction(float4 color, int mode, __CONSTANTREF__ Re
     if (mappingMode == 0) return color;
 
     // Palette indexing
-    int idx = 0;
+    int bestIdx = 0;
     
     if (mappingMode == 1) { // Luma Mode
         const float luma = color.x * LUMA_R + color.y * LUMA_G + color.z * LUMA_B;
-        idx = (int)(_saturatef(luma) * 15.99f);
-    } else { // Bitmask Mode (Unified RGBI)
-        idx = (color.x > 0.5f ? 8 : 0) | (color.y > 0.5f ? 4 : 0) | (color.z > 0.5f ? 2 : 0) | 
-              ((color.x + color.y + color.z > 1.5f) ? 1 : 0);
+        bestIdx = (int)(_saturatef(luma) * 15.99f);
+    } else if (mappingMode == 2) { // Nearest Neighbor Mode
+        float minDelta = 1e10f;
+        const int count = params->paletteSize;
+        
+        // Cast the float[128] array to a float4 pointer for vectorized access
+        __CONSTANTREF__ float4 *palette = (__CONSTANTREF__ float4 *)params->themePalette;
+        
+        for (int i = 0; i < count; i++) {
+            const float4 p = palette[i];
+            
+            // Perceptual weighting factor (R:0.3, G:0.59, B:0.11)
+            const float dr = color.x - p.x;
+            const float dg = color.y - p.y;
+            const float db = color.z - p.z;
+            
+            const float delta = (dr * dr * 0.3f) + (dg * dg * 0.59f) + (db * db * 0.11f);
+            
+            if (delta < minDelta) {
+                minDelta = delta;
+                bestIdx = i;
+            }
+        }
     }
 
-    const int pIdx = idx * 4;
-    return to_float4(params->themePalette[pIdx], params->themePalette[pIdx+1], params->themePalette[pIdx+2], color.w);
+    __CONSTANTREF__ float4 *resPalette = (__CONSTANTREF__ float4 *)params->themePalette;
+    float4 res = resPalette[bestIdx];
+    res.w = color.w; // Preserve original alpha
+    return res;
 }
 #define DOT_RADIUS_THRESHOLD 0.1f
 #define BOUNDING_BOX_MARGIN 1.0f
@@ -730,9 +808,9 @@ __KERNEL__ void RenderDotsKernel(
         (float)params->cellGridNum[1]
     );
 
-    const float4 paperColor = to_float4(params->paperColor[0], params->paperColor[1], params->paperColor[2], params->paperColor[3]);
-
-    const float4 userDotColor = to_float4(params->dotColor[0], params->dotColor[1], params->dotColor[2], params->dotColor[3]);
+    // Access paperColor and dotColor as float4 vectors using pointer casting
+    const float4 paperColor = *(__CONSTANTREF__ float4 *)params->paperColor;
+    const float4 userDotColor = *(__CONSTANTREF__ float4 *)params->dotColor;
     const int useOriginalColorFlag = params->useOriginalColor;
     const int colorReduction = params->colorReduction;
 
@@ -1350,12 +1428,13 @@ function Process(req)
         -- Transfer Palette Data for hardware themes (Modes 4 and up)
         local theme = ColorThemes[colorReduction + 1]
         
-        -- Default: Clear Palette
-        for i = 0, 63 do params.themePalette[i] = 0.0 end
+        -- Default: Clear Palette (All 128 floats / 32 colors)
+        for i = 0, 127 do params.themePalette[i] = 0.0 end
         params.mappingMode = 0
-
-        if theme and theme.PaletteType == "Luma" then
-            params.mappingMode = 1 -- Luma Table (16 slots)
+        -- Populate Palette from Theme definition
+        if theme and theme.PaletteType == PALETTE_TYPE.LUMA then
+            params.mappingMode = 1 -- Luma Mode (16 slots)
+            params.paletteSize = 16
             local N = #theme.Palette
             for i = 0, 15 do
                 local sourceIdx = math.floor(i * N / 16) + 1
@@ -1366,46 +1445,16 @@ function Process(req)
                 params.themePalette[baseIdx + 2] = entry[3]
                 params.themePalette[baseIdx + 3] = 1.0
             end
-        elseif theme and theme.PaletteType == "RGB" then
-            params.mappingMode = 2 -- Bitmask Table (8 colors stretched to 16)
-            for i = 0, 7 do
+        elseif theme and (theme.PaletteType == PALETTE_TYPE.RGB or theme.PaletteType == PALETTE_TYPE.NEAREST_NEIGHBOR) then
+            params.mappingMode = 2 -- Nearest Neighbor Mode
+            params.paletteSize = #theme.Palette
+            for i = 0, params.paletteSize - 1 do
                 local entry = theme.Palette[i + 1]
-                for intensity = 0, 1 do
-                    local baseIdx = (i * 2 + intensity) * 4
-                    params.themePalette[baseIdx + 0] = entry[1]
-                    params.themePalette[baseIdx + 1] = entry[2]
-                    params.themePalette[baseIdx + 2] = entry[3]
-                    params.themePalette[baseIdx + 3] = 1.0
-                end
-            end
-        elseif colorReduction == 1 then -- Generic 8c
-            params.mappingMode = 2 -- Bitmask Table
-            for i = 0, 7 do
-                local r = (math.modf(i / 4) % 2 == 1) and 1 or 0
-                local g = (math.modf(i / 2) % 2 == 1) and 1 or 0
-                local b = (i % 2 == 1) and 1 or 0
-                for intensity = 0, 1 do
-                    local baseIdx = (i * 2 + intensity) * 4
-                    params.themePalette[baseIdx + 0] = r
-                    params.themePalette[baseIdx + 1] = g
-                    params.themePalette[baseIdx + 2] = b
-                    params.themePalette[baseIdx + 3] = 1.0
-                end
-            end
-        elseif colorReduction >= 2 then -- Generic 16c/32c (Balanced RGBI)
-            params.mappingMode = 2 -- Bitmask Table
-            for i = 0, 7 do
-                local r = (math.modf(i / 4) % 2 == 1) and 1 or 0
-                local g = (math.modf(i / 2) % 2 == 1) and 1 or 0
-                local b = (i % 2 == 1) and 1 or 0
-                for intensity = 0, 1 do
-                    local baseIdx = (i * 2 + intensity) * 4
-                    local i_val = (intensity == 1) and 0.3 or 0.0
-                    params.themePalette[baseIdx + 0] = math.min(1.0, r * 0.7 + i_val)
-                    params.themePalette[baseIdx + 1] = math.min(1.0, g * 0.7 + i_val)
-                    params.themePalette[baseIdx + 2] = math.min(1.0, b * 0.7 + i_val)
-                    params.themePalette[baseIdx + 3] = 1.0
-                end
+                local baseIdx = i * 4
+                params.themePalette[baseIdx + 0] = entry[1]
+                params.themePalette[baseIdx + 1] = entry[2]
+                params.themePalette[baseIdx + 2] = entry[3]
+                params.themePalette[baseIdx + 3] = 1.0
             end
         end
 
