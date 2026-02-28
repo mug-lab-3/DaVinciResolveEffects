@@ -15,7 +15,7 @@ FuRegisterClass("MugAdvancedHalftone", CT_Tool, {
     REGS_IconID            = "Icons.Tools.Icons.AdvancedHalftone",
     REG_Source_GlobalCtrls = true,
     REG_Source_SizeCtrls   = true,
-    REG_Version            = 1.70,
+    REG_Version            = 1.80,
 })
 
 -- Palette Mapping Types
@@ -1004,6 +1004,14 @@ __KERNEL__ void RenderDotsKernel(
 function Create()
     local groupID = 0
 
+    InGithub = self:AddInput("GitHub (Check for Latest)", "Github", {
+        LINKID_DataType = "Number",
+        INPID_InputControl = "ButtonControl",
+        INP_DoNotifyChanged = true,
+        INP_External = false,
+        IC_ControlPage = 0,
+    })
+
     InScreenDensity = self:AddInput("Screen Density", "ScreenDensity", {
         LINKID_DataType = "Number",
         INPID_InputControl = "SliderControl",
@@ -1590,6 +1598,11 @@ function Process(req)
 end
 
 function NotifyChanged(inp, param, time)
+    if inp == InGithub then
+        if param.Value == 1 then
+            bmd.openurl("https://github.com/mug-lab-3/DaVinciResolveEffects/tree/main/fuses/halftone")
+        end
+    end
     if inp == InDotShape then
         local shape = math.floor(param.Value + 0.5)
         if shape == 1 then
