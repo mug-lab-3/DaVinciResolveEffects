@@ -15,7 +15,7 @@ FuRegisterClass("MugAdvancedHalftone", CT_Tool, {
     REGS_IconID            = "Icons.Tools.Icons.AdvancedHalftone",
     REG_Source_GlobalCtrls = true,
     REG_Source_SizeCtrls   = true,
-    REG_Version            = 1.60,
+    REG_Version            = 1.70,
 })
 
 -- Palette Mapping Types
@@ -477,8 +477,8 @@ __KERNEL__ void CellInfoKernel(
             // Compute perceptual luminance
             const float luma = color.x * LUMA_R + color.y * LUMA_G + color.z * LUMA_B;
 
-            // Simplified accumulation
-            totalLuma += luma * sampleStepSquared;
+            // Accumulate luminance and color
+            totalLuma = _fmaf(luma, sampleStepSquared, totalLuma);
             sampleCount += sampleStepInt;
             avgColor += color * sampleStepSquared;
         }
@@ -498,8 +498,8 @@ __KERNEL__ void CellInfoKernel(
     // Average color calculation
     avgColor *= invSampleCount;
 
-    // Apply user contrast enhancement
-    avgLuma = 0.5f + (avgLuma - 0.5f) * params->contrast;
+    // Apply contrast enhancement
+    avgLuma = _fmaf(avgLuma - 0.5f, params->contrast, 0.5f);
     avgLuma = _saturatef(avgLuma);  // Clamp between 0.0 and 1.0
 
     const int invertMode = params->invertMode;
@@ -557,8 +557,8 @@ RenderParams = [[
   float gridStaggerX;     // [22] 4 bytes - X-axis offset multiplier for odd rows
   int mappingMode;        // [23] 4 bytes - 0: Off, 1: Luma (16 slots), 2: NearestNeighbor (Block 6: 16b aligned)
   int paletteSize;        // [24] 4 bytes - Current number of active colors in palette
-  int _padding1;          // [25] 4 bytes - Alignment padding
-  int _padding2;          // [26] 4 bytes - Alignment padding
+  float lineAngle;        // [25] 4 bytes - Hatching line angle in degrees
+  float cellBasePitch;    // [26] 4 bytes - Base pitch for global pattern spacing
   int _padding3;          // [27] 4 bytes - Alignment padding (Total 112 bytes - Perfect 16-byte boundary)
   float themePalette[128]; // [28-155] 512 bytes - RGBA palette (Starts at 112b. Aligned.)
 ]]
@@ -620,7 +620,9 @@ __DEVICE__ float checkCellDot(
     const float2 cellGridNum,
     __TEXTURE2D__ cell_info1,
     const float aaEdgeWidth,
-    const int dotShape)
+    const int dotShape,
+    __CONSTANTREF__ RenderParams *params,
+    const float cellBasePitch)
 {
     if (cellPos.x >= 0.0f && cellPos.x < cellGridNum.x &&
         cellPos.y >= 0.0f && cellPos.y < cellGridNum.y) {
@@ -638,7 +640,10 @@ __DEVICE__ float checkCellDot(
         if (dotRadius <= DOT_RADIUS_THRESHOLD && aaEdgeWidth <= 0.0f)
             return 0.0f;
 
-        const float bbSize = dotRadius + BOUNDING_BOX_MARGIN + aaEdgeWidth;
+        float bbSize = dotRadius + BOUNDING_BOX_MARGIN + aaEdgeWidth;
+        // For line-based shapes, expand bounding box to allow continuous lines.
+        if (dotShape >= 3) bbSize = _fmaxf(bbSize, cellBasePitch * 1.5f);
+
         const float2 diff = pixelPos - cellCenter;
         const float2 absDiff = to_float2(_fabs(diff.x), _fabs(diff.y));
 
@@ -650,23 +655,22 @@ __DEVICE__ float checkCellDot(
         if (finalAspect > 1.0f) {
             measureDiff.x *= finalAspect; // Compress X-axis for tall dots
         } else if (finalAspect < 1.0f) {
-            measureDiff.y /= _fmaxf(0.01f, finalAspect); // Compress Y-axis for wide dots
+            measureDiff.y *= _frecip(_fmaxf(0.01f, finalAspect)); // Compress Y-axis for wide dots
         }
 
         if (dotShape == 0) { // Circle
-            const float distSq = measureDiff.x * measureDiff.x + measureDiff.y * measureDiff.y;
+            const float dist = _hypotf(measureDiff.x, measureDiff.y);
             const float radiusSq = dotRadius * dotRadius;
 
             if (aaEdgeWidth <= 0.0f) {
-                return (distSq <= radiusSq) ? 1.0f : 0.0f;
+                return (dist <= dotRadius) ? 1.0f : 0.0f;
             }
 
-            if (distSq >= radiusSq) return 0.0f;
+            if (dist >= dotRadius) return 0.0f;
 
             const float innerR = _fmaxf(dotRadius - aaEdgeWidth, 0.0f);
-            if (distSq <= innerR * innerR) return 1.0f;
+            if (dist <= innerR) return 1.0f;
 
-            const float dist = _sqrtf(distSq);
             return _saturatef((dotRadius - dist) / aaEdgeWidth);
         } else if (dotShape == 1) { // Square
             const float dist = _fmaxf(measureDiff.x, measureDiff.y);
@@ -680,6 +684,52 @@ __DEVICE__ float checkCellDot(
             if (dist >= dotRadius) return 0.0f;
             if (dist <= _fmaxf(dotRadius - aaEdgeWidth, 0.0f)) return 1.0f;
             return _saturatef((dotRadius - dist) / aaEdgeWidth);
+        } else if (dotShape == 3 || dotShape == 4) { // Line or Crosshatch
+            // Global parallel line pattern
+            const float angleRad = params->lineAngle * (3.14159265f / 180.0f);
+            const float nx = _sinf(angleRad);
+            const float ny = -_cosf(angleRad);
+            
+            // Project pixel position onto the line normal for global phase
+            const float proj1 = _fmaf(pixelPos.x, nx, pixelPos.y * ny);
+            const float pitch = cellBasePitch;
+            
+            // Distance to global line center
+            const float phase1 = proj1 - _floorf(proj1 / pitch) * pitch;
+            const float dist1 = _fabs(phase1 - pitch * 0.5f);
+            
+            float coverage = 0.0f;
+            if (aaEdgeWidth <= 0.0f) {
+                coverage = (dist1 <= dotRadius) ? 1.0f : 0.0f;
+            } else {
+                if (dist1 < dotRadius) {
+                    coverage = _saturatef((dotRadius - dist1) / aaEdgeWidth);
+                }
+            }
+            
+            if (dotShape == 4) { // Crosshatch
+                const float nx2 = _cosf(angleRad);
+                const float ny2 = _sinf(angleRad);
+                const float proj2 = _fmaf(pixelPos.x, nx2, pixelPos.y * ny2);
+                const float phase2 = proj2 - _floorf(proj2 / pitch) * pitch;
+                const float dist2 = _fabs(phase2 - pitch * 0.5f);
+                
+                // Secondary hatch for shadows
+                const float maxR = pitch * 0.75f;
+                const float dotRatio = dotRadius / _fmaxf(0.01f, maxR);
+                const float dotRadius2 = _saturatef((dotRatio - 0.5f) * 2.0f) * maxR;
+
+                float coverage2 = 0.0f;
+                if (aaEdgeWidth <= 0.0f) {
+                    coverage2 = (dist2 <= dotRadius2) ? 1.0f : 0.0f;
+                } else {
+                    if (dist2 < dotRadius2) {
+                        coverage2 = _saturatef((dotRadius2 - dist2) / aaEdgeWidth);
+                    }
+                }
+                coverage = _fmaxf(coverage, coverage2);
+            }
+            return coverage;
         }
     }
     return 0.0f;
@@ -689,7 +739,7 @@ __DEVICE__ float checkCellDot(
 // Neighbor cell relative offset definitions
 __DEVICE__ void getNeighborOffsets(const int isOddRow, const float gridStaggerX, float2 neighborOffsets[8], int *neighborCount)
 {
-    // Fast path for hexagonal grid often used in high-quality print
+    // Hexagonal grid layout
     if (gridStaggerX != 0.0f) {
         *neighborCount = 6;
         const float offset = isOddRow != 0 ? -1.0f : 0.0f;
@@ -713,8 +763,7 @@ __DEVICE__ void getNeighborOffsets(const int isOddRow, const float gridStaggerX,
     }
 }
 
-// Fallback function for high-density execution
-// Sub-pixel compositing / Alpha blend overlay function for computing dot coverage
+// Alpha blend overlay function for computing dot coverage
 __DEVICE__ float4 blendDotOver(
     const float4 baseColor,
     const float4 dotColor,
@@ -733,14 +782,14 @@ __DEVICE__ float4 blendDotOver(
 }
 
 // --- [UPDATE_BEST_CELL Refactoring] ---
-// Structure to hold state of optimal cell search (avoids typedef for OpenCL compatibility)
+// Holds state for tracking the best dot coverage and color.
 struct BestCellState {
     float bestStrength;
     float bestCoverage;
     float4 bestDotColor;
 };
 
-// Evaluate a neighbor cell candidate and update the tracking state object
+// Evaluates a candidate cell and updates the best cell state.
 __DEVICE__ void updateBestCell(
     const float2 candidatePos,
     const float2 pixelPos,
@@ -757,16 +806,16 @@ __DEVICE__ void updateBestCell(
     const float2 cellShiftROFF,
     const float2 cellShiftBOFF,
     __CONSTANTREF__ RenderParams *params,
-    struct BestCellState *state)
+    struct BestCellState *state,
+    const float cellBasePitch)
 {
-    const float coverageCandidate = checkCellDot(candidatePos, pixelPos, cellGridNum, cell_info1, aaEdgeWidth, dotShape);
+    const float coverageCandidate = checkCellDot(candidatePos, pixelPos, cellGridNum, cell_info1, aaEdgeWidth, dotShape, params, cellBasePitch);
     if (coverageCandidate > 0.0f) {
         float4 candidateDotColor = userDotColor;
         float candidateStrength = coverageCandidate;
         if (useOriginalColorFlag != 0) {
             const float2 baseUV = (candidatePos + to_float2(0.5f, 0.5f)) / cellGridNum;
             if (shiftVal == 0.0f) {
-                // Optimization: Avoid redundant separated sampling if Shift is disabled
                 candidateDotColor = _tex2DVec4(cell_info2, baseUV.x, baseUV.y);
             } else {
                 const float4 cR = _tex2DVec4(cell_info2, baseUV.x + cellShiftROFF.x, baseUV.y + cellShiftROFF.y);
@@ -780,7 +829,7 @@ __DEVICE__ void updateBestCell(
             // Enforce UI Alpha setting regardless of original image transparency
             candidateDotColor.w = userDotColor.w;
 
-            const float candidateLuma = candidateDotColor.x * LUMA_R + candidateDotColor.y * LUMA_G + candidateDotColor.z * LUMA_B;
+            const float candidateLuma = _fmaf(candidateDotColor.x, LUMA_R, _fmaf(candidateDotColor.y, LUMA_G, candidateDotColor.z * LUMA_B));
             candidateStrength *= _fmaxf(1.0f - candidateLuma, 0.0f);
         } else if (blendWithInput != 0) {
             // If UseOriginalColor is off and BlendWithInput is on,
@@ -849,7 +898,7 @@ __KERNEL__ void RenderDotsKernel(
         (float)params->cellGridNum[1]
     );
 
-    // Access paperColor and dotColor as float4 vectors using pointer casting
+    // Access paperColor and dotColor as float4 vectors
     const float4 paperColor = *(__CONSTANTREF__ float4 *)params->paperColor;
     const float4 userDotColor = *(__CONSTANTREF__ float4 *)params->dotColor;
     const int useOriginalColorFlag = params->useOriginalColor;
@@ -863,7 +912,7 @@ __KERNEL__ void RenderDotsKernel(
     const float shiftVal = (blendWithInput != 0 || useOriginalColorFlag != 0) ? params->rgbShift : 0.0f;
     const float2 shiftROFF = to_float2(-shiftVal / intWidth, -shiftVal / intHeight);
     const float2 shiftBOFF = to_float2( shiftVal / intWidth,  shiftVal / intHeight);
-    // cell_info2 maps exactly to the image region (UV space 0.0~1.0), so pixel shift amount is identical to the offset used for src
+    // Cell info UV shift amounts are identical to source image shifts.
     const float2 cellShiftROFF = shiftROFF;
     const float2 cellShiftBOFF = shiftBOFF;
 
@@ -874,7 +923,6 @@ __KERNEL__ void RenderDotsKernel(
         const float py = (float)y / intHeight;
 
         if (shiftVal == 0.0f) {
-            // Optimization: Avoid redundant separated sampling if Shift is disabled
             inputColor = _tex2DVec4(src_img, px, py);
         } else {
             // Independent RGB offset sampling to simulate misaligned print plates
@@ -893,7 +941,7 @@ __KERNEL__ void RenderDotsKernel(
     state.bestStrength = -1.0f;
     state.bestDotColor = (blendWithInput != 0 && useOriginalColorFlag != 0) ? inputColor : userDotColor;
 
-    updateBestCell(mainCellPos, pixelPos, cellGridNum, cell_info1, cell_info2, aaEdgeWidth, params->dotShape, userDotColor, useOriginalColorFlag, colorReduction, blendWithInput, shiftVal, cellShiftROFF, cellShiftBOFF, params, &state);
+    updateBestCell(mainCellPos, pixelPos, cellGridNum, cell_info1, cell_info2, aaEdgeWidth, params->dotShape, userDotColor, useOriginalColorFlag, colorReduction, blendWithInput, shiftVal, cellShiftROFF, cellShiftBOFF, params, &state, cellBasePitch);
 
     const float2 cellCenter = to_float2(
         mainCellX * cellPitch.x + ((isOddRow != 0) ? (halfCellPitch.x * params->gridStaggerX) : 0.0f) + halfCellPitch.x,
@@ -930,11 +978,11 @@ __KERNEL__ void RenderDotsKernel(
         for (int i = 0; i < checkCount; i++) {
             const int index = checkIndices[i];
             if (index < 0) continue;
-            updateBestCell(mainCellPos + neighborOffsets[index], pixelPos, cellGridNum, cell_info1, cell_info2, aaEdgeWidth, params->dotShape, userDotColor, useOriginalColorFlag, colorReduction, blendWithInput, shiftVal, cellShiftROFF, cellShiftBOFF, params, &state);
+            updateBestCell(mainCellPos + neighborOffsets[index], pixelPos, cellGridNum, cell_info1, cell_info2, aaEdgeWidth, params->dotShape, userDotColor, useOriginalColorFlag, colorReduction, blendWithInput, shiftVal, cellShiftROFF, cellShiftBOFF, params, &state, cellBasePitch);
         }
     } else {
         for (int i = 0; i < neighborCount; i++) {
-            updateBestCell(mainCellPos + neighborOffsets[i], pixelPos, cellGridNum, cell_info1, cell_info2, aaEdgeWidth, params->dotShape, userDotColor, useOriginalColorFlag, colorReduction, blendWithInput, shiftVal, cellShiftROFF, cellShiftBOFF, params, &state);
+            updateBestCell(mainCellPos + neighborOffsets[i], pixelPos, cellGridNum, cell_info1, cell_info2, aaEdgeWidth, params->dotShape, userDotColor, useOriginalColorFlag, colorReduction, blendWithInput, shiftVal, cellShiftROFF, cellShiftBOFF, params, &state, cellBasePitch);
         }
     }
 
@@ -995,6 +1043,8 @@ function Create()
         { CCS_AddString = "Circle" },
         { CCS_AddString = "Square" },
         { CCS_AddString = "Diamond" },
+        { CCS_AddString = "Line" },
+        { CCS_AddString = "Crosshatch" },
         INP_DoNotifyChanged = true,
         INPS_StatusText = "Select the shape of the halftone dots",
     })
@@ -1006,6 +1056,16 @@ function Create()
         INP_Integer = true,
         IC_Visible = false,
         INPS_StatusText = "Applies a brick-like staggered layout to square dots",
+    })
+        
+    InLineAngle = self:AddInput("Line Angle", "LineAngle", {
+        LINKID_DataType = "Number",
+        INPID_InputControl = "SliderControl",
+        INP_Default = 45.0,
+        INP_MinScale = 0.0,
+        INP_MaxScale = 360.0,
+        IC_Visible = false,
+        INPS_StatusText = "Controls the angle of hatching lines",
     })
 
     InAspectRatio = self:AddInput("Dot Aspect Ratio", "AspectRatio", {
@@ -1327,6 +1387,7 @@ function Process(req)
 
     local aspectRatioSlider = InAspectRatio:GetValue(req).Value
     local aspectRatio = pow(2.0, aspectRatioSlider * 2.0)
+    local lineAngle = InLineAngle:GetValue(req).Value
     local dotGain = InDotGain:GetValue(req).Value
     local dotSizeCurveSlider = InDotSizeCurve:GetValue(req).Value
     local dotSizeCurve = pow(4.0, -dotSizeCurveSlider)
@@ -1465,14 +1526,15 @@ function Process(req)
         params.rgbShift = rgbShift
         params.gridSpacingY = gridSpacingY
         params.gridStaggerX = gridStaggerX
-        
-        -- Transfer Palette Data for hardware themes (Modes 4 and up)
+        params.lineAngle = lineAngle
+        params.cellBasePitch = cellBasePitch
+        -- Transfer palette data for hardware themes
         local theme = ColorThemes[colorReduction + 1]
         
-        -- Default: Clear Palette (All 128 floats / 32 colors)
+        -- Clear palette
         for i = 0, 127 do params.themePalette[i] = 0.0 end
         params.mappingMode = 0
-        -- Populate Palette from Theme definition
+        -- Populate palette from theme definition
         if theme and theme.PaletteType == PALETTE_TYPE.LUMA then
             params.mappingMode = 1 -- Luma Mode (16 slots)
             params.paletteSize = 16
@@ -1534,6 +1596,12 @@ function NotifyChanged(inp, param, time)
             InStaggerSquareDots:SetAttrs({IC_Visible = true})
         else
             InStaggerSquareDots:SetAttrs({IC_Visible = false})
+        end
+
+        if shape == 3 or shape == 4 then
+            InLineAngle:SetAttrs({IC_Visible = true})
+        else
+            InLineAngle:SetAttrs({IC_Visible = false})
         end
     end
 
