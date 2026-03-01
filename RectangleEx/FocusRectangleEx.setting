@@ -270,7 +270,7 @@
 						[0] = "DFTDissolve"
 					},
 					Inputs = {
-						Mix = Input { Expression = "iif(time / comp.RenderEnd > 0.5, 1, 0)", },
+						Mix = Input { Expression = "iif((time - comp.RenderStart) / (comp.RenderEnd - comp.RenderStart) > 0.5, 1, 0)", },
 						Background = Input {
 							SourceOp = "RectangleEx_Rectangle",
 							Source = "Mask",
