@@ -110,5 +110,5 @@
 
 ## 🔗 リンク
 - [<img src="https://cdn.simpleicons.org/youtube" width="16" height="16"> **YouTube: Mug Lab**](https://www.youtube.com/@MugLab3)
-- [<img src="https://cdn.simpleicons.org/github/black#gh-light-mode-only" width="16" height="16"><img src="https://cdn.simpleicons.org/github/white#gh-dark-mode-only" width="16" height="16"> **GitHub: Mug Lab Repository**](https://github.com/mug-lab-3/DaVinciResolveEffects)
-- [<img src="https://cdn.simpleicons.org/x/black#gh-light-mode-only" width="16" height="16"><img src="https://cdn.simpleicons.org/x/white#gh-dark-mode-only" width="16" height="16"> **X: @MugLab3**](https://x.com/MugLab3)
+- [<picture><source media="(prefers-color-scheme: dark)" srcset="https://cdn.simpleicons.org/github/white"><img src="https://cdn.simpleicons.org/github/black" width="16" height="16"></picture> **GitHub: Mug Lab Repository**](https://github.com/mug-lab-3/DaVinciResolveEffects)
+- [<picture><source media="(prefers-color-scheme: dark)" srcset="https://cdn.simpleicons.org/x/white"><img src="https://cdn.simpleicons.org/x/black" width="16" height="16"></picture> **X: @MugLab3**](https://x.com/MugLab3)
