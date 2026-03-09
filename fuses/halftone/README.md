@@ -23,9 +23,9 @@
 
 | ファイル | 必須 | 用途 | 配置先フォルダ |
 | :--- | :---: | :--- | :--- |
-| **MugAdvancedHalftone.fuse** | **必須** | プラグイン本体 (Fusion用) | `Fuses` |
-| **MugAdvancedHalftone.setting** | **必須** | Editページ表示用プリセット | `Templates/Edit/Effects` |
-| **MugAdvancedHalftone.png** | 任意 | アイコン画像 | `Templates/Edit/Effects` |
+| [**MugAdvancedHalftone.fuse**](./MugAdvancedHalftone.fuse) | **必須** | プラグイン本体 (Fusion用) | `Fuses` |
+| [**MugAdvancedHalftone.setting**](./MugAdvancedHalftone.setting) | **必須** | Editページ表示用プリセット | `Templates/Edit/Effects` |
+| [**MugAdvancedHalftone.png**](./MugAdvancedHalftone.png) | 任意 | アイコン画像 | `Templates/Edit/Effects` |
 
 ### 配置フォルダのパス
 
