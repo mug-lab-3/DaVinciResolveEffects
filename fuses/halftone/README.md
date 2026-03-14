@@ -23,9 +23,9 @@
 
 | ファイル | 必須 | 用途 | 配置先フォルダ |
 | :--- | :---: | :--- | :--- |
-| [**MugAdvancedHalftone.fuse**](https://github.com/mug-lab-3/DaVinciResolveEffects/raw/main/fuses/halftone/MugAdvancedHalftone.fuse) | **必須** | プラグイン本体 (Fusion用) | `Fuses` |
-| [**MugAdvancedHalftone.setting**](https://github.com/mug-lab-3/DaVinciResolveEffects/raw/main/fuses/halftone/MugAdvancedHalftone.setting) | **必須** | Editページ表示用プリセット | `Templates/Edit/Effects` |
-| [**MugAdvancedHalftone.png**](https://github.com/mug-lab-3/DaVinciResolveEffects/raw/main/fuses/halftone/MugAdvancedHalftone.png) | 任意 | アイコン画像 | `Templates/Edit/Effects` |
+| [**MugAdvancedHalftone.fuse**](https://github.com/mug-lab-3/DaVinciResolveEffects/releases/download/halftone_v1.81/MugAdvancedHalftone.fuse) | **必須** | プラグイン本体 (Fusion用) | `Fuses` |
+| [**MugAdvancedHalftone.setting**](https://github.com/mug-lab-3/DaVinciResolveEffects/releases/download/halftone_v1.81/MugAdvancedHalftone.setting) | **必須** | Editページ表示用プリセット | `Templates/Edit/Effects` |
+| [**MugAdvancedHalftone.png**](https://github.com/mug-lab-3/DaVinciResolveEffects/releases/download/halftone_v1.81/MugAdvancedHalftone.png) | 任意 | アイコン画像 | `Templates/Edit/Effects` |
 
 ### 配置フォルダのパス
 
